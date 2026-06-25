@@ -1,0 +1,28 @@
+{
+  "name": "Demo Datacenter",
+  "serverModels": [
+    {
+      "modelCode": "SRV-DEMO-001",
+      "manufacturer": "CPZ",
+      "model": "Demo Server",
+      "idlePowerWatts": 100.0,
+      "maxPowerWatts": 300.0
+    }
+  ],
+  "servers": [
+    {
+      "column": "A01",
+      "row": "R01",
+      "slot": "S01",
+      "modelCode": "SRV-DEMO-001",
+      "status": "OK"
+    },
+    {
+      "column": "A01",
+      "row": "R01",
+      "slot": "S02",
+      "modelCode": "SRV-DEMO-001",
+      "status": "OK"
+    }
+  ]
+}
