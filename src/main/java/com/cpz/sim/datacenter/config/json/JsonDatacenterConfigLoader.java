@@ -12,9 +12,10 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
 
     @Override
     public DatacenterDefinition load(Path path) {
-        // Aquí luego usaremos Jackson, Gson u otro parser.
-        // Por ahora solo definimos la arquitectura.
-        throw new UnsupportedOperationException("Not implemented yet");
+        // CONTINUAR AQUÍ ***********************************************************
+        // IMPLEMENTAR CARGA DE ARCHIVO DE CONFIGURACIÓN JSON USANDO Jackson
+        // **************************************************************************
+        throw new UnsupportedOperationException("JSON loading is not implemented yet");
     }
 
 }
