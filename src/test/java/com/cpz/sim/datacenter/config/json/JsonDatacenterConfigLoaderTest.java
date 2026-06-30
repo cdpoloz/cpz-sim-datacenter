@@ -37,9 +37,17 @@ class JsonDatacenterConfigLoaderTest {
         JsonDatacenterConfigLoader loader = new JsonDatacenterConfigLoader();
         DatacenterDefinition definition = loader.load(resourcePath("datacenter/valid-datacenter.json"));
         assertEquals("Demo Datacenter", definition.name());
+        assertEquals(2, definition.layout().racks().size());
+        assertEquals("RACK-A01-R01", definition.layout().racks().getFirst().code());
+        assertEquals("A01", definition.layout().racks().getFirst().column());
+        assertEquals("R01", definition.layout().racks().getFirst().row());
+        assertEquals(42, definition.layout().racks().getFirst().slotCount());
         assertEquals(1, definition.serverModels().size());
         assertEquals(2, definition.servers().size());
         assertEquals("SRV-DEMO-001", definition.serverModels().getFirst().modelCode());
+        assertEquals("RACK-A01-R01", definition.servers().getFirst().rackCode());
+        assertEquals("U01", definition.servers().getFirst().slot());
+        assertEquals(1.5f, definition.servers().getFirst().workloadFactor());
     }
 
     @Test
@@ -48,6 +56,7 @@ class JsonDatacenterConfigLoaderTest {
         DatacenterDefinition definition = loader.load(resourcePath("datacenter/valid-datacenter.json"));
         DatacenterFactory factory = new DatacenterFactory();
         Datacenter datacenter = factory.create(definition);
+        assertEquals(2, datacenter.getRackCount());
         assertEquals(2, datacenter.getServerCount());
     }
 

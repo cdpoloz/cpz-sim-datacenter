@@ -22,7 +22,7 @@ class NoiseWorkloadSourceTest {
         return position -> value;
     }
 
-    private static Server serverAt(Column column, Row row, Slot slot) {
+    private static Server serverAt(String rackCode, String slot) {
         ServerConfig config = new ServerConfig(
                 "TEST-SERVER",
                 "CPZ",
@@ -30,7 +30,7 @@ class NoiseWorkloadSourceTest {
                 100.0f,
                 300.0f
         );
-        return new Server(new ServerLocation(column, row, slot), config, HardwareStatus.OK);
+        return new Server(new ServerLocation(new RackCode(rackCode), slot), config, HardwareStatus.OK);
     }
 
     private static SimulationTick tickAtSeconds(long index, long elapsedSeconds) {
@@ -125,7 +125,7 @@ class NoiseWorkloadSourceTest {
                 0.8f
         );
         float utilization = workloadSource.getUtilization(
-                serverAt(Column.A01, Row.R01, Slot.S01),
+                serverAt("RACK-A01-R01", "U01"),
                 tickAtSeconds(1, 60)
         );
         assertEquals(0.5f, utilization, 0.000001f);
@@ -141,7 +141,7 @@ class NoiseWorkloadSourceTest {
                 0.8f
         );
         float utilization = workloadSource.getUtilization(
-                serverAt(Column.A01, Row.R01, Slot.S01),
+                serverAt("RACK-A01-R01", "U01"),
                 tickAtSeconds(1, 60)
         );
         assertEquals(0.2f, utilization, 0.000001f);
@@ -157,7 +157,7 @@ class NoiseWorkloadSourceTest {
                 0.8f
         );
         float utilization = workloadSource.getUtilization(
-                serverAt(Column.A01, Row.R01, Slot.S01),
+                serverAt("RACK-A01-R01", "U01"),
                 tickAtSeconds(1, 60)
         );
         assertEquals(0.8f, utilization, 0.000001f);
@@ -178,11 +178,11 @@ class NoiseWorkloadSourceTest {
         );
         SimulationTick tick = tickAtSeconds(1, 60);
         workloadSource.getUtilization(
-                serverAt(Column.A01, Row.R01, Slot.S01),
+                serverAt("RACK-A01-R01", "U01"),
                 tick
         );
         workloadSource.getUtilization(
-                serverAt(Column.A01, Row.R01, Slot.S02),
+                serverAt("RACK-A01-R01", "U02"),
                 tick
         );
         assertEquals(2, receivedPositions.size());
@@ -191,7 +191,7 @@ class NoiseWorkloadSourceTest {
 
     @Test
     void shouldProduceSameSequenceWithSameSeed() {
-        Server server = serverAt(Column.A01, Row.R01, Slot.S01);
+        Server server = serverAt("RACK-A01-R01", "U01");
         NoiseWorkloadSource sourceA = new NoiseWorkloadSource(
                 fractalNoise(1234L),
                 0.001,
@@ -214,7 +214,7 @@ class NoiseWorkloadSourceTest {
 
     @Test
     void shouldProduceDifferentSequenceWithDifferentSeeds() {
-        Server server = serverAt(Column.A01, Row.R01, Slot.S01);
+        Server server = serverAt("RACK-A01-R01", "U01");
         NoiseWorkloadSource sourceA = new NoiseWorkloadSource(
                 fractalNoise(1234L),
                 0.001,
@@ -262,7 +262,7 @@ class NoiseWorkloadSourceTest {
                 0.0f,
                 1.0f
         );
-        Server server = serverAt(Column.A01, Row.R01, Slot.S01);
+        Server server = serverAt("RACK-A01-R01", "U01");
         assertThrows(
                 NullPointerException.class,
                 () -> workloadSource.getUtilization(server, null)

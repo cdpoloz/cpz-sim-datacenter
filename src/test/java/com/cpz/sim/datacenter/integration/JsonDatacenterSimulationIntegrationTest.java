@@ -61,6 +61,8 @@ class JsonDatacenterSimulationIntegrationTest {
     @Test
     void shouldRunNoiseSimulationFromJsonConfiguration() {
         Datacenter datacenter = loadDatacenterFromJson();
+        assertEquals(2, datacenter.getRackCount());
+        assertEquals(2, datacenter.getServerCount());
         WorkloadSource workloadSource = createNoiseWorkloadSource();
         SimulationClock clock = new SimulationClock(Duration.ofMinutes(30));
         SimulationEngine engine = new SimulationEngine(clock);
@@ -69,16 +71,16 @@ class JsonDatacenterSimulationIntegrationTest {
         engine.register(new PowerConsumptionSystem(datacenter));
         engine.register(energySystem);
         double[] expectedPowerWatts = {
-                432.9,
-                416.5,
-                424.1,
-                412.6
+                427.6,
+                419.5,
+                421.7,
+                424.6
         };
         double[] expectedEnergyKWh = {
-                0.216,
-                0.425,
-                0.637,
-                0.843
+                0.214,
+                0.424,
+                0.634,
+                0.847
         };
         for (int i = 0; i < 4; i++) {
             SimulationTick tick = engine.step();

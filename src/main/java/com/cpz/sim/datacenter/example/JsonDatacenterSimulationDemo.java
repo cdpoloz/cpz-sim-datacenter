@@ -35,8 +35,9 @@ public class JsonDatacenterSimulationDemo {
         Datacenter datacenter = factory.create(definition);
         System.out.printf(
                 Locale.US,
-                "Loaded datacenter: %s | Servers: %d%n",
+                "Loaded datacenter: %s | Racks: %d | Servers: %d%n",
                 definition.name(),
+                datacenter.getRackCount(),
                 datacenter.getServerCount()
         );
         PerlinNoise perlinNoise = new PerlinNoise(1234L);

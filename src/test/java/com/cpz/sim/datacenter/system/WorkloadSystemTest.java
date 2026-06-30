@@ -22,10 +22,11 @@ class WorkloadSystemTest {
 
     private static Server createServer(
             ServerConfig config,
-            Slot slot
+            RackCode rackCode,
+            String slot
     ) {
         return new Server(
-                new ServerLocation(Column.A01, Row.R01, slot),
+                new ServerLocation(rackCode, slot),
                 config,
                 HardwareStatus.OK
         );
@@ -44,9 +45,10 @@ class WorkloadSystemTest {
                 100.0f,
                 300.0f
         );
-        serverA = createServer(config, Slot.S01);
-        serverB = createServer(config, Slot.S02);
-        datacenter = new Datacenter(List.of(serverA, serverB));
+        Rack rack = new Rack(new RackCode("RACK-A01-R01"), new RackLocation("A01", "R01"), 42);
+        serverA = createServer(config, rack.getCode(), "U01");
+        serverB = createServer(config, rack.getCode(), "U02");
+        datacenter = new Datacenter(List.of(rack), List.of(serverA, serverB));
     }
 
     @Test

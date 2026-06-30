@@ -22,8 +22,8 @@ class EnergyConsumptionSystemTest {
     private SimulationEngine engine;
     private EnergyConsumptionSystem energySystem;
 
-    private static Server createServer(ServerConfig config, Slot slot) {
-        return new Server(new ServerLocation(Column.A01, Row.R01, slot), config, HardwareStatus.OK);
+    private static Server createServer(ServerConfig config, RackCode rackCode, String slot) {
+        return new Server(new ServerLocation(rackCode, slot), config, HardwareStatus.OK);
     }
 
     @BeforeEach
@@ -35,9 +35,10 @@ class EnergyConsumptionSystemTest {
                 100.0f,
                 300.0f
         );
-        Server serverA = createServer(config, Slot.S01);
-        Server serverB = createServer(config, Slot.S02);
-        datacenter = new Datacenter(List.of(serverA, serverB));
+        Rack rack = new Rack(new RackCode("RACK-A01-R01"), new RackLocation("A01", "R01"), 42);
+        Server serverA = createServer(config, rack.getCode(), "U01");
+        Server serverB = createServer(config, rack.getCode(), "U02");
+        datacenter = new Datacenter(List.of(rack), List.of(serverA, serverB));
         WorkloadSource source = (server, tick) -> 0.5f;
         energySystem = new EnergyConsumptionSystem(datacenter);
         engine = new SimulationEngine(new SimulationClock(Duration.ofMinutes(30)));

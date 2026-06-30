@@ -4,8 +4,7 @@ package com.cpz.sim.datacenter.config.definition;
  * @author CPZ
  */
 public record ServerDefinition(
-        String column,
-        String row,
+        String rackCode,
         String slot,
         String modelCode,
         String status,
@@ -13,12 +12,11 @@ public record ServerDefinition(
 ) {
 
     public ServerDefinition(
-            String column,
-            String row,
+            String rackCode,
             String slot,
             String modelCode,
             String status
     ) {
-        this(column, row, slot, modelCode, status, 1.0f);
+        this(rackCode, slot, modelCode, status, 1.0f);
     }
 }

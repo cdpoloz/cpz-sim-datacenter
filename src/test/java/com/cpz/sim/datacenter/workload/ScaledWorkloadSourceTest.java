@@ -1,12 +1,10 @@
 package com.cpz.sim.datacenter.workload;
 
-import com.cpz.sim.datacenter.model.Column;
 import com.cpz.sim.datacenter.model.HardwareStatus;
-import com.cpz.sim.datacenter.model.Row;
+import com.cpz.sim.datacenter.model.RackCode;
 import com.cpz.sim.datacenter.model.Server;
 import com.cpz.sim.datacenter.model.ServerConfig;
 import com.cpz.sim.datacenter.model.ServerLocation;
-import com.cpz.sim.datacenter.model.Slot;
 import com.cpz.sim.foundation.time.SimulationTick;
 import org.junit.jupiter.api.Test;
 
@@ -19,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class ScaledWorkloadSourceTest {
 
     private static Server createServer() {
-        ServerLocation location = new ServerLocation(Column.A01, Row.R01, Slot.S01);
+        ServerLocation location = new ServerLocation(new RackCode("RACK-A01-R01"), "U01");
         ServerConfig config = new ServerConfig(
                 "SRV-DEMO-001",
                 "CPZ",

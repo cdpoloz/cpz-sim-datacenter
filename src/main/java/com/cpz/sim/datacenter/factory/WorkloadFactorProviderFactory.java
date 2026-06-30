@@ -29,7 +29,7 @@ public class WorkloadFactorProviderFactory {
         validator.validate(definition);
         Map<String, Float> factorsByServerCode = new HashMap<>();
         for (ServerDefinition server : definition.servers()) {
-            String serverCode = server.column() + "-" + server.row() + "-" + server.slot();
+            String serverCode = server.rackCode() + "-" + server.slot();
             factorsByServerCode.put(serverCode, server.workloadFactor());
         }
         return new MapServerWorkloadFactorProvider(factorsByServerCode);

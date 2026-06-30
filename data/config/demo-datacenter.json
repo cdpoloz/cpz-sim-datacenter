@@ -1,5 +1,21 @@
 {
   "name": "Demo Datacenter",
+  "layout": {
+    "racks": [
+      {
+        "code": "RACK-A01-R01",
+        "column": "A01",
+        "row": "R01",
+        "slotCount": 42
+      },
+      {
+        "code": "RACK-A01-R02",
+        "column": "A01",
+        "row": "R02",
+        "slotCount": 42
+      }
+    ]
+  },
   "serverModels": [
     {
       "modelCode": "SRV-DEMO-001",
@@ -11,17 +27,15 @@
   ],
   "servers": [
     {
-      "column": "A01",
-      "row": "R01",
-      "slot": "S01",
+      "rackCode": "RACK-A01-R01",
+      "slot": "U01",
       "modelCode": "SRV-DEMO-001",
       "status": "OK",
       "workloadFactor": 1.5
     },
     {
-      "column": "A01",
-      "row": "R01",
-      "slot": "S02",
+      "rackCode": "RACK-A01-R01",
+      "slot": "U02",
       "modelCode": "SRV-DEMO-001",
       "status": "OK",
       "workloadFactor": 1.0

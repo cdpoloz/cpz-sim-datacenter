@@ -1,6 +1,8 @@
 package com.cpz.sim.datacenter.factory;
 
 import com.cpz.sim.datacenter.config.definition.DatacenterDefinition;
+import com.cpz.sim.datacenter.config.definition.DatacenterLayoutDefinition;
+import com.cpz.sim.datacenter.config.definition.RackDefinition;
 import com.cpz.sim.datacenter.config.definition.ServerDefinition;
 import com.cpz.sim.datacenter.config.definition.ServerModelDefinition;
 import com.cpz.sim.datacenter.config.validation.DatacenterConfigValidationException;
@@ -19,9 +21,19 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 class DatacenterFactoryTest {
 
+    private static DatacenterLayoutDefinition validLayout() {
+        return new DatacenterLayoutDefinition(
+                List.of(
+                        new RackDefinition("RACK-A01-R01", "A01", "R01", 42),
+                        new RackDefinition("RACK-A01-R02", "A01", "R02", 42)
+                )
+        );
+    }
+
     private static DatacenterDefinition validDefinition() {
         return new DatacenterDefinition(
                 "Demo Datacenter",
+                validLayout(),
                 List.of(
                         new ServerModelDefinition(
                                 "SRV-DEMO-001",
@@ -33,16 +45,14 @@ class DatacenterFactoryTest {
                 ),
                 List.of(
                         new ServerDefinition(
-                                "A01",
-                                "R01",
-                                "S01",
+                                "RACK-A01-R01",
+                                "U01",
                                 "SRV-DEMO-001",
                                 "OK"
                         ),
                         new ServerDefinition(
-                                "A01",
-                                "R01",
-                                "S02",
+                                "RACK-A01-R01",
+                                "U02",
                                 "SRV-DEMO-001",
                                 "OK"
                         )
@@ -55,6 +65,7 @@ class DatacenterFactoryTest {
         DatacenterDefinition definition = validDefinition();
         DatacenterFactory factory = new DatacenterFactory();
         Datacenter datacenter = factory.create(definition);
+        assertEquals(2, datacenter.getRackCount());
         assertEquals(2, datacenter.getServerCount());
     }
 
@@ -73,6 +84,7 @@ class DatacenterFactoryTest {
     void shouldApplyInitialHardwareStatus() {
         DatacenterDefinition definition = new DatacenterDefinition(
                 "Demo Datacenter",
+                validLayout(),
                 List.of(
                         new ServerModelDefinition(
                                 "SRV-DEMO-001",
@@ -84,9 +96,8 @@ class DatacenterFactoryTest {
                 ),
                 List.of(
                         new ServerDefinition(
-                                "A01",
-                                "R01",
-                                "S01",
+                                "RACK-A01-R01",
+                                "U01",
                                 "SRV-DEMO-001",
                                 "OFFLINE"
                         )
@@ -102,6 +113,7 @@ class DatacenterFactoryTest {
     void shouldRejectUnknownServerModel() {
         DatacenterDefinition definition = new DatacenterDefinition(
                 "Demo Datacenter",
+                validLayout(),
                 List.of(
                         new ServerModelDefinition(
                                 "SRV-DEMO-001",
@@ -113,9 +125,8 @@ class DatacenterFactoryTest {
                 ),
                 List.of(
                         new ServerDefinition(
-                                "A01",
-                                "R01",
-                                "S01",
+                                "RACK-A01-R01",
+                                "U01",
                                 "UNKNOWN",
                                 "OK"
                         )
@@ -129,6 +140,7 @@ class DatacenterFactoryTest {
     void shouldRejectDuplicatedServerLocations() {
         DatacenterDefinition definition = new DatacenterDefinition(
                 "Demo Datacenter",
+                validLayout(),
                 List.of(
                         new ServerModelDefinition(
                                 "SRV-DEMO-001",
@@ -140,16 +152,14 @@ class DatacenterFactoryTest {
                 ),
                 List.of(
                         new ServerDefinition(
-                                "A01",
-                                "R01",
-                                "S01",
+                                "RACK-A01-R01",
+                                "U01",
                                 "SRV-DEMO-001",
                                 "OK"
                         ),
                         new ServerDefinition(
-                                "A01",
-                                "R01",
-                                "S01",
+                                "RACK-A01-R01",
+                                "U01",
                                 "SRV-DEMO-001",
                                 "OK"
                         )
@@ -160,9 +170,10 @@ class DatacenterFactoryTest {
     }
 
     @Test
-    void shouldRejectInvalidEnumValues() {
+    void shouldRejectUnknownRackCode() {
         DatacenterDefinition definition = new DatacenterDefinition(
                 "Demo Datacenter",
+                validLayout(),
                 List.of(
                         new ServerModelDefinition(
                                 "SRV-DEMO-001",
@@ -174,9 +185,8 @@ class DatacenterFactoryTest {
                 ),
                 List.of(
                         new ServerDefinition(
-                                "INVALID_COLUMN",
-                                "R01",
-                                "S01",
+                                "UNKNOWN_RACK",
+                                "U01",
                                 "SRV-DEMO-001",
                                 "OK"
                         )
@@ -184,6 +194,11 @@ class DatacenterFactoryTest {
         );
         DatacenterFactory factory = new DatacenterFactory();
         assertThrows(DatacenterConfigValidationException.class, () -> factory.create(definition));
+    }
+
+    @Test
+    void shouldRejectNullValidator() {
+        assertThrows(NullPointerException.class, () -> new DatacenterFactory(null));
     }
 
 }

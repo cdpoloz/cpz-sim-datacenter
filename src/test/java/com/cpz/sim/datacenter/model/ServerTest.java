@@ -22,7 +22,7 @@ class ServerTest {
                 100.0f,
                 300.0f
         );
-        ServerLocation location = new ServerLocation(Column.A01, Row.R01, Slot.S01);
+        ServerLocation location = new ServerLocation(new RackCode("RACK-A01-R01"), "U01");
         server = new Server(location, config, HardwareStatus.OK);
     }
 
@@ -66,6 +66,6 @@ class ServerTest {
 
     @Test
     void shouldExposeLocationCode() {
-        assertEquals("A01-R01-S01", server.getCode());
+        assertEquals("RACK-A01-R01-U01", server.getCode());
     }
 }

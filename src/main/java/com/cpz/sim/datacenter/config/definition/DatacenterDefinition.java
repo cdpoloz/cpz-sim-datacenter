@@ -7,6 +7,7 @@ import java.util.List;
  */
 public record DatacenterDefinition(
         String name,
+        DatacenterLayoutDefinition layout,
         List<ServerModelDefinition> serverModels,
         List<ServerDefinition> servers
 ) {

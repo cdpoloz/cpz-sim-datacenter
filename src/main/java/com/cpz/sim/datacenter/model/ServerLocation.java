@@ -6,18 +6,17 @@ import java.util.Objects;
  * @author CPZ
  */
 public record ServerLocation(
-        Column column,
-        Row row,
-        Slot slot
+        RackCode rackCode,
+        String slot
 ) {
 
     public ServerLocation {
-        Objects.requireNonNull(column, "column cannot be null");
-        Objects.requireNonNull(row, "row cannot be null");
+        Objects.requireNonNull(rackCode, "rackCode cannot be null");
         Objects.requireNonNull(slot, "slot cannot be null");
+        if (slot.isBlank()) throw new IllegalArgumentException("slot cannot be blank");
     }
 
     public String code() {
-        return column + "-" + row + "-" + slot;
+        return rackCode.value() + "-" + slot;
     }
 }
