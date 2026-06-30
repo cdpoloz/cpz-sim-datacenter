@@ -65,6 +65,7 @@ public final class DatacenterConfigValidator {
             validateRequiredServerFields(server, context, errors);
             validateServerEnums(server, context, errors);
             validateServerModelReference(server, knownModelCodes, context, errors);
+            validateWorkloadFactor(server, context, errors);
             validateDuplicatedLocation(server, locations, context, errors);
         }
     }
@@ -127,6 +128,12 @@ public final class DatacenterConfigValidator {
 
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private static void validateWorkloadFactor(ServerDefinition server, String context, List<String> errors) {
+        if (!Float.isFinite(server.workloadFactor()) || server.workloadFactor() < 0.0f) {
+            errors.add(context + " must have finite workloadFactor >= 0");
+        }
     }
 
     public void validate(DatacenterDefinition definition) {

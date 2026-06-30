@@ -12,19 +12,21 @@
         <maven.compiler.release>26</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.version>5.12.2</junit.version>
-        <jackson.version>2.22.0</jackson.version>
+        <cpz.utils.version>0.2.3</cpz.utils.version>
+        <cpz.sim.foundation.version>0.1.0-SNAPSHOT</cpz.sim.foundation.version>
+        <jackson.version>2.21.4</jackson.version>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>com.cpz.sim.foundation</groupId>
             <artifactId>cpz-sim-foundation</artifactId>
-            <version>0.1.0-SNAPSHOT</version>
+            <version>${cpz.sim.foundation.version}</version>
         </dependency>
         <dependency>
             <groupId>io.github.cdpoloz</groupId>
             <artifactId>cpz-utils</artifactId>
-            <version>0.2.3</version>
+            <version>${cpz.utils.version}</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

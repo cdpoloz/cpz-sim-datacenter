@@ -1,0 +1,77 @@
+{
+  "name": "Medium Demo Datacenter",
+  "serverModels": [
+    {
+      "modelCode": "SRV-DEMO-001",
+      "manufacturer": "CPZ",
+      "model": "Demo Compute Server",
+      "idlePowerWatts": 100.0,
+      "maxPowerWatts": 300.0
+    },
+    {
+      "modelCode": "SRV-STORAGE-001",
+      "manufacturer": "CPZ",
+      "model": "Demo Storage Server",
+      "idlePowerWatts": 150.0,
+      "maxPowerWatts": 450.0
+    }
+  ],
+  "servers": [
+    {
+      "column": "A01",
+      "row": "R01",
+      "slot": "S01",
+      "modelCode": "SRV-DEMO-001",
+      "status": "OK"
+    },
+    {
+      "column": "A01",
+      "row": "R01",
+      "slot": "S02",
+      "modelCode": "SRV-DEMO-001",
+      "status": "OK"
+    },
+    {
+      "column": "A01",
+      "row": "R02",
+      "slot": "S01",
+      "modelCode": "SRV-STORAGE-001",
+      "status": "OK"
+    },
+    {
+      "column": "A01",
+      "row": "R02",
+      "slot": "S02",
+      "modelCode": "SRV-STORAGE-001",
+      "status": "OK"
+    },
+    {
+      "column": "A02",
+      "row": "R01",
+      "slot": "S01",
+      "modelCode": "SRV-DEMO-001",
+      "status": "OK"
+    },
+    {
+      "column": "A02",
+      "row": "R01",
+      "slot": "S02",
+      "modelCode": "SRV-DEMO-001",
+      "status": "OK"
+    },
+    {
+      "column": "A02",
+      "row": "R02",
+      "slot": "S01",
+      "modelCode": "SRV-STORAGE-001",
+      "status": "OK"
+    },
+    {
+      "column": "A02",
+      "row": "R02",
+      "slot": "S02",
+      "modelCode": "SRV-STORAGE-001",
+      "status": "OFFLINE"
+    }
+  ]
+}
