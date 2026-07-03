@@ -8,7 +8,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -60,6 +62,38 @@ class WorkloadSystemTest {
         engine.step();
         assertEquals(0.25f, serverA.getUtilization());
         assertEquals(0.75f, serverB.getUtilization());
+    }
+
+    @Test
+    void shouldKeepOfflineServersAtZeroUtilization() {
+        serverA.setUtilization(0.9f);
+        serverA.setStatus(HardwareStatus.OFFLINE);
+
+        WorkloadSource source = (server, tick) -> server == serverA ? 0.25f : 0.75f;
+        WorkloadSystem system = new WorkloadSystem(datacenter, source);
+        SimulationEngine engine = createEngine();
+
+        engine.register(system);
+        engine.step();
+
+        assertEquals(0.0f, serverA.getUtilization());
+        assertEquals(0.75f, serverB.getUtilization());
+    }
+
+    @Test
+    void shouldNotQueryWorkloadSourceForOfflineServers() {
+        serverA.setStatus(HardwareStatus.OFFLINE);
+        RecordingWorkloadSource source = new RecordingWorkloadSource(Map.of(serverB, 0.6f));
+        WorkloadSystem system = new WorkloadSystem(datacenter, source);
+        SimulationEngine engine = createEngine();
+
+        engine.register(system);
+        engine.step();
+
+        assertEquals(0, source.invocationCount(serverA));
+        assertEquals(1, source.invocationCount(serverB));
+        assertEquals(0.0f, serverA.getUtilization());
+        assertEquals(0.6f, serverB.getUtilization());
     }
 
     @Test
@@ -122,6 +156,26 @@ class WorkloadSystemTest {
         assertEquals(0.0f, serverB.getUtilization());
         assertEquals(200.0f, datacenter.getTotalItPowerWatts());
         assertEquals(0L, engine.currentTick().index());
+    }
+
+    private static final class RecordingWorkloadSource implements WorkloadSource {
+
+        private final Map<Server, Float> utilizationByServer;
+        private final Map<Server, Integer> invocations = new HashMap<>();
+
+        private RecordingWorkloadSource(Map<Server, Float> utilizationByServer) {
+            this.utilizationByServer = utilizationByServer;
+        }
+
+        @Override
+        public float getUtilization(Server server, com.cpz.sim.foundation.time.SimulationTick tick) {
+            invocations.merge(server, 1, Integer::sum);
+            return utilizationByServer.getOrDefault(server, 0.0f);
+        }
+
+        private int invocationCount(Server server) {
+            return invocations.getOrDefault(server, 0);
+        }
     }
 
 }

@@ -6,14 +6,14 @@
 
     <groupId>com.cpz.sim</groupId>
     <artifactId>cpz-sim-datacenter</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0-alpha.1</version>
 
     <properties>
         <maven.compiler.release>26</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.version>5.12.2</junit.version>
         <cpz.utils.version>0.2.3</cpz.utils.version>
-        <cpz.sim.foundation.version>0.1.0-SNAPSHOT</cpz.sim.foundation.version>
+        <cpz.sim.foundation.version>0.1.0-alpha.1</cpz.sim.foundation.version>
         <jackson.version>2.21.4</jackson.version>
     </properties>
 

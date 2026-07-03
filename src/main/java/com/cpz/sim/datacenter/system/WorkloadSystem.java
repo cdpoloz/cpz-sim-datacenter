@@ -1,6 +1,7 @@
 package com.cpz.sim.datacenter.system;
 
 import com.cpz.sim.datacenter.model.Datacenter;
+import com.cpz.sim.datacenter.model.HardwareStatus;
 import com.cpz.sim.datacenter.model.Server;
 import com.cpz.sim.datacenter.workload.WorkloadSource;
 import com.cpz.sim.foundation.engine.Simulatable;
@@ -25,6 +26,10 @@ public class WorkloadSystem implements Simulatable {
     public void update(SimulationTick tick) {
         Objects.requireNonNull(tick, "tick cannot be null");
         for (Server server : datacenter.getServers()) {
+            if (server.getStatus() == HardwareStatus.OFFLINE) {
+                server.setUtilization(0.0f);
+                continue;
+            }
             float utilization = workloadSource.getUtilization(server, tick);
             server.setUtilization(utilization);
         }

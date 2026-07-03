@@ -95,7 +95,7 @@ class MediumJsonDatacenterIntegrationTest {
                 .filter(server -> server.getStatus() == HardwareStatus.OFFLINE)
                 .findFirst()
                 .orElseThrow();
-        assertEquals(1.0f, offlineServer.getUtilization());
+        assertEquals(0.0f, offlineServer.getUtilization());
         assertEquals(0.0f, offlineServer.getCurrentPowerWatts());
     }
 
