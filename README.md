@@ -1,4 +1,9 @@
-# cpz-sim-datacenter
+# CPZ-SIM-DATACENTER
+
+![Java](https://img.shields.io/badge/Java-26+-orange)
+![Status](https://img.shields.io/badge/status-active-brightgreen)
+![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey)
+[![GitHub](https://img.shields.io/badge/GitHub-cdpoloz-181717?logo=github)](https://github.com/cdpoloz)
 
 `cpz-sim-datacenter` is a pure Java backend for simulating server workload, IT
 power and accumulated energy consumption in a datacenter. It is an independent
@@ -8,6 +13,8 @@ UI such as `sim-datacenter-ui`.
 It does not include Processing, a graphical UI, temperature modeling, cooling
 modeling or a thermal model. The API is preliminary and may change before the
 final `0.1.0` release.
+
+---
 
 ## Current Status
 
@@ -39,6 +46,8 @@ Important rules:
 - `Server.updatePowerConsumption()` forces `currentPowerWatts = 0.0f` for `OFFLINE` servers.
 - `workloadFactor` can be greater than `1.0`; the final utilization produced by `ScaledWorkloadSource` is clamped to `[0, 1]`.
 
+---
+
 ## Requirements
 
 - Java 26.
@@ -46,6 +55,8 @@ Important rules:
 - `cpz-sim-foundation` version `0.1.0-alpha.1`, installed locally or available from a configured Maven repository.
 - `cpz-utils` version `0.2.3`, resolved by Maven.
 - Jackson Databind, resolved by Maven.
+
+---
 
 ## Local Build
 
@@ -63,6 +74,8 @@ mvn clean install
 
 If `cpz-sim-foundation` is not published in a reachable repository, install it in
 the local Maven repository before building this project.
+
+---
 
 ## Quick Usage
 
@@ -82,6 +95,8 @@ Recommended local order when all projects are under development:
 2. Install `cpz-sim-datacenter`.
 3. Build or run `sim-datacenter-ui`.
 
+---
+
 ## Minimal JSON Configuration
 
 ```json
@@ -90,14 +105,14 @@ Recommended local order when all projects are under development:
   "layout": {
     "racks": [
       {
-        "code": "RACK-A01-R01",
-        "column": "A01",
+        "code": "RACK-C01-R01",
+        "column": "C01",
         "row": "R01",
         "slotCount": 42
       },
       {
-        "code": "RACK-A01-R02",
-        "column": "A01",
+        "code": "RACK-C01-R02",
+        "column": "C01",
         "row": "R02",
         "slotCount": 42
       }
@@ -114,14 +129,14 @@ Recommended local order when all projects are under development:
   ],
   "servers": [
     {
-      "rackCode": "RACK-A01-R01",
+      "rackCode": "RACK-C01-R01",
       "slot": "U01",
       "modelCode": "SRV-DEMO-001",
       "status": "OK",
       "workloadFactor": 1.5
     },
     {
-      "rackCode": "RACK-A01-R01",
+      "rackCode": "RACK-C01-R01",
       "slot": "U02",
       "modelCode": "SRV-DEMO-001",
       "status": "OFFLINE",
@@ -131,7 +146,9 @@ Recommended local order when all projects are under development:
 }
 ```
 
-`RACK-A01-R02` exists even though it has no installed servers.
+`RACK-C01-R02` exists even though it has no installed servers.
+
+---
 
 ## Energy Snapshot
 
@@ -182,6 +199,8 @@ The snapshot captures tick index, elapsed seconds, total IT power, accumulated
 energy and one entry per server with rack, slot, status, utilization and current
 power.
 
+---
+
 ## Existing Demos
 
 The demos are located in `src/main/java/com/cpz/sim/datacenter/example`:
@@ -202,6 +221,8 @@ mvn -Dexec.mainClass=com.cpz.sim.datacenter.example.EnergySnapshotSimulationDemo
 `EnergySnapshotSimulationDemo` optionally accepts the JSON path as its first
 argument; by default it uses `data/config/demo-datacenter-medium.json`.
 
+---
+
 ## Additional Documentation
 
 - [Architecture](docs/architecture.md)
@@ -209,6 +230,8 @@ argument; by default it uses `data/config/demo-datacenter-medium.json`.
 - [Workloads](docs/workloads.md)
 - [Energy Snapshot](docs/energy-snapshot.md)
 - [Using the Library from a Maven UI](docs/getting-started-ui.md)
+
+---
 
 ## Roadmap
 
@@ -220,6 +243,8 @@ outside the current scope:
 - Cooling model.
 - UI or visualization.
 - More complete public contracts for consumer applications.
+
+---
 
 ## License
 
