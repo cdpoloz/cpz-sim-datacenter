@@ -3,32 +3,32 @@
   "layout": {
     "racks": [
       {
-        "code": "RACK-A01-R01",
-        "column": "A01",
+        "code": "RACK-C01-R01",
+        "column": "C01",
         "row": "R01",
         "slotCount": 42
       },
       {
-        "code": "RACK-A01-R02",
-        "column": "A01",
+        "code": "RACK-C01-R02",
+        "column": "C01",
         "row": "R02",
         "slotCount": 42
       },
       {
-        "code": "RACK-A02-R01",
-        "column": "A02",
+        "code": "RACK-C02-R01",
+        "column": "C02",
         "row": "R01",
         "slotCount": 42
       },
       {
-        "code": "RACK-A02-R02",
-        "column": "A02",
+        "code": "RACK-C02-R02",
+        "column": "C02",
         "row": "R02",
         "slotCount": 42
       },
       {
-        "code": "RACK-A03-R01",
-        "column": "A03",
+        "code": "RACK-C03-R01",
+        "column": "C03",
         "row": "R01",
         "slotCount": 42
       }
@@ -52,56 +52,56 @@
   ],
   "servers": [
     {
-      "rackCode": "RACK-A01-R01",
+      "rackCode": "RACK-C01-R01",
       "slot": "U01",
       "modelCode": "SRV-DEMO-001",
       "status": "OK",
       "workloadFactor": 1.5
     },
     {
-      "rackCode": "RACK-A01-R01",
+      "rackCode": "RACK-C01-R01",
       "slot": "U02",
       "modelCode": "SRV-DEMO-001",
       "status": "OK",
       "workloadFactor": 1.3
     },
     {
-      "rackCode": "RACK-A01-R02",
+      "rackCode": "RACK-C01-R02",
       "slot": "U01",
       "modelCode": "SRV-STORAGE-001",
       "status": "OK",
       "workloadFactor": 1.0
     },
     {
-      "rackCode": "RACK-A01-R02",
+      "rackCode": "RACK-C01-R02",
       "slot": "U02",
       "modelCode": "SRV-STORAGE-001",
       "status": "OK",
       "workloadFactor": 0.9
     },
     {
-      "rackCode": "RACK-A02-R01",
+      "rackCode": "RACK-C02-R01",
       "slot": "U01",
       "modelCode": "SRV-DEMO-001",
       "status": "OK",
       "workloadFactor": 1.4
     },
     {
-      "rackCode": "RACK-A02-R01",
+      "rackCode": "RACK-C02-R01",
       "slot": "U02",
       "modelCode": "SRV-DEMO-001",
       "status": "OK",
       "workloadFactor": 1.0
     },
     {
-      "rackCode": "RACK-A02-R02",
+      "rackCode": "RACK-C02-R02",
       "slot": "U01",
       "modelCode": "SRV-STORAGE-001",
       "status": "OK",
       "workloadFactor": 0.8
     },
     {
-      "rackCode": "RACK-A02-R02",
+      "rackCode": "RACK-C02-R02",
       "slot": "U02",
       "modelCode": "SRV-STORAGE-001",
       "status": "OFFLINE",
