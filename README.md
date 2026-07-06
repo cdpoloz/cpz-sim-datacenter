@@ -1,4 +1,4 @@
-# CPZ-SIM-DATACENTER
+# CPZ SIM Datacenter
 
 ![Java](https://img.shields.io/badge/Java-26+-orange)
 ![Status](https://img.shields.io/badge/status-active-brightgreen)
