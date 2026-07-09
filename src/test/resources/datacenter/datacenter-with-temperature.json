@@ -1,0 +1,37 @@
+{
+  "name": "Datacenter With Temperature",
+  "layout": {
+    "racks": [
+      {
+        "code": "RACK-A01-R01",
+        "column": "A01",
+        "row": "R01",
+        "slotCount": 42
+      }
+    ]
+  },
+  "serverModels": [
+    {
+      "modelCode": "SRV-DEMO-001",
+      "manufacturer": "CPZ",
+      "model": "Demo Server",
+      "idlePowerWatts": 100.0,
+      "maxPowerWatts": 300.0
+    }
+  ],
+  "servers": [
+    {
+      "rackCode": "RACK-A01-R01",
+      "slot": "U01",
+      "modelCode": "SRV-DEMO-001",
+      "status": "OK",
+      "workloadFactor": 1.0
+    }
+  ],
+  "temperature": {
+    "ambientTemperatureCelsius": 24.0,
+    "defaultInitialTemperatureCelsius": 30.0,
+    "thermalCapacityJoulesPerCelsius": 5000.0,
+    "heatDissipationWattsPerCelsius": 8.0
+  }
+}

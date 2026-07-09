@@ -1,0 +1,51 @@
+{
+  "name": "Temperature Demo Datacenter",
+  "layout": {
+    "racks": [
+      {
+        "code": "RACK-C01-R01",
+        "column": "C01",
+        "row": "R01",
+        "slotCount": 42
+      }
+    ]
+  },
+  "serverModels": [
+    {
+      "modelCode": "SRV-TEMP-DEMO-001",
+      "manufacturer": "CPZ",
+      "model": "Temperature Demo Server",
+      "idlePowerWatts": 100.0,
+      "maxPowerWatts": 500.0
+    }
+  ],
+  "servers": [
+    {
+      "rackCode": "RACK-C01-R01",
+      "slot": "U01",
+      "modelCode": "SRV-TEMP-DEMO-001",
+      "status": "OK",
+      "workloadFactor": 1.0
+    },
+    {
+      "rackCode": "RACK-C01-R01",
+      "slot": "U02",
+      "modelCode": "SRV-TEMP-DEMO-001",
+      "status": "OK",
+      "workloadFactor": 0.9
+    },
+    {
+      "rackCode": "RACK-C01-R01",
+      "slot": "U03",
+      "modelCode": "SRV-TEMP-DEMO-001",
+      "status": "OFFLINE",
+      "workloadFactor": 1.0
+    }
+  ],
+  "temperature": {
+    "ambientTemperatureCelsius": 24.0,
+    "defaultInitialTemperatureCelsius": 30.0,
+    "thermalCapacityJoulesPerCelsius": 5000.0,
+    "heatDissipationWattsPerCelsius": 8.0
+  }
+}

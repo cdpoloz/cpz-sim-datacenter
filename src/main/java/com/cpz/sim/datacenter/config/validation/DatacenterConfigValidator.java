@@ -5,6 +5,7 @@ import com.cpz.sim.datacenter.config.definition.DatacenterLayoutDefinition;
 import com.cpz.sim.datacenter.config.definition.RackDefinition;
 import com.cpz.sim.datacenter.config.definition.ServerDefinition;
 import com.cpz.sim.datacenter.config.definition.ServerModelDefinition;
+import com.cpz.sim.datacenter.config.definition.TemperatureSystemOptionsDefinition;
 import com.cpz.sim.datacenter.model.HardwareStatus;
 
 import java.util.ArrayList;
@@ -205,6 +206,24 @@ public final class DatacenterConfigValidator {
         }
     }
 
+    private static void validateTemperature(
+            TemperatureSystemOptionsDefinition temperature,
+            List<String> errors
+    ) {
+        if (temperature == null) return;
+        String context = "Temperature config";
+        if (!Double.isFinite(temperature.ambientTemperatureCelsius()))
+            errors.add(context + " must have finite ambientTemperatureCelsius");
+        if (!Double.isFinite(temperature.defaultInitialTemperatureCelsius()))
+            errors.add(context + " must have finite defaultInitialTemperatureCelsius");
+        if (!Double.isFinite(temperature.thermalCapacityJoulesPerCelsius())
+                || temperature.thermalCapacityJoulesPerCelsius() <= 0.0)
+            errors.add(context + " must have finite thermalCapacityJoulesPerCelsius > 0");
+        if (!Double.isFinite(temperature.heatDissipationWattsPerCelsius())
+                || temperature.heatDissipationWattsPerCelsius() < 0.0)
+            errors.add(context + " must have finite heatDissipationWattsPerCelsius >= 0");
+    }
+
     public void validate(DatacenterDefinition definition) {
         List<String> errors = new ArrayList<>();
         if (definition == null) throw new DatacenterConfigValidationException("Datacenter definition cannot be null");
@@ -212,6 +231,7 @@ public final class DatacenterConfigValidator {
         Map<String, RackDefinition> racksByCode = validateLayout(definition.layout(), errors);
         validateServerModels(definition.serverModels(), errors);
         validateServers(definition.servers(), definition.serverModels(), racksByCode, errors);
+        validateTemperature(definition.temperature(), errors);
         if (!errors.isEmpty())
             throw new DatacenterConfigValidationException(String.join(System.lineSeparator(), errors));
     }

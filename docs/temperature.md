@@ -21,6 +21,11 @@ The current milestone implements a server-level thermal model with these classes
 The model uses `Server.currentPowerWatts` as thermal input and updates one
 representative internal temperature per installed server.
 
+An optional top-level JSON `temperature` block can be used to configure
+`TemperatureSystemOptions`. If the block is omitted, `TemperatureSystemOptions.defaults()`
+remains the fallback behavior. If the block is present, all current fields are
+required.
+
 ## What `temperatureCelsius` Represents
 
 `ServerTemperatureSnapshot.temperatureCelsius()` is a simplified representative
@@ -179,7 +184,6 @@ The exact numeric output depends on workload evolution and tick duration.
 ## Current Limitations
 
 - simplified internal server temperature only
-- no JSON temperature configuration yet
 - no room temperature simulation output
 - no rack inlet temperature
 - no cooling model
@@ -191,7 +195,6 @@ The exact numeric output depends on workload evolution and tick duration.
 
 Possible future extensions, not implemented in this milestone:
 
-- JSON configuration for temperature model options
 - rack inlet temperature modeling
 - room or zone temperature modeling
 - cooling equipment integration

@@ -48,6 +48,18 @@ class JsonDatacenterConfigLoaderTest {
         assertEquals("RACK-A01-R01", definition.servers().getFirst().rackCode());
         assertEquals("U01", definition.servers().getFirst().slot());
         assertEquals(1.5f, definition.servers().getFirst().workloadFactor());
+        assertEquals(null, definition.temperature());
+    }
+
+    @Test
+    void shouldLoadDatacenterDefinitionWithTemperatureBlock() {
+        JsonDatacenterConfigLoader loader = new JsonDatacenterConfigLoader();
+        DatacenterDefinition definition = loader.load(resourcePath("datacenter/datacenter-with-temperature.json"));
+        assertEquals("Datacenter With Temperature", definition.name());
+        assertEquals(24.0, definition.temperature().ambientTemperatureCelsius());
+        assertEquals(30.0, definition.temperature().defaultInitialTemperatureCelsius());
+        assertEquals(5000.0, definition.temperature().thermalCapacityJoulesPerCelsius());
+        assertEquals(8.0, definition.temperature().heatDissipationWattsPerCelsius());
     }
 
     @Test
@@ -64,6 +76,15 @@ class JsonDatacenterConfigLoaderTest {
     void shouldRejectMissingJsonFile() {
         JsonDatacenterConfigLoader loader = new JsonDatacenterConfigLoader();
         assertThrows(DatacenterConfigException.class, () -> loader.load(Path.of("data/config/missing-datacenter.json")));
+    }
+
+    @Test
+    void shouldRejectPartialTemperatureBlock() {
+        JsonDatacenterConfigLoader loader = new JsonDatacenterConfigLoader();
+        assertThrows(
+                DatacenterConfigException.class,
+                () -> loader.load(resourcePath("datacenter/datacenter-with-partial-temperature.json"))
+        );
     }
 
 }

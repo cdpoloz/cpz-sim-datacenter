@@ -5,6 +5,7 @@ import com.cpz.sim.datacenter.config.definition.DatacenterLayoutDefinition;
 import com.cpz.sim.datacenter.config.definition.RackDefinition;
 import com.cpz.sim.datacenter.config.definition.ServerDefinition;
 import com.cpz.sim.datacenter.config.definition.ServerModelDefinition;
+import com.cpz.sim.datacenter.config.definition.TemperatureSystemOptionsDefinition;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -48,11 +49,20 @@ class DatacenterConfigValidatorTest {
             DatacenterLayoutDefinition layout,
             List<ServerDefinition> servers
     ) {
+        return definition(layout, servers, null);
+    }
+
+    private static DatacenterDefinition definition(
+            DatacenterLayoutDefinition layout,
+            List<ServerDefinition> servers,
+            TemperatureSystemOptionsDefinition temperature
+    ) {
         return new DatacenterDefinition(
                 "Demo Datacenter",
                 layout,
                 List.of(model()),
-                servers
+                servers,
+                temperature
         );
     }
 
@@ -176,7 +186,68 @@ class DatacenterConfigValidatorTest {
                 "Demo Datacenter",
                 layout(List.of(rack("RACK-A01-R01"))),
                 List.of(new ServerModelDefinition("SRV-DEMO-001", "CPZ", "Demo Server", 100.0f, 100.0f)),
-                List.of()
+                List.of(),
+                null
+        );
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldAcceptMissingTemperatureBlock() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(rack("RACK-A01-R01"))),
+                List.of(server("RACK-A01-R01", "U01", 1.0f)),
+                null
+        );
+        assertDoesNotThrow(() -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldAcceptValidTemperatureBlock() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(rack("RACK-A01-R01"))),
+                List.of(server("RACK-A01-R01", "U01", 1.0f)),
+                new TemperatureSystemOptionsDefinition(24.0, 30.0, 5000.0, 8.0)
+        );
+        assertDoesNotThrow(() -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectNonFiniteAmbientTemperature() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(rack("RACK-A01-R01"))),
+                List.of(server("RACK-A01-R01", "U01", 1.0f)),
+                new TemperatureSystemOptionsDefinition(Double.NaN, 30.0, 5000.0, 8.0)
+        );
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectNonFiniteDefaultInitialTemperature() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(rack("RACK-A01-R01"))),
+                List.of(server("RACK-A01-R01", "U01", 1.0f)),
+                new TemperatureSystemOptionsDefinition(24.0, Double.POSITIVE_INFINITY, 5000.0, 8.0)
+        );
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectZeroThermalCapacityInTemperatureBlock() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(rack("RACK-A01-R01"))),
+                List.of(server("RACK-A01-R01", "U01", 1.0f)),
+                new TemperatureSystemOptionsDefinition(24.0, 30.0, 0.0, 8.0)
+        );
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectNegativeHeatDissipationInTemperatureBlock() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(rack("RACK-A01-R01"))),
+                List.of(server("RACK-A01-R01", "U01", 1.0f)),
+                new TemperatureSystemOptionsDefinition(24.0, 30.0, 5000.0, -1.0)
         );
         assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
     }

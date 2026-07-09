@@ -184,13 +184,30 @@ end up with `0.0f` utilization and `0.0f` power.
 
 ## Temperature Configuration Status
 
-The initial server temperature model is implemented in Java, but JSON temperature
-configuration is not available yet in `0.1.0-alpha.1`.
+An optional `temperature` block can be added to the top-level JSON definition.
+If it is omitted, consumers can use `TemperatureSystemOptions.defaults()`.
 
-Possible future configuration areas include:
+Current shape:
 
-- ambient temperature input for the simplified server model
-- default initial server temperature
-- thermal capacity and heat dissipation coefficients
+```json
+{
+  "temperature": {
+    "ambientTemperatureCelsius": 24.0,
+    "defaultInitialTemperatureCelsius": 30.0,
+    "thermalCapacityJoulesPerCelsius": 5000.0,
+    "heatDissipationWattsPerCelsius": 8.0
+  }
+}
+```
 
-These options are not currently part of the JSON schema.
+Rules:
+
+- the whole `temperature` block is optional
+- if the block is present, all four fields are currently required
+- `ambientTemperatureCelsius` must be finite
+- `defaultInitialTemperatureCelsius` must be finite
+- `thermalCapacityJoulesPerCelsius` must be finite and `> 0`
+- `heatDissipationWattsPerCelsius` must be finite and `>= 0`
+
+This configuration feeds the simplified internal server temperature model only.
+It does not enable room temperature, rack inlet, cooling, or airflow modeling.

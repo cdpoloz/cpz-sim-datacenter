@@ -9,6 +9,16 @@ public record DatacenterDefinition(
         String name,
         DatacenterLayoutDefinition layout,
         List<ServerModelDefinition> serverModels,
-        List<ServerDefinition> servers
+        List<ServerDefinition> servers,
+        TemperatureSystemOptionsDefinition temperature
 ) {
+
+    public DatacenterDefinition(
+            String name,
+            DatacenterLayoutDefinition layout,
+            List<ServerModelDefinition> serverModels,
+            List<ServerDefinition> servers
+    ) {
+        this(name, layout, serverModels, servers, null);
+    }
 }
