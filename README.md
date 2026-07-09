@@ -6,13 +6,13 @@
 [![GitHub](https://img.shields.io/badge/GitHub-cdpoloz-181717?logo=github)](https://github.com/cdpoloz)
 
 `cpz-sim-datacenter` is a pure Java backend for simulating server workload, IT
-power and accumulated energy consumption in a datacenter. It is an independent
-Maven library intended to be consumed by other applications, for example a future
-UI such as `sim-datacenter-ui`.
+power, simplified server temperature, and accumulated energy consumption in a
+datacenter. It is an independent Maven library intended to be consumed by other
+applications, for example a future UI such as `sim-datacenter-ui`.
 
-It does not include Processing, a graphical UI, temperature modeling, cooling
-modeling or a thermal model. The API is preliminary and may change before the
-final `0.1.0` release.
+It does not include Processing, a graphical UI, client-specific logic, cooling
+modeling, airflow modeling, or room-level thermal modeling. The API is
+preliminary and may change before the final `0.1.0` release.
 
 ---
 
@@ -32,11 +32,12 @@ Available in `0.1.0-alpha.1`:
 - Physical layout with existing racks, including empty racks.
 - Servers installed by `rackCode` and `slot`.
 - Hardware states: `OK`, `ALERT`, `OFFLINE`.
-- Simulation systems: `WorkloadSystem`, `PowerConsumptionSystem` and `EnergyConsumptionSystem`.
+- Simulation systems: `WorkloadSystem`, `PowerConsumptionSystem`, `TemperatureSystem`, and `EnergyConsumptionSystem`.
 - Workload strategy through `WorkloadSource`, with noise-based and scaled workloads.
 - Integration with `FractalNoise` from `cpz-utils` for variable workloads.
 - Per-server `workloadFactor` read from JSON and applied through `ScaledWorkloadSource`.
 - Energy snapshots through `EnergyConsumptionSnapshotProvider`, `EnergyConsumptionSnapshot` and `ServerEnergySnapshot`.
+- Temperature snapshots through `TemperatureSnapshotProvider`, `TemperatureSnapshot`, and `ServerTemperatureSnapshot`.
 
 Important rules:
 
@@ -157,8 +158,18 @@ The expected causal simulation order is:
 ```text
 WorkloadSystem
 -> PowerConsumptionSystem
+-> TemperatureSystem
 -> EnergyConsumptionSystem
--> EnergyConsumptionSnapshotProvider
+```
+
+Snapshot providers read resulting state after systems update:
+
+```text
+WorkloadSystem
+-> PowerConsumptionSystem
+-> TemperatureSystem
+-> EnergyConsumptionSystem
+-> EnergyConsumptionSnapshotProvider / TemperatureSnapshotProvider
 ```
 
 Recommended flow using JSON `workloadFactor`, `FractalNoise`, `NoiseWorkloadSource`
@@ -182,22 +193,35 @@ ServerWorkloadFactorProvider factors =
         new WorkloadFactorProviderFactory().create(definition);
 WorkloadSource workload = new ScaledWorkloadSource(baseWorkload, factors);
 
+TemperatureSystemOptions temperatureOptions = TemperatureSystemOptions.defaults();
+TemperatureSystem temperatureSystem = new TemperatureSystem(
+        datacenter,
+        temperatureOptions,
+        new SimpleServerTemperatureModel()
+);
 EnergyConsumptionSystem energySystem = new EnergyConsumptionSystem(datacenter);
 
 SimulationEngine engine = new SimulationEngine(new SimulationClock(Duration.ofMinutes(30)));
 engine.register(new WorkloadSystem(datacenter, workload));
 engine.register(new PowerConsumptionSystem(datacenter));
+engine.register(temperatureSystem);
 engine.register(energySystem);
 
 SimulationTick tick = engine.step();
-EnergyConsumptionSnapshotProvider provider =
+EnergyConsumptionSnapshotProvider energyProvider =
         new EnergyConsumptionSnapshotProvider(datacenter, energySystem);
-EnergyConsumptionSnapshot snapshot = provider.snapshot(tick);
+TemperatureSnapshotProvider temperatureProvider =
+        new TemperatureSnapshotProvider(datacenter, temperatureSystem, temperatureOptions);
+EnergyConsumptionSnapshot energySnapshot = energyProvider.snapshot(tick);
+TemperatureSnapshot temperatureSnapshot = temperatureProvider.snapshot(tick);
 ```
 
 The snapshot captures tick index, elapsed seconds, total IT power, accumulated
 energy and one entry per server with rack, slot, status, utilization and current
 power.
+
+Temperature is exposed through a separate snapshot model. See
+[Temperature Model](docs/temperature.md).
 
 ---
 
@@ -209,6 +233,7 @@ The demos are located in `src/main/java/com/cpz/sim/datacenter/example`:
 - `NoiseWorkloadSimulationDemo`: in-code datacenter using `FractalNoise`.
 - `JsonDatacenterSimulationDemo`: loads `data/config/demo-datacenter-medium.json`, uses `FractalNoise` and `ScaledWorkloadSource`.
 - `EnergySnapshotSimulationDemo`: loads JSON, simulates `FractalNoise + workloadFactor` and emits snapshots.
+- `TemperatureSimulationDemo`: in-code simulation with workload, power, temperature, and energy systems plus separate energy and temperature snapshots.
 
 From an IDE, run the `main` method of each class directly. With Maven, because no
 exec plugin is configured in `pom.xml`, use the Maven Exec Plugin explicitly:
@@ -229,18 +254,19 @@ argument; by default it uses `data/config/demo-datacenter-medium.json`.
 - [JSON Configuration](docs/configuration.md)
 - [Workloads](docs/workloads.md)
 - [Energy Snapshot](docs/energy-snapshot.md)
+- [Temperature Model](docs/temperature.md)
 - [Using the Library from a Maven UI](docs/getting-started-ui.md)
 
 ---
 
 ## Roadmap
 
-This milestone closes the first functional base for energy simulation. Future work
-outside the current scope:
+This milestone closes the first functional base for energy simulation and the
+initial server temperature model. Future work outside the current scope:
 
 - Stable final `0.1.0` API.
-- Temperature model.
 - Cooling model.
+- Rack inlet, room, and cooling-zone thermal modeling.
 - UI or visualization.
 - More complete public contracts for consumer applications.
 

@@ -181,3 +181,16 @@ base utilization by the factor and clamps the result to `[0, 1]`.
 In this example `RACK-A01-R02` is an empty rack. The server in `U02` is installed
 but `OFFLINE`; after running `WorkloadSystem` and `PowerConsumptionSystem`, it must
 end up with `0.0f` utilization and `0.0f` power.
+
+## Temperature Configuration Status
+
+The initial server temperature model is implemented in Java, but JSON temperature
+configuration is not available yet in `0.1.0-alpha.1`.
+
+Possible future configuration areas include:
+
+- ambient temperature input for the simplified server model
+- default initial server temperature
+- thermal capacity and heat dissipation coefficients
+
+These options are not currently part of the JSON schema.

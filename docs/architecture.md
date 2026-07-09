@@ -2,7 +2,7 @@
 
 `cpz-sim-datacenter` is organized as a pure Java backend. The library models the
 physical state of a datacenter, loads JSON configuration, runs simulation systems,
-and exposes energy snapshots for external consumers.
+and exposes independent snapshots for external consumers.
 
 It does not include Processing or a UI. A future graphical application should
 consume this project as a Maven dependency and treat it as a domain/simulation
@@ -17,8 +17,9 @@ backend.
 - `com.cpz.sim.datacenter.config.validation`: validation of definitions before building the domain.
 - `com.cpz.sim.datacenter.factory`: domain construction and helper providers (`DatacenterFactory`, `WorkloadFactorProviderFactory`).
 - `com.cpz.sim.datacenter.workload`: workload strategies (`WorkloadSource` and its implementations).
+- `com.cpz.sim.datacenter.temperature`: server thermal state and temperature model contracts.
 - `com.cpz.sim.datacenter.system`: systems updated on each tick.
-- `com.cpz.sim.datacenter.snapshot`: energy snapshot DTOs and provider.
+- `com.cpz.sim.datacenter.snapshot`: snapshot DTOs and providers.
 - `com.cpz.sim.datacenter.example`: runnable demos.
 
 ## Domain Model
@@ -68,20 +69,32 @@ Registration order matters:
 ```text
 WorkloadSystem
 -> PowerConsumptionSystem
+-> TemperatureSystem
 -> EnergyConsumptionSystem
 ```
 
-After running a tick, a consumer can create a snapshot with
-`EnergyConsumptionSnapshotProvider`.
+Snapshot providers are readers of state after the systems update. They are not
+simulation systems and do not advance the simulation.
 
 ## Causal Order
 
 1. `WorkloadSystem` computes `Server.utilization` for each operational server.
 2. `PowerConsumptionSystem` recalculates `Server.currentPowerWatts`.
-3. `EnergyConsumptionSystem` integrates accumulated energy using total IT power and `tick.deltaSeconds()`.
-4. `EnergyConsumptionSnapshotProvider` reads the resulting state and builds an `EnergyConsumptionSnapshot`.
+3. `TemperatureSystem` updates a representative internal server temperature from current server power.
+4. `EnergyConsumptionSystem` integrates accumulated energy using total IT power and `tick.deltaSeconds()`.
+5. Snapshot providers such as `EnergyConsumptionSnapshotProvider` and `TemperatureSnapshotProvider` read the resulting state and build immutable DTOs.
 
-If this order is changed, energy or power values may reflect the previous tick.
+If this order is changed, power, temperature, or energy values may reflect the
+previous tick.
+
+## Snapshot Ownership
+
+Each simulation concern owns its own state and snapshot model.
+
+- `EnergyConsumptionSystem` exposes energy data through `EnergyConsumptionSnapshotProvider`.
+- `TemperatureSystem` exposes temperature data through `TemperatureSnapshotProvider`.
+
+There is intentionally no global `DatacenterSnapshot` at this stage.
 
 ## Current Energy Rules
 
@@ -104,8 +117,9 @@ consumedEnergyWh += datacenter.getTotalItPowerWatts() * (tick.deltaSeconds() / 3
 ## Current Limits
 
 - Preliminary API.
-- No temperature model yet.
+- Temperature is currently a simplified server-level internal model.
 - No cooling model yet.
+- No rack inlet, room temperature, airflow, or rack-to-rack thermal coupling.
 - No advanced electrical model.
 - No UI.
 - No result persistence.

@@ -42,12 +42,15 @@ updated in this order:
 ```text
 WorkloadSystem
 -> PowerConsumptionSystem
+-> TemperatureSystem
 -> EnergyConsumptionSystem
--> EnergyConsumptionSnapshotProvider
 ```
 
 The provider does not advance the simulation. It only reads the current state of
 the datacenter and the energy system.
+
+Temperature data is exposed separately through `TemperatureSnapshotProvider`. It
+is intentionally not merged into `EnergyConsumptionSnapshot`.
 
 ## Recommended Example with JSON, FractalNoise, and workloadFactor
 
