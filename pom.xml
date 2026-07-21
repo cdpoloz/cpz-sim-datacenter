@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.cpz.sim</groupId>
+    <groupId>com.cpz.sim.datacenter</groupId>
     <artifactId>cpz-sim-datacenter</artifactId>
     <version>0.1.0-alpha.1</version>
 
