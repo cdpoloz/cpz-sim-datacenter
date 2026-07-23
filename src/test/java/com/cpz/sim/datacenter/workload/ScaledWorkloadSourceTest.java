@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class ScaledWorkloadSourceTest {
 
     private static Server createServer() {
-        ServerLocation location = new ServerLocation(new RackCode("RACK-A01-R01"), "U01");
+        ServerLocation location = new ServerLocation("A01", new RackCode("RACK-A01-R01"), "U01");
         ServerConfig config = new ServerConfig(
                 "SRV-DEMO-001",
                 "CPZ",

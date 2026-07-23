@@ -2,6 +2,7 @@ package com.cpz.sim.datacenter.factory;
 
 import com.cpz.sim.datacenter.config.definition.DatacenterDefinition;
 import com.cpz.sim.datacenter.config.definition.ServerDefinition;
+import com.cpz.sim.datacenter.config.definition.ServerDefinitionLocationResolver;
 import com.cpz.sim.datacenter.config.validation.DatacenterConfigValidator;
 import com.cpz.sim.datacenter.workload.MapServerWorkloadFactorProvider;
 import com.cpz.sim.datacenter.workload.ServerWorkloadFactorProvider;
@@ -29,7 +30,7 @@ public class WorkloadFactorProviderFactory {
         validator.validate(definition);
         Map<String, Float> factorsByServerCode = new HashMap<>();
         for (ServerDefinition server : definition.servers()) {
-            String serverCode = server.rackCode() + "-" + server.slot();
+            String serverCode = ServerDefinitionLocationResolver.serverCode(definition, server);
             factorsByServerCode.put(serverCode, server.workloadFactor());
         }
         return new MapServerWorkloadFactorProvider(factorsByServerCode);

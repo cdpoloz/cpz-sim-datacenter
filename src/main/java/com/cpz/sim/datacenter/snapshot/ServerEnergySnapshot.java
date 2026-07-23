@@ -1,13 +1,20 @@
 package com.cpz.sim.datacenter.snapshot;
 
+import com.cpz.sim.datacenter.model.RackCode;
+
 import java.util.Objects;
 
 /**
+ * Immutable per-server energy data for one tick.
+ *
+ * <p>{@code column + rackCode + slot} identifies the physical server location.
+ *
  * @author CPZ
  */
 public record ServerEnergySnapshot(
         String serverCode,
-        String rackCode,
+        String column,
+        RackCode rackCode,
         String slot,
         String status,
         float utilization,
@@ -15,7 +22,8 @@ public record ServerEnergySnapshot(
 ) {
     public ServerEnergySnapshot {
         serverCode = requireText(serverCode, "serverCode");
-        rackCode = requireText(rackCode, "rackCode");
+        column = requireText(column, "column");
+        Objects.requireNonNull(rackCode, "rackCode must not be null");
         slot = requireText(slot, "slot");
         status = requireText(status, "status");
         if (!Float.isFinite(utilization) || utilization < 0.0f || utilization > 1.0f)

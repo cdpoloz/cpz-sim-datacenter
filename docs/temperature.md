@@ -21,6 +21,10 @@ The current milestone implements a server-level thermal model with these classes
 The model uses `Server.currentPowerWatts` as thermal input and updates one
 representative internal temperature per installed server.
 
+`ServerTemperatureSnapshot` includes `column`, `rackCode`, and `slot`. The complete
+server identity is `column + rackCode + slot`, so temperature snapshots can
+distinguish `C01/R01/S01` from `C02/R01/S01`.
+
 An optional top-level JSON `temperature` block can be used to configure
 `TemperatureSystemOptions`. If the block is omitted, `TemperatureSystemOptions.defaults()`
 remains the fallback behavior. If the block is present, all current fields are
@@ -156,6 +160,10 @@ This snapshot is independent from `EnergyConsumptionSnapshotProvider`:
 - `TemperatureSnapshot` contains temperature-oriented data
 - `EnergyConsumptionSnapshot` contains energy and IT power data
 - there is no global combined `DatacenterSnapshot` in the current architecture
+
+Temperature snapshots contain installed servers only. Empty physical slots are
+obtained from `Rack.getSlotCodes()` and correlated with
+`Datacenter.getServer(column, rack, slot)`.
 
 Snapshot providers read resulting state after systems update. They are not
 simulation systems themselves.

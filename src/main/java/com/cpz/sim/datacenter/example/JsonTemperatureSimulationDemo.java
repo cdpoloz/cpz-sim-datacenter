@@ -148,8 +148,9 @@ public class JsonTemperatureSimulationDemo {
         for (ServerTemperatureSnapshot server : snapshot.servers()) {
             System.out.printf(
                     Locale.US,
-                    "  - %s | rack=%s | slot=%s | status=%s | util=%.2f | power=%.1f W | temp=%.2f °C%n",
+                    "  - %s | column=%s | rack=%s | slot=%s | status=%s | util=%.2f | power=%.1f W | temp=%.2f °C%n",
                     server.serverCode(),
+                    server.column(),
                     server.rackCode().value(),
                     server.slot(),
                     server.status(),

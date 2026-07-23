@@ -34,7 +34,10 @@ Main fields:
 
 ## layout.racks
 
-Each rack is defined as:
+Each rack declares its physical slots using exactly one of two mutually exclusive
+formats.
+
+Legacy `slotCount` format:
 
 ```json
 {
@@ -45,11 +48,42 @@ Each rack is defined as:
 }
 ```
 
+This generates ordered slot codes `U01`, `U02`, ..., `U42`. The format is kept for
+compatibility and convenience.
+
+Explicit `slots` format:
+
+```json
+{
+  "code": "RACK-A01-R01",
+  "column": "A01",
+  "row": "R01",
+  "slots": [
+    "S01",
+    "S02",
+    "S03"
+  ]
+}
+```
+
+The `slots` array order is the physical or visual order inside the rack. Slot codes
+are opaque strings. The backend does not require `U`, does not parse the numeric
+part, and does not infer position from the text. Valid examples include `U01`,
+`S01`, `GPU-A`, `NETWORK`, `LOWER-B`, and `SPARE`.
+
 Rules:
 
 - `code`, `column`, and `row` cannot be null or blank.
 - `code` must be unique.
-- `slotCount` must be greater than `0`.
+- Each rack must define exactly one of `slotCount` or `slots`.
+- If `slotCount` is used, it must be greater than `0` and generates legacy `Uxx` codes.
+- If `slots` is used, the list cannot be null or empty.
+- Explicit slot codes cannot be null or blank.
+- Explicit slot codes must be unique inside the same rack.
+- Slot comparisons are exact and case-sensitive.
+- Different racks may reuse the same slot code because full server identity is `column + rackCode + slot`.
+- A `rackCode` may be reused in different columns.
+- Within one column, `rackCode` must be unique.
 - A rack may have no associated servers; that represents empty physical infrastructure.
 
 ## serverModels
@@ -79,8 +113,9 @@ Each installed server is defined as:
 
 ```json
 {
+  "column": "C01",
   "rackCode": "RACK-A01-R01",
-  "slot": "U01",
+  "slot": "S01",
   "modelCode": "SRV-DEMO-001",
   "status": "OK",
   "workloadFactor": 1.5
@@ -89,19 +124,21 @@ Each installed server is defined as:
 
 Fields:
 
+- `column`: column containing the rack. Recommended for all new configurations.
 - `rackCode`: code of an existing rack in `layout.racks`.
-- `slot`: position inside the rack, using the `U<n>` format, for example `U01`.
+- `slot`: exact slot code declared by the referenced rack.
 - `modelCode`: code of an existing model in `serverModels`.
 - `status`: `HardwareStatus` value: `OK`, `ALERT`, or `OFFLINE`.
 - `workloadFactor`: non-negative factor used to scale workload per server.
 
 Rules:
 
+- `column`, if present, cannot be blank.
 - `rackCode`, `slot`, `modelCode`, and `status` cannot be null or blank.
-- `rackCode` must exist.
-- `slot` must match the `U<n>` format.
-- The slot number must be between `1` and the rack `slotCount`.
-- Two servers cannot share the same location `rackCode + "-" + slot`.
+- If `column` is present, `column + rackCode` must identify an existing rack.
+- If `column` is omitted, `rackCode` must identify exactly one rack in the datacenter.
+- `slot` must exist in the referenced rack's effective slot list.
+- Two servers cannot share the same location `column + "/" + rackCode + "/" + slot`.
 - `status` must exactly match the enum name.
 - `workloadFactor` must be finite and `>= 0`.
 - If `ServerDefinition` is built from Java using the constructor without `workloadFactor`, the default value is `1.0f`.
@@ -146,7 +183,11 @@ base utilization by the factor and clamps the result to `[0, 1]`.
         "code": "RACK-A01-R02",
         "column": "A01",
         "row": "R02",
-        "slotCount": 42
+        "slots": [
+          "S01",
+          "S02",
+          "SPARE"
+        ]
       }
     ]
   },
@@ -160,15 +201,17 @@ base utilization by the factor and clamps the result to `[0, 1]`.
     }
   ],
   "servers": [
-    {
-      "rackCode": "RACK-A01-R01",
+      {
+        "column": "A01",
+        "rackCode": "RACK-A01-R01",
       "slot": "U01",
       "modelCode": "SRV-DEMO-001",
       "status": "OK",
       "workloadFactor": 1.5
     },
-    {
-      "rackCode": "RACK-A01-R01",
+      {
+        "column": "A01",
+        "rackCode": "RACK-A01-R01",
       "slot": "U02",
       "modelCode": "SRV-DEMO-001",
       "status": "OFFLINE",
@@ -181,6 +224,34 @@ base utilization by the factor and clamps the result to `[0, 1]`.
 In this example `RACK-A01-R02` is an empty rack. The server in `U02` is installed
 but `OFFLINE`; after running `WorkloadSystem` and `PowerConsumptionSystem`, it must
 end up with `0.0f` utilization and `0.0f` power.
+
+An empty slot is different from an `OFFLINE` server:
+
+- A declared slot with no server entry is empty physical capacity.
+- A server with `HardwareStatus.OFFLINE` is installed but powered off or not operational.
+- `EMPTY` is not a `HardwareStatus` value.
+
+## Location Lookup from Java
+
+Use backend APIs rather than assembling visual state manually:
+
+```java
+List<Server> servers = datacenter.getServers("C01", "R01");
+
+Optional<Server> server =
+        datacenter.getServer("C01", "R01", "S03");
+
+Rack rack = datacenter.findRack("C01", "R01").orElseThrow();
+
+for (String slot : rack.getSlotCodes()) {
+    Optional<Server> installed =
+            datacenter.getServer("C01", "R01", slot);
+
+    if (installed.isEmpty()) {
+        // Empty physical slot
+    }
+}
+```
 
 ## Temperature Configuration Status
 

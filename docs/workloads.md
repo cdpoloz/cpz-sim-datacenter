@@ -108,7 +108,10 @@ WorkloadSystem workloadSystem = new WorkloadSystem(datacenter, workload);
 ```
 
 `WorkloadFactorProviderFactory` creates factors by server code. The code is derived
-as `<rackCode>-<slot>`, for example `RACK-A01-R01-U01`.
+as `<column>-<rackCode>-<slot>`, for example `C01-R01-S01` or
+`C01-RACK-A01-R01-GPU-A`. This avoids collisions when the same rack code and slot
+text appear in different columns. The slot portion is the exact opaque slot code
+declared by the rack.
 
 ## OFFLINE and Power
 

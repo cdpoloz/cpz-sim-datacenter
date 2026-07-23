@@ -71,16 +71,16 @@ class JsonDatacenterSimulationIntegrationTest {
         engine.register(new PowerConsumptionSystem(datacenter));
         engine.register(energySystem);
         double[] expectedPowerWatts = {
-                427.6,
                 419.5,
-                421.7,
-                424.6
+                418.3,
+                444.1,
+                437.7
         };
         double[] expectedEnergyKWh = {
-                0.214,
-                0.424,
-                0.634,
-                0.847
+                0.210,
+                0.419,
+                0.641,
+                0.860
         };
         for (int i = 0; i < 4; i++) {
             SimulationTick tick = engine.step();

@@ -1,0 +1,70 @@
+{
+  "name": "Repeated Rack Codes Datacenter",
+  "layout": {
+    "racks": [
+      {
+        "code": "R01",
+        "column": "C01",
+        "row": "R01",
+        "slots": [
+          "S01",
+          "S02",
+          "S03",
+          "S04"
+        ]
+      },
+      {
+        "code": "R01",
+        "column": "C02",
+        "row": "R01",
+        "slots": [
+          "S01",
+          "S02",
+          "S03",
+          "S04"
+        ]
+      }
+    ]
+  },
+  "serverModels": [
+    {
+      "modelCode": "SRV-DEMO-001",
+      "manufacturer": "CPZ",
+      "model": "Demo Compute Server",
+      "idlePowerWatts": 100.0,
+      "maxPowerWatts": 300.0
+    }
+  ],
+  "servers": [
+    {
+      "column": "C01",
+      "rackCode": "R01",
+      "slot": "S01",
+      "modelCode": "SRV-DEMO-001",
+      "status": "OK",
+      "workloadFactor": 1.0
+    },
+    {
+      "column": "C02",
+      "rackCode": "R01",
+      "slot": "S01",
+      "modelCode": "SRV-DEMO-001",
+      "status": "ALERT",
+      "workloadFactor": 1.2
+    },
+    {
+      "column": "C02",
+      "rackCode": "R01",
+      "slot": "S02",
+      "modelCode": "SRV-DEMO-001",
+      "status": "OFFLINE",
+      "workloadFactor": 1.0
+    }
+  ],
+  "temperature": {
+    "ambientTemperatureCelsius": 24.0,
+    "defaultInitialTemperatureCelsius": 30.0,
+    "thermalCapacityJoulesPerCelsius": 5000.0,
+    "heatDissipationWattsPerCelsius": 8.0
+  }
+}

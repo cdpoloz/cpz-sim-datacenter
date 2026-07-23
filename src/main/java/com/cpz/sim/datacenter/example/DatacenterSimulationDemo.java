@@ -29,9 +29,13 @@ public class DatacenterSimulationDemo {
                 100.0f,
                 300.0f
         );
-        Rack rack = new Rack(new RackCode("RACK-A01-R01"), new RackLocation("A01", "R01"), 42);
-        Server serverA = createServer(config, rack.getCode(), "U01");
-        Server serverB = createServer(config, rack.getCode(), "U02");
+        Rack rack = new Rack(
+                new RackCode("RACK-A01-R01"),
+                new RackLocation("A01", "R01"),
+                List.of("S01", "S02", "SPARE")
+        );
+        Server serverA = createServer(config, rack.getCode(), "S01");
+        Server serverB = createServer(config, rack.getCode(), "S02");
         Datacenter datacenter = new Datacenter(List.of(rack), List.of(serverA, serverB));
         EnergyConsumptionSystem energySystem = new EnergyConsumptionSystem(datacenter);
         SimulationEngine engine = new SimulationEngine(new SimulationClock(Duration.ofMinutes(30)));
@@ -52,7 +56,7 @@ public class DatacenterSimulationDemo {
     }
 
     private static Server createServer(ServerConfig config, RackCode rackCode, String slot) {
-        return new Server(new ServerLocation(rackCode, slot), config, HardwareStatus.OK);
+        return new Server(new ServerLocation("A01", rackCode, slot), config, HardwareStatus.OK);
     }
 
 }

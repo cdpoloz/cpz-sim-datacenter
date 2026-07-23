@@ -30,7 +30,7 @@ class NoiseWorkloadSourceTest {
                 100.0f,
                 300.0f
         );
-        return new Server(new ServerLocation(new RackCode(rackCode), slot), config, HardwareStatus.OK);
+        return new Server(new ServerLocation("A01", new RackCode(rackCode), slot), config, HardwareStatus.OK);
     }
 
     private static SimulationTick tickAtSeconds(long index, long elapsedSeconds) {

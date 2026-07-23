@@ -82,10 +82,11 @@ public class EnergySnapshotSimulationDemo {
         );
         for (ServerEnergySnapshot server : snapshot.servers()) {
             System.out.printf(
-                    "  %s | %s | %s/%s | util: %.2f | power: %.1f W%n",
+                    "  %s | %s | %s/%s/%s | util: %.2f | power: %.1f W%n",
                     server.serverCode(),
                     server.status(),
-                    server.rackCode(),
+                    server.column(),
+                    server.rackCode().value(),
                     server.slot(),
                     server.utilization(),
                     server.currentPowerWatts()

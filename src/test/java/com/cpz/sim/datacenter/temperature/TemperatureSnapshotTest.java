@@ -23,6 +23,7 @@ class TemperatureSnapshotTest {
                 List.of(
                         new ServerTemperatureSnapshot(
                                 "server-01",
+                                "C01",
                                 new RackCode("RACK-01"),
                                 "U01",
                                 HardwareStatus.OK,
@@ -32,6 +33,7 @@ class TemperatureSnapshotTest {
                         ),
                         new ServerTemperatureSnapshot(
                                 "server-02",
+                                "C01",
                                 new RackCode("RACK-01"),
                                 "U02",
                                 HardwareStatus.OK,

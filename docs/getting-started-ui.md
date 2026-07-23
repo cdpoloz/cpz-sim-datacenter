@@ -40,7 +40,7 @@ mvn clean install
 4. Register systems in `SimulationEngine` in the correct order.
 5. Run ticks.
 6. Convert each resulting tick to one or more snapshots such as `EnergyConsumptionSnapshot` and `TemperatureSnapshot`.
-7. Render the UI from snapshots, not from direct domain mutations.
+7. Render the UI from rack slot definitions and snapshots, not from direct domain mutations.
 
 Example:
 
@@ -87,6 +87,40 @@ TemperatureSnapshot temperatureSnapshot = temperatureSnapshots.snapshot(tick);
 
 ## Useful Contract for a UI
 
+Physical rack layout:
+
+- `datacenter.getRacks()`
+- `rack.getCode()`
+- `rack.getLocation()`
+- `rack.getColumn()`
+- `rack.getRow()`
+- `rack.getSlotCount()`
+- `rack.getSlotCodes()`
+- `rack.hasSlot(slotCode)`
+- `datacenter.findRack("C01", "R01")`
+- `datacenter.getServers("C01", "R01")`
+- `datacenter.getServer("C01", "R01", "S03")`
+
+The UI must get physical slots from each rack. It should compare those exact slot
+codes with server locations from snapshots. Rack identity is `column + rackCode`;
+server identity is `column + rackCode + slot`. It must not generate `U01`, `U02`,
+... on its own when a rack uses explicit `slots`.
+
+Example slot rendering:
+
+```java
+Rack rack = datacenter.findRack("C01", "R01").orElseThrow();
+
+for (String slot : rack.getSlotCodes()) {
+    Optional<Server> installed =
+            datacenter.getServer("C01", "R01", slot);
+
+    if (installed.isEmpty()) {
+        // Empty physical slot
+    }
+}
+```
+
 High-level data:
 
 - `energySnapshot.tickIndex()`
@@ -99,6 +133,7 @@ High-level data:
 Per-server data:
 
 - `server.serverCode()`
+- `server.column()`
 - `server.rackCode()`
 - `server.slot()`
 - `server.status()`
@@ -115,6 +150,16 @@ Independent temperature data:
 The temperature snapshot is separate from the energy snapshot. This lets a UI
 consume temperature and energy independently without introducing a global
 combined snapshot.
+
+Slot state should be represented as:
+
+- declared slot without an installed server: empty slot
+- installed server with `OFFLINE` status: server present but powered off or not operational
+
+Snapshots contain installed servers only. Empty slots come from
+`Rack.getSlotCodes()` combined with `Datacenter.getServer(...)`.
+
+Do not model empty slots by adding `EMPTY` to `HardwareStatus`.
 
 ## Current Integration Limits
 

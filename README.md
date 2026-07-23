@@ -29,8 +29,8 @@ Current version:
 Available in `0.1.0-alpha.1`:
 
 - JSON-configurable datacenter definitions with `layout.racks`, `serverModels` and `servers`.
-- Physical layout with existing racks, including empty racks.
-- Servers installed by `rackCode` and `slot`.
+- Physical layout with existing racks, ordered slot codes, and empty racks.
+- Servers installed by `column`, `rackCode`, and `slot`.
 - Hardware states: `OK`, `ALERT`, `OFFLINE`.
 - Simulation systems: `WorkloadSystem`, `PowerConsumptionSystem`, `TemperatureSystem`, and `EnergyConsumptionSystem`.
 - Workload strategy through `WorkloadSource`, with noise-based and scaled workloads.
@@ -43,6 +43,8 @@ Important rules:
 
 - An empty rack represents physical infrastructure with no installed server.
 - An `OFFLINE` server represents an installed server that is powered off or not operational.
+- Rack identity is `column + rackCode`; server identity is `column + rackCode + slot`.
+- Slot codes are opaque identifiers declared by each rack. A UI should read rack slots from the backend and match servers by exact `column + rackCode + slot`.
 - `WorkloadSystem` forces `utilization = 0.0f` for `OFFLINE` servers and does not query the `WorkloadSource` for them.
 - `Server.updatePowerConsumption()` forces `currentPowerWatts = 0.0f` for `OFFLINE` servers.
 - `workloadFactor` can be greater than `1.0`; the final utilization produced by `ScaledWorkloadSource` is clamped to `[0, 1]`.
@@ -115,7 +117,11 @@ Recommended local order when all projects are under development:
         "code": "RACK-C01-R02",
         "column": "C01",
         "row": "R02",
-        "slotCount": 42
+        "slots": [
+          "S01",
+          "S02",
+          "S03"
+        ]
       }
     ]
   },
@@ -130,6 +136,7 @@ Recommended local order when all projects are under development:
   ],
   "servers": [
     {
+      "column": "C01",
       "rackCode": "RACK-C01-R01",
       "slot": "U01",
       "modelCode": "SRV-DEMO-001",
@@ -137,6 +144,7 @@ Recommended local order when all projects are under development:
       "workloadFactor": 1.5
     },
     {
+      "column": "C01",
       "rackCode": "RACK-C01-R01",
       "slot": "U02",
       "modelCode": "SRV-DEMO-001",
@@ -147,7 +155,32 @@ Recommended local order when all projects are under development:
 }
 ```
 
-`RACK-C01-R02` exists even though it has no installed servers.
+`RACK-C01-R01` uses the legacy `slotCount` format, which generates `U01` through
+`U42`. `RACK-C01-R02` uses explicit opaque slot codes and exists even though it has
+no installed servers.
+
+The same `rackCode` may appear in different columns:
+
+```json
+{
+  "layout": {
+    "racks": [
+      { "code": "R01", "column": "C01", "row": "R01", "slots": ["S01"] },
+      { "code": "R01", "column": "C02", "row": "R01", "slots": ["S01"] }
+    ]
+  }
+}
+```
+
+Servers should include `column`. Legacy server entries without `column` remain
+valid only when their `rackCode` identifies exactly one rack in the datacenter.
+
+Each rack must define exactly one of:
+
+- `slotCount`: legacy/convenience format that generates `U01`, `U02`, ...
+- `slots`: ordered list of non-blank, unique slot identifiers such as `S01`, `GPU-A`, `NETWORK`, or `SPARE`
+
+`slotCount` and `slots` are mutually exclusive.
 
 ---
 
@@ -218,7 +251,9 @@ TemperatureSnapshot temperatureSnapshot = temperatureProvider.snapshot(tick);
 
 The snapshot captures tick index, elapsed seconds, total IT power, accumulated
 energy and one entry per server with rack, slot, status, utilization and current
-power.
+power. Per-server snapshots include column, rack code and slot. The slot value is
+the exact code from `ServerLocation`; it is not normalized or interpreted by the
+backend.
 
 Temperature is exposed through a separate snapshot model. See
 [Temperature Model](docs/temperature.md).

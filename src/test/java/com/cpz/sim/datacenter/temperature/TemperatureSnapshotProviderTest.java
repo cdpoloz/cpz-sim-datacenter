@@ -19,7 +19,7 @@ class TemperatureSnapshotProviderTest {
 
     private static final double EPSILON = 0.000001;
     private static final RackCode RACK_CODE = new RackCode("RACK-A01-R01");
-    private static final String SERVER_CODE = "RACK-A01-R01-U01";
+    private static final String SERVER_CODE = "A01-RACK-A01-R01-U01";
 
     @Test
     void rejectsNullDatacenter() {
@@ -117,6 +117,7 @@ class TemperatureSnapshotProviderTest {
         assertEquals(29.8, snapshot.maxTemperatureCelsius(), EPSILON);
         ServerTemperatureSnapshot serverSnapshot = snapshot.servers().getFirst();
         assertEquals(SERVER_CODE, serverSnapshot.serverCode());
+        assertEquals("A01", serverSnapshot.column());
         assertEquals(RACK_CODE, serverSnapshot.rackCode());
         assertEquals("U01", serverSnapshot.slot());
         assertEquals(HardwareStatus.OK, serverSnapshot.status());
@@ -156,6 +157,33 @@ class TemperatureSnapshotProviderTest {
         assertTrue(serverSnapshot.temperatureCelsius() > 25.0);
     }
 
+    @Test
+    void distinguishesSameRackCodeAndSlotInDifferentColumns() {
+        RackCode rackCode = new RackCode("R01");
+        Rack firstRack = new Rack(rackCode, "C01", "R01", List.of("S01"));
+        Rack secondRack = new Rack(rackCode, "C02", "R01", List.of("S01"));
+        ServerConfig config = new ServerConfig(
+                "model-01",
+                "Example",
+                "Server X",
+                100.0f,
+                500.0f
+        );
+        Server firstServer = new Server(new ServerLocation("C01", rackCode, "S01"), config, HardwareStatus.OK);
+        Server secondServer = new Server(new ServerLocation("C02", rackCode, "S01"), config, HardwareStatus.OK);
+        Datacenter datacenter = new Datacenter(List.of(firstRack, secondRack), List.of(firstServer, secondServer));
+        TemperatureSystemOptions options = TemperatureSystemOptions.defaults();
+        TemperatureSystem system = new TemperatureSystem(datacenter, options, new SimpleServerTemperatureModel());
+        TemperatureSnapshot snapshot = new TemperatureSnapshotProvider(datacenter, system, options)
+                .snapshot(tickAtSeconds(1, 0, 1));
+        assertEquals("C01-R01-S01", snapshot.servers().getFirst().serverCode());
+        assertEquals("C01", snapshot.servers().getFirst().column());
+        assertEquals(new RackCode("R01"), snapshot.servers().getFirst().rackCode());
+        assertEquals("C02-R01-S01", snapshot.servers().get(1).serverCode());
+        assertEquals("C02", snapshot.servers().get(1).column());
+        assertEquals(new RackCode("R01"), snapshot.servers().get(1).rackCode());
+    }
+
     private static Datacenter createDatacenterWithOneServer(
             HardwareStatus status,
             float utilization
@@ -169,7 +197,7 @@ class TemperatureSnapshotProviderTest {
                 500.0f
         );
         Server server = new Server(
-                new ServerLocation(RACK_CODE, "U01"),
+                new ServerLocation("A01", RACK_CODE, "U01"),
                 config,
                 status
         );

@@ -1,0 +1,114 @@
+{
+  "name": "Single Rack UI Test Datacenter",
+  "layout": {
+    "racks": [
+      {
+        "code": "R01",
+        "column": "C01",
+        "row": "R01",
+        "slots": [
+          "S01",
+          "S02",
+          "S03",
+          "S04",
+          "S05",
+          "S06",
+          "S07",
+          "S08",
+          "S09",
+          "S10",
+          "S11",
+          "S12"
+        ]
+      }
+    ]
+  },
+  "serverModels": [
+    {
+      "modelCode": "SRV-DEMO-001",
+      "manufacturer": "CPZ",
+      "model": "Demo Server",
+      "idlePowerWatts": 100.0,
+      "maxPowerWatts": 300.0
+    },
+    {
+      "modelCode": "SRV-DEMO-002",
+      "manufacturer": "CPZ",
+      "model": "High Density Demo Server",
+      "idlePowerWatts": 150.0,
+      "maxPowerWatts": 500.0
+    }
+  ],
+  "servers": [
+    {
+      "column": "C01",
+      "rackCode": "R01",
+      "slot": "S01",
+      "modelCode": "SRV-DEMO-001",
+      "status": "OK",
+      "workloadFactor": 1.0
+    },
+    {
+      "column": "C01",
+      "rackCode": "R01",
+      "slot": "S02",
+      "modelCode": "SRV-DEMO-001",
+      "status": "ALERT",
+      "workloadFactor": 0.8
+    },
+    {
+      "column": "C01",
+      "rackCode": "R01",
+      "slot": "S03",
+      "modelCode": "SRV-DEMO-002",
+      "status": "OK",
+      "workloadFactor": 1.2
+    },
+    {
+      "column": "C01",
+      "rackCode": "R01",
+      "slot": "S04",
+      "modelCode": "SRV-DEMO-002",
+      "status": "OFFLINE",
+      "workloadFactor": 1.0
+    },
+    {
+      "column": "C01",
+      "rackCode": "R01",
+      "slot": "S05",
+      "modelCode": "SRV-DEMO-001",
+      "status": "OK",
+      "workloadFactor": 0.6
+    },
+    {
+      "column": "C01",
+      "rackCode": "R01",
+      "slot": "S06",
+      "modelCode": "SRV-DEMO-002",
+      "status": "ALERT",
+      "workloadFactor": 0.9
+    },
+    {
+      "column": "C01",
+      "rackCode": "R01",
+      "slot": "S07",
+      "modelCode": "SRV-DEMO-001",
+      "status": "OFFLINE",
+      "workloadFactor": 1.0
+    },
+    {
+      "column": "C01",
+      "rackCode": "R01",
+      "slot": "S08",
+      "modelCode": "SRV-DEMO-002",
+      "status": "OK",
+      "workloadFactor": 1.1
+    }
+  ],
+  "temperature": {
+    "ambientTemperatureCelsius": 24.0,
+    "defaultInitialTemperatureCelsius": 30.0,
+    "thermalCapacityJoulesPerCelsius": 5000.0,
+    "heatDissipationWattsPerCelsius": 8.0
+  }
+}

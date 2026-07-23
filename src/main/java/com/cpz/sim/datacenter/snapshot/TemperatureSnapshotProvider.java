@@ -56,6 +56,7 @@ public final class TemperatureSnapshotProvider {
                 : options.defaultInitialTemperatureCelsius();
         return new ServerTemperatureSnapshot(
                 server.getCode(),
+                server.getLocation().column(),
                 server.getLocation().rackCode(),
                 server.getLocation().slot(),
                 server.getStatus(),

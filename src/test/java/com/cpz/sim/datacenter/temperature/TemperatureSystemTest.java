@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class TemperatureSystemTest {
 
     private static final double EPSILON = 0.000001;
-    private static final String SERVER_CODE = "RACK-A01-R01-U01";
+    private static final String SERVER_CODE = "A01-RACK-A01-R01-U01";
 
     @Test
     void rejectsNullDatacenter() {
@@ -149,7 +149,7 @@ class TemperatureSystemTest {
                 500.0f
         );
         Server server = new Server(
-                new ServerLocation(rackCode, "U01"),
+                new ServerLocation("A01", rackCode, "U01"),
                 config,
                 status
         );

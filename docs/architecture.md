@@ -12,7 +12,7 @@ backend.
 
 - `com.cpz.sim.datacenter.model`: domain model (`Datacenter`, `Rack`, `Server`, `ServerLocation`, `HardwareStatus`, etc.).
 - `com.cpz.sim.datacenter.config`: configuration loading contract.
-- `com.cpz.sim.datacenter.config.definition`: records that represent JSON (`DatacenterDefinition`, `RackDefinition`, `ServerModelDefinition`, `ServerDefinition`).
+- `com.cpz.sim.datacenter.config.definition`: objects that represent JSON (`DatacenterDefinition`, `RackDefinition`, `ServerModelDefinition`, `ServerDefinition`) plus helpers for effective rack slots.
 - `com.cpz.sim.datacenter.config.json`: JSON loading with Jackson (`JsonDatacenterConfigLoader`).
 - `com.cpz.sim.datacenter.config.validation`: validation of definitions before building the domain.
 - `com.cpz.sim.datacenter.factory`: domain construction and helper providers (`DatacenterFactory`, `WorkloadFactorProviderFactory`).
@@ -26,20 +26,30 @@ backend.
 
 `Datacenter` contains a list of `Rack` and a list of `Server`. During construction
 it validates that racks are unique, that each server points to an existing rack,
-that the slot uses the `U<n>` format, and that the slot is inside the rack range.
+and that the server slot exists in the referenced rack's effective slot list.
 
 `Rack` represents physical infrastructure:
 
 - `RackCode code`
-- `RackLocation location`, with `column` and `row`
-- `slotCount`
+- `RackLocation location`, composed of `column` and `RackCode`
+- `row`, retained as layout metadata
+- ordered slot codes
+
+Rack identity is `column + rackCode`. `RackCode` is not globally unique; `C01/R01`
+and `C02/R01` are valid distinct racks. Within a single column, a rack code must
+remain unique.
+
+`Rack.getSlotCount()` returns the number of effective slots. For legacy
+configuration this is the declared `slotCount`; for explicit configuration this is
+the size of the `slots` array. `Rack.getSlotCodes()` exposes an immutable ordered
+list, and `Rack.hasSlot(String)` performs exact membership checks.
 
 A rack can exist without servers. This makes it possible to model unused physical
 capacity.
 
 `Server` represents an installed server:
 
-- `ServerLocation location`, composed of `RackCode rackCode` and `slot`
+- `ServerLocation location`, composed of `column`, `RackCode rackCode`, and `slot`
 - `ServerConfig config`
 - `HardwareStatus status`
 - `utilization`
@@ -48,10 +58,26 @@ capacity.
 `ServerLocation.code()` derives the server code as:
 
 ```text
-<rackCode>-<slot>
+<column>-<rackCode>-<slot>
 ```
 
-Example: `RACK-A01-R01-U01`.
+Examples: `C01-R01-S01` and `C02-R01-S01`.
+
+The `slot` part is opaque. It may be `U01`, `S01`, `GPU-A`, `NETWORK`, or any other
+non-blank slot code declared by the rack. The backend does not derive physical
+position by parsing the slot text.
+
+`Datacenter` exposes location-aware lookup APIs:
+
+```java
+Optional<Rack> rack = datacenter.findRack("C01", "R01");
+List<Server> rackServers = datacenter.getServers("C01", "R01");
+Optional<Server> installed = datacenter.getServer("C01", "R01", "S03");
+```
+
+`getServers(...)` throws for an unknown rack and returns an empty immutable list
+for a valid empty rack. `getServer(...)` throws for an unknown rack or undeclared
+slot and returns `Optional.empty()` when the slot is valid but empty.
 
 `HardwareStatus` supports:
 

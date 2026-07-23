@@ -21,10 +21,11 @@ class DatacenterTest {
     private static Server createServer(
             ServerConfig config,
             RackCode rackCode,
+            String column,
             String slot
     ) {
         return new Server(
-                new ServerLocation(rackCode, slot),
+                new ServerLocation(column, rackCode, slot),
                 config,
                 HardwareStatus.OK
         );
@@ -45,9 +46,9 @@ class DatacenterTest {
         rackC = new Rack(new RackCode("RACK-A02-R01"), new RackLocation("A02", "R01"), 42);
         emptyRack = new Rack(new RackCode("RACK-A02-R02"), new RackLocation("A02", "R02"), 42);
 
-        serverA = createServer(config, rackA.getCode(), "U01");
-        serverB = createServer(config, rackB.getCode(), "U01");
-        serverC = createServer(config, rackC.getCode(), "U01");
+        serverA = createServer(config, rackA.getCode(), rackA.getColumn(), "U01");
+        serverB = createServer(config, rackB.getCode(), rackB.getColumn(), "U01");
+        serverC = createServer(config, rackC.getCode(), rackC.getColumn(), "U01");
 
         serverA.setUtilization(0.5f);  // 200 W
         serverB.setUtilization(1.0f);  // 300 W
@@ -113,7 +114,7 @@ class DatacenterTest {
     @Test
     void shouldRejectServerOutsideRackSlotRange() {
         Rack smallRack = new Rack(new RackCode("RACK-SMALL"), new RackLocation("A99", "R99"), 1);
-        Server server = createServer(serverA.getConfig(), smallRack.getCode(), "U02");
+        Server server = createServer(serverA.getConfig(), smallRack.getCode(), smallRack.getColumn(), "U02");
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new Datacenter(List.of(smallRack), List.of(server))
@@ -121,8 +122,68 @@ class DatacenterTest {
     }
 
     @Test
+    void shouldAcceptServersInExplicitOpaqueSlots() {
+        RackCode rackCode = new RackCode("RACK-EXPLICIT");
+        Rack explicitRack = new Rack(rackCode, new RackLocation("A99", "R99"), List.of("GPU-A", "NETWORK", "SPARE"));
+        Server server = createServer(serverA.getConfig(), rackCode, explicitRack.getColumn(), "NETWORK");
+        Datacenter explicitDatacenter = new Datacenter(List.of(explicitRack), List.of(server));
+        assertEquals("A99-RACK-EXPLICIT-NETWORK", explicitDatacenter.getServers().getFirst().getCode());
+    }
+
+    @Test
+    void shouldRejectServerInUndeclaredExplicitSlot() {
+        RackCode rackCode = new RackCode("RACK-EXPLICIT");
+        Rack explicitRack = new Rack(rackCode, new RackLocation("A99", "R99"), List.of("GPU-A"));
+        Server server = createServer(serverA.getConfig(), rackCode, explicitRack.getColumn(), "gpu-a");
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new Datacenter(List.of(explicitRack), List.of(server))
+        );
+    }
+
+    @Test
+    void shouldAllowSameRackCodeAndSlotInDifferentColumns() {
+        RackCode rackCode = new RackCode("R01");
+        Rack firstRack = new Rack(rackCode, "C01", "R01", List.of("S01", "S02"));
+        Rack secondRack = new Rack(rackCode, "C02", "R01", List.of("S01", "S02"));
+        Server firstServer = createServer(serverA.getConfig(), rackCode, "C01", "S01");
+        Server secondServer = createServer(serverA.getConfig(), rackCode, "C02", "S01");
+        Datacenter datacenter = new Datacenter(List.of(firstRack, secondRack), List.of(firstServer, secondServer));
+        assertEquals("C01-R01-S01", firstServer.getCode());
+        assertEquals("C02-R01-S01", secondServer.getCode());
+        assertEquals(List.of(firstServer), datacenter.getServers("C01", "R01"));
+        assertEquals(List.of(secondServer), datacenter.getServers("C02", "R01"));
+        assertEquals(firstServer, datacenter.getServer("C01", "R01", "S01").orElseThrow());
+        assertEquals(secondServer, datacenter.getServer("C02", "R01", "S01").orElseThrow());
+    }
+
+    @Test
+    void shouldRejectDuplicatedRackLocation() {
+        Rack firstRack = new Rack(new RackCode("R01"), "C01", "R01", List.of("S01"));
+        Rack secondRack = new Rack(new RackCode("R01"), "C01", "R02", List.of("S01"));
+        assertThrows(IllegalArgumentException.class, () -> new Datacenter(List.of(firstRack, secondRack), List.of()));
+    }
+
+    @Test
+    void shouldExposeRackAndServerLookups() {
+        assertEquals(rackA, datacenter.findRack("A01", "RACK-A01-R01").orElseThrow());
+        assertEquals(List.of(serverA), datacenter.getServers("A01", "RACK-A01-R01"));
+        assertEquals(List.of(), datacenter.getServers(emptyRack.getLocation()));
+        assertEquals(serverA, datacenter.getServer("A01", "RACK-A01-R01", "U01").orElseThrow());
+        assertEquals(List.of(), datacenter.getServers("A02", "RACK-A02-R02"));
+        assertEquals(true, datacenter.getServer("A02", "RACK-A02-R02", "U01").isEmpty());
+        assertThrows(UnsupportedOperationException.class, () -> datacenter.getServers("A01", "RACK-A01-R01").add(serverA));
+    }
+
+    @Test
+    void shouldRejectInvalidLookupLocations() {
+        assertThrows(IllegalArgumentException.class, () -> datacenter.getServers("A99", "RACK-A99-R01"));
+        assertThrows(IllegalArgumentException.class, () -> datacenter.getServer("A01", "RACK-A01-R01", "U99"));
+    }
+
+    @Test
     void shouldRejectDuplicateRacks() {
-        Rack duplicate = new Rack(rackA.getCode(), rackA.getLocation(), rackA.getSlotCount());
+        Rack duplicate = new Rack(rackA.getLocation(), rackA.getRow(), rackA.getSlotCount());
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new Datacenter(List.of(rackA, duplicate), List.of(serverA))

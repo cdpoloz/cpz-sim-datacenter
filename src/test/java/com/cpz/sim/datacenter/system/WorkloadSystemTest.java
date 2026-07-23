@@ -28,7 +28,7 @@ class WorkloadSystemTest {
             String slot
     ) {
         return new Server(
-                new ServerLocation(rackCode, slot),
+                new ServerLocation("A01", rackCode, slot),
                 config,
                 HardwareStatus.OK
         );

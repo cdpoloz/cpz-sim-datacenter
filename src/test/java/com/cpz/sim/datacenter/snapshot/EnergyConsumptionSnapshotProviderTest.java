@@ -32,8 +32,8 @@ class EnergyConsumptionSnapshotProviderTest {
                 100.0f,
                 300.0f
         );
-        Server firstServer = new Server(new ServerLocation(rackCode, "U01"), config, HardwareStatus.OK);
-        Server secondServer = new Server(new ServerLocation(rackCode, "U02"), config, HardwareStatus.OK);
+        Server firstServer = new Server(new ServerLocation("A01", rackCode, "U01"), config, HardwareStatus.OK);
+        Server secondServer = new Server(new ServerLocation("A01", rackCode, "U02"), config, HardwareStatus.OK);
         return new Datacenter(List.of(rack), List.of(firstServer, secondServer));
     }
 
@@ -57,18 +57,48 @@ class EnergyConsumptionSnapshotProviderTest {
         assertEquals(0.2, snapshot.consumedEnergyKWh(), EPSILON);
         assertEquals(2, snapshot.serverCount());
         ServerEnergySnapshot firstServer = snapshot.servers().getFirst();
-        assertEquals("RACK-A01-R01-U01", firstServer.serverCode());
-        assertEquals("RACK-A01-R01", firstServer.rackCode());
+        assertEquals("A01-RACK-A01-R01-U01", firstServer.serverCode());
+        assertEquals("A01", firstServer.column());
+        assertEquals(new RackCode("RACK-A01-R01"), firstServer.rackCode());
         assertEquals("U01", firstServer.slot());
         assertEquals("OK", firstServer.status());
         assertEquals(0.5f, firstServer.utilization(), EPSILON);
         assertEquals(200.0f, firstServer.currentPowerWatts(), EPSILON);
         ServerEnergySnapshot secondServer = snapshot.servers().get(1);
-        assertEquals("RACK-A01-R01-U02", secondServer.serverCode());
-        assertEquals("RACK-A01-R01", secondServer.rackCode());
+        assertEquals("A01-RACK-A01-R01-U02", secondServer.serverCode());
+        assertEquals("A01", secondServer.column());
+        assertEquals(new RackCode("RACK-A01-R01"), secondServer.rackCode());
         assertEquals("U02", secondServer.slot());
         assertEquals("OK", secondServer.status());
         assertEquals(0.5f, secondServer.utilization(), EPSILON);
         assertEquals(200.0f, secondServer.currentPowerWatts(), EPSILON);
+    }
+
+    @Test
+    void shouldDistinguishSameRackCodeAndSlotInDifferentColumns() {
+        RackCode rackCode = new RackCode("R01");
+        Rack firstRack = new Rack(rackCode, "C01", "R01", List.of("S01"));
+        Rack secondRack = new Rack(rackCode, "C02", "R01", List.of("S01"));
+        ServerConfig config = new ServerConfig(
+                "SRV-DEMO-001",
+                "CPZ",
+                "Demo Server",
+                100.0f,
+                300.0f
+        );
+        Server firstServer = new Server(new ServerLocation("C01", rackCode, "S01"), config, HardwareStatus.OK);
+        Server secondServer = new Server(new ServerLocation("C02", rackCode, "S01"), config, HardwareStatus.ALERT);
+        Datacenter datacenter = new Datacenter(List.of(firstRack, secondRack), List.of(firstServer, secondServer));
+        EnergyConsumptionSystem energySystem = new EnergyConsumptionSystem(datacenter);
+        EnergyConsumptionSnapshot snapshot = new EnergyConsumptionSnapshotProvider(datacenter, energySystem)
+                .snapshot(new SimulationTick(1, Duration.ZERO, Duration.ofSeconds(1)));
+        assertEquals("C01-R01-S01", snapshot.servers().getFirst().serverCode());
+        assertEquals("C01", snapshot.servers().getFirst().column());
+        assertEquals(new RackCode("R01"), snapshot.servers().getFirst().rackCode());
+        assertEquals("S01", snapshot.servers().getFirst().slot());
+        assertEquals("C02-R01-S01", snapshot.servers().get(1).serverCode());
+        assertEquals("C02", snapshot.servers().get(1).column());
+        assertEquals(new RackCode("R01"), snapshot.servers().get(1).rackCode());
+        assertEquals("S01", snapshot.servers().get(1).slot());
     }
 }

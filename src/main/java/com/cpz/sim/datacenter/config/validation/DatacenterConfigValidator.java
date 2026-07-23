@@ -3,6 +3,7 @@ package com.cpz.sim.datacenter.config.validation;
 import com.cpz.sim.datacenter.config.definition.DatacenterDefinition;
 import com.cpz.sim.datacenter.config.definition.DatacenterLayoutDefinition;
 import com.cpz.sim.datacenter.config.definition.RackDefinition;
+import com.cpz.sim.datacenter.config.definition.RackSlotResolver;
 import com.cpz.sim.datacenter.config.definition.ServerDefinition;
 import com.cpz.sim.datacenter.config.definition.ServerModelDefinition;
 import com.cpz.sim.datacenter.config.definition.TemperatureSystemOptionsDefinition;
@@ -14,15 +15,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * @author CPZ
  */
 public final class DatacenterConfigValidator {
-
-    private static final Pattern SLOT_PATTERN = Pattern.compile("^U(\\d+)$");
 
     private static void validateDatacenterFields(DatacenterDefinition definition, List<String> errors) {
         if (isBlank(definition.name())) errors.add("Datacenter name cannot be null or blank");
@@ -31,14 +28,31 @@ public final class DatacenterConfigValidator {
         if (definition.servers() == null) errors.add("Servers list cannot be null");
     }
 
-    private static Map<String, RackDefinition> validateLayout(DatacenterLayoutDefinition layout, List<String> errors) {
-        Map<String, RackDefinition> racksByCode = new HashMap<>();
-        if (layout == null) return racksByCode;
+    private record RackKey(String column, String rackCode) {
+        String code() {
+            return column + "/" + rackCode;
+        }
+    }
+
+    private record LayoutIndex(
+            Map<RackKey, RackDefinition> racksByLocation,
+            Map<String, List<RackDefinition>> racksByCode,
+            Set<String> columns
+    ) {
+    }
+
+    private record ServerRackReference(String column, RackDefinition rack) {
+    }
+
+    private static LayoutIndex validateLayout(DatacenterLayoutDefinition layout, List<String> errors) {
+        Map<RackKey, RackDefinition> racksByLocation = new HashMap<>();
+        Map<String, List<RackDefinition>> racksByCode = new HashMap<>();
+        Set<String> columns = new HashSet<>();
+        if (layout == null) return new LayoutIndex(racksByLocation, racksByCode, columns);
         if (layout.racks() == null) {
             errors.add("Layout racks list cannot be null");
-            return racksByCode;
+            return new LayoutIndex(racksByLocation, racksByCode, columns);
         }
-        Set<String> rackCodes = new HashSet<>();
         for (int i = 0; i < layout.racks().size(); i++) {
             RackDefinition rack = layout.racks().get(i);
             if (rack == null) {
@@ -49,14 +63,50 @@ public final class DatacenterConfigValidator {
             if (isBlank(rack.code())) {
                 errors.add(context + " must have a non-blank code");
             } else {
-                if (!rackCodes.add(rack.code())) errors.add("Duplicated rack code: " + rack.code());
-                racksByCode.put(rack.code(), rack);
+                racksByCode.computeIfAbsent(rack.code(), ignored -> new ArrayList<>()).add(rack);
             }
             if (isBlank(rack.column())) errors.add(context + " must have a non-blank column");
+            else columns.add(rack.column());
+            if (!isBlank(rack.column()) && !isBlank(rack.code())) {
+                RackKey rackKey = new RackKey(rack.column(), rack.code());
+                if (racksByLocation.putIfAbsent(rackKey, rack) != null)
+                    errors.add("Duplicated rack location: " + rackKey.code());
+            }
             if (isBlank(rack.row())) errors.add(context + " must have a non-blank row");
-            if (rack.slotCount() <= 0) errors.add(context + " must have slotCount > 0");
+            validateRackSlots(rack, context, errors);
         }
-        return racksByCode;
+        return new LayoutIndex(racksByLocation, racksByCode, columns);
+    }
+
+    private static void validateRackSlots(RackDefinition rack, String context, List<String> errors) {
+        if (rack.hasSlotCount() == rack.hasSlots()) {
+            errors.add(context + " must define exactly one of slotCount or slots");
+            return;
+        }
+        if (rack.hasSlotCount()) {
+            if (rack.slotCount() == null || rack.slotCount() <= 0) errors.add(context + " must have slotCount > 0");
+            return;
+        }
+        if (rack.slots() == null || rack.slots().isEmpty()) {
+            errors.add(context + " must have a non-empty slots list");
+            return;
+        }
+        Set<String> slotCodes = new HashSet<>();
+        for (int i = 0; i < rack.slots().size(); i++) {
+            String slotCode = rack.slots().get(i);
+            if (slotCode == null) {
+                errors.add(context + " has null slot code at index " + i);
+                continue;
+            }
+            if (slotCode.isBlank()) {
+                errors.add(context + " has blank slot code at index " + i);
+                continue;
+            }
+            if (!slotCodes.add(slotCode)) {
+                String rackContext = isBlank(rack.code()) ? context : "Rack " + rack.code();
+                errors.add(rackContext + " contains duplicate slot code: " + slotCode);
+            }
+        }
     }
 
     private static void validateServerModels(List<ServerModelDefinition> serverModels, List<String> errors) {
@@ -86,7 +136,7 @@ public final class DatacenterConfigValidator {
     private static void validateServers(
             List<ServerDefinition> servers,
             List<ServerModelDefinition> serverModels,
-            Map<String, RackDefinition> racksByCode,
+            LayoutIndex layout,
             List<String> errors
     ) {
         if (servers == null) return;
@@ -100,58 +150,78 @@ public final class DatacenterConfigValidator {
             }
             String context = "Server at index " + i;
             validateRequiredServerFields(server, context, errors);
-            validateServerRackReference(server, racksByCode, context, errors);
-            validateServerSlot(server, racksByCode, context, errors);
+            ServerRackReference rackReference = resolveServerRackReference(server, layout, context, errors);
+            validateServerSlot(server, rackReference, context, errors);
             validateServerStatus(server, context, errors);
             validateServerModelReference(server, knownModelCodes, context, errors);
             validateWorkloadFactor(server, context, errors);
-            validateDuplicatedLocation(server, locations, context, errors);
+            validateDuplicatedLocation(server, rackReference, locations, context, errors);
         }
     }
 
     private static void validateRequiredServerFields(ServerDefinition server, String context, List<String> errors) {
+        if (server.column() != null && server.column().isBlank()) errors.add(context + " must have a non-blank column");
         if (isBlank(server.rackCode())) errors.add(context + " must have a non-blank rackCode");
         if (isBlank(server.slot())) errors.add(context + " must have a non-blank slot");
         if (isBlank(server.modelCode())) errors.add(context + " must have a non-blank modelCode");
         if (isBlank(server.status())) errors.add(context + " must have a non-blank status");
     }
 
-    private static void validateServerRackReference(
+    private static ServerRackReference resolveServerRackReference(
             ServerDefinition server,
-            Map<String, RackDefinition> racksByCode,
+            LayoutIndex layout,
             String context,
             List<String> errors
     ) {
-        if (isBlank(server.rackCode())) return;
-        if (!racksByCode.containsKey(server.rackCode()))
+        if (isBlank(server.rackCode())) return null;
+        if (!isBlank(server.column())) {
+            RackDefinition rack = layout.racksByLocation().get(new RackKey(server.column(), server.rackCode()));
+            if (rack != null) return new ServerRackReference(server.column(), rack);
+            if (!layout.columns().contains(server.column())) {
+                errors.add(context + " references unknown column: " + server.column());
+            } else {
+                errors.add(context + " references unknown rack " + server.rackCode() + " in column " + server.column());
+            }
+            return null;
+        }
+        List<RackDefinition> racks = layout.racksByCode().get(server.rackCode());
+        if (racks == null || racks.isEmpty()) {
             errors.add(context + " references unknown rackCode: " + server.rackCode());
+            return null;
+        }
+        if (racks.size() > 1) {
+            errors.add(context + " must define column because rack code " + server.rackCode() + " exists in multiple columns");
+            return null;
+        }
+        RackDefinition rack = racks.getFirst();
+        return new ServerRackReference(rack.column(), rack);
     }
 
     private static void validateServerSlot(
             ServerDefinition server,
-            Map<String, RackDefinition> racksByCode,
+            ServerRackReference rackReference,
             String context,
             List<String> errors
     ) {
         if (isBlank(server.slot())) return;
-        Matcher matcher = SLOT_PATTERN.matcher(server.slot());
-        if (!matcher.matches()) {
-            errors.add(context + " has invalid slot: " + server.slot());
-            return;
+        if (rackReference == null) return;
+        RackDefinition rack = rackReference.rack();
+        if (!canResolveSlots(rack)) return;
+        if (!RackSlotResolver.resolveSlotCodes(rack).contains(server.slot())) {
+            errors.add(context + " references unknown slot " + server.slot()
+                    + " in rack " + server.rackCode() + ", column " + rackReference.column());
         }
-        if (isBlank(server.rackCode())) return;
-        RackDefinition rack = racksByCode.get(server.rackCode());
-        if (rack == null) return;
-        int slotNumber;
-        try {
-            slotNumber = Integer.parseInt(matcher.group(1));
-        } catch (NumberFormatException exception) {
-            errors.add(context + " has invalid slot: " + server.slot());
-            return;
+    }
+
+    private static boolean canResolveSlots(RackDefinition rack) {
+        if (rack.hasSlotCount() == rack.hasSlots()) return false;
+        if (rack.hasSlotCount()) return rack.slotCount() != null && rack.slotCount() > 0;
+        if (rack.slots() == null || rack.slots().isEmpty()) return false;
+        Set<String> slotCodes = new HashSet<>();
+        for (String slotCode : rack.slots()) {
+            if (isBlank(slotCode) || !slotCodes.add(slotCode)) return false;
         }
-        if (slotNumber < 1 || slotNumber > rack.slotCount()) {
-            errors.add(context + " has slot outside rack range: " + server.slot());
-        }
+        return true;
     }
 
     private static void validateServerStatus(ServerDefinition server, String context, List<String> errors) {
@@ -169,13 +239,15 @@ public final class DatacenterConfigValidator {
 
     private static void validateDuplicatedLocation(
             ServerDefinition server,
+            ServerRackReference rackReference,
             Set<String> locations,
             String context,
             List<String> errors
     ) {
         if (isBlank(server.rackCode()) || isBlank(server.slot())) return;
-        String locationKey = server.rackCode() + "-" + server.slot();
-        if (!locations.add(locationKey)) errors.add(context + " has duplicated location: " + locationKey);
+        if (rackReference == null) return;
+        String locationKey = rackReference.column() + "/" + server.rackCode() + "/" + server.slot();
+        if (!locations.add(locationKey)) errors.add("Duplicate server location: " + locationKey);
     }
 
     private static Set<String> collectKnownModelCodes(List<ServerModelDefinition> serverModels) {
@@ -228,9 +300,9 @@ public final class DatacenterConfigValidator {
         List<String> errors = new ArrayList<>();
         if (definition == null) throw new DatacenterConfigValidationException("Datacenter definition cannot be null");
         validateDatacenterFields(definition, errors);
-        Map<String, RackDefinition> racksByCode = validateLayout(definition.layout(), errors);
+        LayoutIndex layout = validateLayout(definition.layout(), errors);
         validateServerModels(definition.serverModels(), errors);
-        validateServers(definition.servers(), definition.serverModels(), racksByCode, errors);
+        validateServers(definition.servers(), definition.serverModels(), layout, errors);
         validateTemperature(definition.temperature(), errors);
         if (!errors.isEmpty())
             throw new DatacenterConfigValidationException(String.join(System.lineSeparator(), errors));

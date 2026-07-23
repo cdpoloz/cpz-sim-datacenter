@@ -9,6 +9,7 @@ import com.cpz.sim.datacenter.config.validation.DatacenterConfigValidationExcept
 import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.model.HardwareStatus;
 import com.cpz.sim.datacenter.model.Server;
+import com.cpz.sim.datacenter.workload.ServerWorkloadFactorProvider;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -67,6 +68,80 @@ class DatacenterFactoryTest {
         Datacenter datacenter = factory.create(definition);
         assertEquals(2, datacenter.getRackCount());
         assertEquals(2, datacenter.getServerCount());
+    }
+
+    @Test
+    void shouldCreateRackWithExplicitSlotCodesFromDefinition() {
+        DatacenterDefinition definition = new DatacenterDefinition(
+                "Demo Datacenter",
+                new DatacenterLayoutDefinition(
+                        List.of(new RackDefinition("RACK-A01-R01", "A01", "R01", List.of("S03", "GPU-A", "NETWORK")))
+                ),
+                List.of(
+                        new ServerModelDefinition(
+                                "SRV-DEMO-001",
+                                "CPZ",
+                                "Demo Server",
+                                100.0f,
+                                300.0f
+                        )
+                ),
+                List.of(
+                        new ServerDefinition(
+                                "RACK-A01-R01",
+                                "GPU-A",
+                                "SRV-DEMO-001",
+                                "OK"
+                        )
+                )
+        );
+        Datacenter datacenter = new DatacenterFactory().create(definition);
+        assertEquals(1, datacenter.getRackCount());
+        assertEquals(3, datacenter.getRacks().getFirst().getSlotCount());
+        assertEquals(List.of("S03", "GPU-A", "NETWORK"), datacenter.getRacks().getFirst().getSlotCodes());
+        assertEquals("A01-RACK-A01-R01-GPU-A", datacenter.getServers().getFirst().getCode());
+    }
+
+    @Test
+    void shouldCreateServersWithSameRackCodeAndSlotInDifferentColumns() {
+        DatacenterDefinition definition = new DatacenterDefinition(
+                "Demo Datacenter",
+                new DatacenterLayoutDefinition(
+                        List.of(
+                                new RackDefinition("R01", "C01", "R01", List.of("S01", "S02")),
+                                new RackDefinition("R01", "C02", "R01", List.of("S01", "S02"))
+                        )
+                ),
+                List.of(
+                        new ServerModelDefinition(
+                                "SRV-DEMO-001",
+                                "CPZ",
+                                "Demo Server",
+                                100.0f,
+                                300.0f
+                        )
+                ),
+                List.of(
+                        new ServerDefinition("C01", "R01", "S01", "SRV-DEMO-001", "OK", 0.5f),
+                        new ServerDefinition("C02", "R01", "S01", "SRV-DEMO-001", "OK", 1.5f)
+                )
+        );
+        Datacenter datacenter = new DatacenterFactory().create(definition);
+        Server first = datacenter.getServer("C01", "R01", "S01").orElseThrow();
+        Server second = datacenter.getServer("C02", "R01", "S01").orElseThrow();
+        assertEquals("C01-R01-S01", first.getCode());
+        assertEquals("C02-R01-S01", second.getCode());
+        ServerWorkloadFactorProvider factors = new WorkloadFactorProviderFactory().create(definition);
+        assertEquals(0.5f, factors.getFactor(first));
+        assertEquals(1.5f, factors.getFactor(second));
+    }
+
+    @Test
+    void shouldGenerateLegacySlotCodesFromSlotCount() {
+        Datacenter datacenter = new DatacenterFactory().create(validDefinition());
+        assertEquals(42, datacenter.getRacks().getFirst().getSlotCount());
+        assertEquals("U01", datacenter.getRacks().getFirst().getSlotCodes().getFirst());
+        assertEquals("U42", datacenter.getRacks().getFirst().getSlotCodes().getLast());
     }
 
     @Test

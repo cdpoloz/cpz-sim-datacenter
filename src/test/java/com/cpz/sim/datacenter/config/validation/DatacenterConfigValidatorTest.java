@@ -35,8 +35,23 @@ class DatacenterConfigValidatorTest {
         return new RackDefinition(code, "A01", "R01", 42);
     }
 
+    private static RackDefinition rackWithSlots(String code, List<String> slots) {
+        return new RackDefinition(code, "A01", "R01", slots);
+    }
+
     private static ServerDefinition server(String rackCode, String slot, float workloadFactor) {
         return new ServerDefinition(
+                rackCode,
+                slot,
+                "SRV-DEMO-001",
+                "OK",
+                workloadFactor
+        );
+    }
+
+    private static ServerDefinition server(String column, String rackCode, String slot, float workloadFactor) {
+        return new ServerDefinition(
+                column,
                 rackCode,
                 slot,
                 "SRV-DEMO-001",
@@ -97,10 +112,73 @@ class DatacenterConfigValidatorTest {
     }
 
     @Test
-    void shouldRejectDuplicatedRackCode() {
+    void shouldRejectDuplicatedRackLocation() {
         DatacenterDefinition definition = definition(
                 layout(List.of(rack("RACK-A01-R01"), rack("RACK-A01-R01"))),
                 List.of()
+        );
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldAllowSameRackCodeInDifferentColumns() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(
+                        new RackDefinition("R01", "C01", "R01", List.of("S01")),
+                        new RackDefinition("R01", "C02", "R01", List.of("S01"))
+                )),
+                List.of(
+                        server("C01", "R01", "S01", 1.0f),
+                        server("C02", "R01", "S01", 1.0f)
+                )
+        );
+        assertDoesNotThrow(() -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectLegacyServerWithoutColumnWhenRackCodeIsAmbiguous() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(
+                        new RackDefinition("R01", "C01", "R01", List.of("S01")),
+                        new RackDefinition("R01", "C02", "R01", List.of("S01"))
+                )),
+                List.of(server("R01", "S01", 1.0f))
+        );
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldAcceptLegacyServerWithoutColumnWhenRackCodeIsUnique() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(new RackDefinition("R01", "C01", "R01", List.of("S01")))),
+                List.of(server("R01", "S01", 1.0f))
+        );
+        assertDoesNotThrow(() -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectServerWithUnknownColumn() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(new RackDefinition("R01", "C01", "R01", List.of("S01")))),
+                List.of(server("C03", "R01", "S01", 1.0f))
+        );
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectServerWithUnknownRackInKnownColumn() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(new RackDefinition("R01", "C01", "R01", List.of("S01")))),
+                List.of(server("C01", "R02", "S01", 1.0f))
+        );
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectBlankServerColumnWhenPresent() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(new RackDefinition("R01", "C01", "R01", List.of("S01")))),
+                List.of(server(" ", "R01", "S01", 1.0f))
         );
         assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
     }
@@ -115,7 +193,7 @@ class DatacenterConfigValidatorTest {
     }
 
     @Test
-    void shouldRejectSlotOutsideRackRange() {
+    void shouldRejectSlotOutsideLegacyRackRange() {
         DatacenterDefinition definition = definition(
                 layout(List.of(new RackDefinition("RACK-A01-R01", "A01", "R01", 2))),
                 List.of(server("RACK-A01-R01", "U03", 1.0f))
@@ -124,12 +202,154 @@ class DatacenterConfigValidatorTest {
     }
 
     @Test
-    void shouldRejectInvalidSlotFormat() {
+    void shouldAcceptExplicitSlotsWithSxxCodes() {
         DatacenterDefinition definition = definition(
-                layout(List.of(rack("RACK-A01-R01"))),
-                List.of(server("RACK-A01-R01", "S01", 1.0f))
+                layout(List.of(rackWithSlots(
+                        "RACK-A01-R01",
+                        List.of("S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08", "S09", "S10", "S11", "S12")
+                ))),
+                List.of(server("RACK-A01-R01", "S12", 1.0f))
+        );
+        assertDoesNotThrow(() -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldAcceptArbitraryExplicitSlotCodes() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(rackWithSlots("RACK-A01-R01", List.of("GPU-A", "NETWORK", "SPARE")))),
+                List.of(
+                        server("RACK-A01-R01", "GPU-A", 1.0f),
+                        server("RACK-A01-R01", "NETWORK", 1.0f),
+                        server("RACK-A01-R01", "SPARE", 1.0f)
+                )
+        );
+        assertDoesNotThrow(() -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldAcceptExplicitRackWithoutInstalledServers() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(rackWithSlots("RACK-A01-R01", List.of("S01", "S02")))),
+                List.of()
+        );
+        assertDoesNotThrow(() -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectEmptyExplicitSlotsList() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(rackWithSlots("RACK-A01-R01", List.of()))),
+                List.of()
         );
         assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectNullExplicitSlotCode() {
+        List<String> slots = new ArrayList<>();
+        slots.add("S01");
+        slots.add(null);
+        DatacenterDefinition definition = definition(
+                layout(List.of(rackWithSlots("RACK-A01-R01", slots))),
+                List.of()
+        );
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectBlankExplicitSlotCode() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(rackWithSlots("RACK-A01-R01", List.of("S01", " ")))),
+                List.of()
+        );
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectDuplicatedExplicitSlotCodeInsideRack() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(rackWithSlots("RACK-A01-R01", List.of("S01", "S03", "S03")))),
+                List.of()
+        );
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldAllowSameSlotCodeInDifferentRacks() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(
+                        rackWithSlots("RACK-A01-R01", List.of("S01")),
+                        rackWithSlots("RACK-A01-R02", List.of("S01"))
+                )),
+                List.of(
+                        server("RACK-A01-R01", "S01", 1.0f),
+                        server("RACK-A01-R02", "S01", 1.0f)
+                )
+        );
+        assertDoesNotThrow(() -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectRackWithSlotCountAndSlots() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(new RackDefinition("RACK-A01-R01", "A01", "R01", 42, List.of("S01")))),
+                List.of()
+        );
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectRackWithoutSlotCountOrSlots() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(new RackDefinition("RACK-A01-R01", "A01", "R01", null, null, false, false))),
+                List.of()
+        );
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectNonPositiveSlotCount() {
+        assertThrows(
+                DatacenterConfigValidationException.class,
+                () -> validator.validate(definition(
+                        layout(List.of(new RackDefinition("RACK-A01-R01", "A01", "R01", 0))),
+                        List.of()
+                ))
+        );
+        assertThrows(
+                DatacenterConfigValidationException.class,
+                () -> validator.validate(definition(
+                        layout(List.of(new RackDefinition("RACK-A01-R01", "A01", "R01", -1))),
+                        List.of()
+                ))
+        );
+    }
+
+    @Test
+    void shouldRejectServerReferencingUndeclaredExplicitSlot() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(rackWithSlots("RACK-A01-R01", List.of("S01", "S02")))),
+                List.of(server("RACK-A01-R01", "S03", 1.0f))
+        );
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldCompareExplicitSlotCodesCaseSensitively() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(rackWithSlots("RACK-A01-R01", List.of("GPU-A")))),
+                List.of(server("RACK-A01-R01", "gpu-a", 1.0f))
+        );
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldKeepLegacySlotCountCompatibility() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(rack("RACK-A01-R01"))),
+                List.of(server("RACK-A01-R01", "U42", 1.0f))
+        );
+        assertDoesNotThrow(() -> validator.validate(definition));
     }
 
     @Test
@@ -139,6 +359,33 @@ class DatacenterConfigValidatorTest {
                 List.of(
                         server("RACK-A01-R01", "U01", 1.0f),
                         server("RACK-A01-R01", "U01", 1.0f)
+                )
+        );
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldAllowSameRackSlotTextInDifferentColumns() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(
+                        new RackDefinition("R01", "C01", "R01", List.of("S01")),
+                        new RackDefinition("R01", "C02", "R01", List.of("S01"))
+                )),
+                List.of(
+                        server("C01", "R01", "S01", 1.0f),
+                        server("C02", "R01", "S01", 1.0f)
+                )
+        );
+        assertDoesNotThrow(() -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectDuplicateServerLocationWithColumn() {
+        DatacenterDefinition definition = definition(
+                layout(List.of(new RackDefinition("R01", "C01", "R01", List.of("S01")))),
+                List.of(
+                        server("C01", "R01", "S01", 1.0f),
+                        server("C01", "R01", "S01", 1.0f)
                 )
         );
         assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));

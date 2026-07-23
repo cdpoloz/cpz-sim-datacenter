@@ -85,17 +85,17 @@ public class TemperatureSimulationDemo {
                 500.0f
         );
         Server serverA = new Server(
-                new ServerLocation(rackCode, "U01"),
+                new ServerLocation("A01", rackCode, "U01"),
                 standardServerConfig,
                 HardwareStatus.OK
         );
         Server serverB = new Server(
-                new ServerLocation(rackCode, "U02"),
+                new ServerLocation("A01", rackCode, "U02"),
                 standardServerConfig,
                 HardwareStatus.OK
         );
         Server offlineServer = new Server(
-                new ServerLocation(rackCode, "U03"),
+                new ServerLocation("A01", rackCode, "U03"),
                 standardServerConfig,
                 HardwareStatus.OFFLINE
         );
@@ -139,8 +139,9 @@ public class TemperatureSimulationDemo {
         for (ServerTemperatureSnapshot server : snapshot.servers()) {
             System.out.printf(
                     Locale.US,
-                    "  - %s | slot=%s | status=%s | util=%.2f | power=%.1f W | temp=%.2f °C%n",
+                    "  - %s | column=%s | slot=%s | status=%s | util=%.2f | power=%.1f W | temp=%.2f °C%n",
                     server.serverCode(),
+                    server.column(),
                     server.slot(),
                     server.status(),
                     server.utilization(),

@@ -28,11 +28,17 @@ It also exposes:
 `ServerEnergySnapshot` contains, per server:
 
 - `serverCode`
+- `column`
 - `rackCode`
 - `slot`
 - `status`
 - `utilization`
 - `currentPowerWatts`
+
+`slot` is the exact server location slot code. It may be legacy `U01` or an
+explicit opaque rack slot such as `S01`, `GPU-A`, or `NETWORK`.
+`column + rackCode + slot` distinguishes servers such as `C01/R01/S01` and
+`C02/R01/S01`.
 
 ## When to Generate It
 

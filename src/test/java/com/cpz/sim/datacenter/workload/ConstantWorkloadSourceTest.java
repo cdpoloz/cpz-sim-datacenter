@@ -22,7 +22,7 @@ class ConstantWorkloadSourceTest {
                 300.0f
         );
         return new Server(
-                new ServerLocation(new RackCode("RACK-A01-R01"), "U01"),
+                new ServerLocation("A01", new RackCode("RACK-A01-R01"), "U01"),
                 config,
                 HardwareStatus.OK
         );

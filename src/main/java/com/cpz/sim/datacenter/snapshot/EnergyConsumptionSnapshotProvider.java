@@ -39,7 +39,8 @@ public final class EnergyConsumptionSnapshotProvider {
     private ServerEnergySnapshot snapshotServer(Server server) {
         return new ServerEnergySnapshot(
                 server.getCode(),
-                server.getLocation().rackCode().value(),
+                server.getLocation().column(),
+                server.getLocation().rackCode(),
                 server.getLocation().slot(),
                 server.getStatus().name(),
                 server.getUtilization(),

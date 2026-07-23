@@ -109,7 +109,7 @@ class MediumJsonDatacenterIntegrationTest {
         engine.register(new WorkloadSystem(datacenter, workloadSource));
         engine.step();
         Server firstServer = datacenter.getServers().stream()
-                .filter(server -> server.getCode().equals("RACK-A01-R01-U01"))
+                .filter(server -> server.getCode().equals("A01-RACK-A01-R01-U01"))
                 .findFirst()
                 .orElseThrow();
         assertEquals(0.75f, firstServer.getUtilization());
