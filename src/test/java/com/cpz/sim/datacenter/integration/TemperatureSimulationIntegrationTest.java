@@ -8,6 +8,7 @@ import com.cpz.sim.datacenter.model.RackLocation;
 import com.cpz.sim.datacenter.model.Server;
 import com.cpz.sim.datacenter.model.ServerConfig;
 import com.cpz.sim.datacenter.model.ServerLocation;
+import com.cpz.sim.datacenter.model.ServerRole;
 import com.cpz.sim.datacenter.snapshot.EnergyConsumptionSnapshot;
 import com.cpz.sim.datacenter.snapshot.EnergyConsumptionSnapshotProvider;
 import com.cpz.sim.datacenter.snapshot.ServerTemperatureSnapshot;
@@ -155,8 +156,18 @@ class TemperatureSimulationIntegrationTest {
         Datacenter datacenter = new Datacenter(
                 List.of(rack),
                 List.of(
-                        new Server(new ServerLocation("A01", rackCode, "S01"), config, HardwareStatus.OK),
-                        new Server(new ServerLocation("A01", rackCode, "S02"), config, HardwareStatus.OFFLINE)
+                        new Server(
+                                new ServerLocation("A01", rackCode, "S01"),
+                                config,
+                                HardwareStatus.OK,
+                                ServerRole.GENERAL_PURPOSE
+                        ),
+                        new Server(
+                                new ServerLocation("A01", rackCode, "S02"),
+                                config,
+                                HardwareStatus.OFFLINE,
+                                ServerRole.GENERAL_PURPOSE
+                        )
                 )
         );
         TemperatureSystemOptions temperatureOptions = new TemperatureSystemOptions(
@@ -207,9 +218,24 @@ class TemperatureSimulationIntegrationTest {
                 100.0f,
                 500.0f
         );
-        Server firstServer = new Server(new ServerLocation("C01", rackCode, "S01"), config, HardwareStatus.OK);
-        Server secondServer = new Server(new ServerLocation("C02", rackCode, "S01"), config, HardwareStatus.ALERT);
-        Server offlineServer = new Server(new ServerLocation("C02", rackCode, "S02"), config, HardwareStatus.OFFLINE);
+        Server firstServer = new Server(
+                new ServerLocation("C01", rackCode, "S01"),
+                config,
+                HardwareStatus.OK,
+                ServerRole.GENERAL_PURPOSE
+        );
+        Server secondServer = new Server(
+                new ServerLocation("C02", rackCode, "S01"),
+                config,
+                HardwareStatus.ALERT,
+                ServerRole.GENERAL_PURPOSE
+        );
+        Server offlineServer = new Server(
+                new ServerLocation("C02", rackCode, "S02"),
+                config,
+                HardwareStatus.OFFLINE,
+                ServerRole.GENERAL_PURPOSE
+        );
         Datacenter datacenter = new Datacenter(
                 List.of(firstRack, secondRack),
                 List.of(firstServer, secondServer, offlineServer)
@@ -273,17 +299,20 @@ class TemperatureSimulationIntegrationTest {
         Server firstServer = new Server(
                 new ServerLocation("A01", rackCode, "U01"),
                 config,
-                HardwareStatus.OK
+                HardwareStatus.OK,
+                ServerRole.GENERAL_PURPOSE
         );
         Server secondServer = new Server(
                 new ServerLocation("A01", rackCode, "U02"),
                 config,
-                HardwareStatus.OK
+                HardwareStatus.OK,
+                ServerRole.GENERAL_PURPOSE
         );
         Server offlineServer = new Server(
                 new ServerLocation("A01", rackCode, "U03"),
                 config,
-                HardwareStatus.OFFLINE
+                HardwareStatus.OFFLINE,
+                ServerRole.GENERAL_PURPOSE
         );
         return new Datacenter(
                 List.of(rack),

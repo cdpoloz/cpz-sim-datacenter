@@ -30,7 +30,8 @@ class WorkloadSystemTest {
         return new Server(
                 new ServerLocation("A01", rackCode, slot),
                 config,
-                HardwareStatus.OK
+                HardwareStatus.OK,
+                ServerRole.GENERAL_PURPOSE
         );
     }
 

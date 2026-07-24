@@ -3,6 +3,9 @@ package com.cpz.sim.datacenter.model;
 import java.util.Objects;
 
 /**
+ * An installed server and its static configuration, functional role, and
+ * mutable simulation state.
+ *
  * @author CPZ
  */
 public class Server {
@@ -13,11 +16,16 @@ public class Server {
     private HardwareStatus status;
     private double utilization;
     private float currentPowerWatts;
+    private final ServerRole role;
 
-    public Server(ServerLocation location, ServerConfig config, HardwareStatus initialStatus) {
+    /**
+     * Creates a server with an explicit, non-null primary functional role.
+     */
+    public Server(ServerLocation location, ServerConfig config, HardwareStatus initialStatus, ServerRole role) {
         this.location = Objects.requireNonNull(location, "location cannot be null");
         this.config = Objects.requireNonNull(config, "config cannot be null");
         this.status = Objects.requireNonNull(initialStatus, "initialStatus cannot be null");
+        this.role = Objects.requireNonNull(role, "role cannot be null");
         updatePowerConsumption();
     }
 
@@ -61,5 +69,14 @@ public class Server {
 
     public float getCurrentPowerWatts() {
         return currentPowerWatts;
+    }
+
+    /**
+     * Returns the server's primary functional role.
+     *
+     * @return the non-null role assigned when the server was constructed
+     */
+    public ServerRole getRole() {
+        return role;
     }
 }

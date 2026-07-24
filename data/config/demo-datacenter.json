@@ -31,6 +31,7 @@
       "slot": "U01",
       "modelCode": "SRV-DEMO-001",
       "status": "OK",
+      "role": "GENERAL_PURPOSE",
       "workloadFactor": 1.5
     },
     {

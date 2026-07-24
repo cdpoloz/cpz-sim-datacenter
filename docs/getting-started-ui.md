@@ -120,6 +120,15 @@ Physical rack layout:
 - `datacenter.getServers("C01", "R01")`
 - `datacenter.getServer("C01", "R01", "S03")`
 
+Static server metadata:
+
+- `server.getRole()`
+
+`Server#getRole()` is the backend source of truth for the server's primary
+functional role and never returns `null` for servers built by
+`DatacenterFactory`. The UI must not infer a role from the model, slot, power, or
+status, and must not maintain a parallel role property.
+
 The UI must get physical slots from each rack. It should compare those exact slot
 codes with server locations from snapshots. Rack identity is `column + rackCode`;
 server identity is `column + rackCode + slot`. It must not generate `U01`, `U02`,

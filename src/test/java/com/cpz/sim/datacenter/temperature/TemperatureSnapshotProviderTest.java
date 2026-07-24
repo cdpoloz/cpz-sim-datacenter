@@ -169,8 +169,18 @@ class TemperatureSnapshotProviderTest {
                 100.0f,
                 500.0f
         );
-        Server firstServer = new Server(new ServerLocation("C01", rackCode, "S01"), config, HardwareStatus.OK);
-        Server secondServer = new Server(new ServerLocation("C02", rackCode, "S01"), config, HardwareStatus.OK);
+        Server firstServer = new Server(
+                new ServerLocation("C01", rackCode, "S01"),
+                config,
+                HardwareStatus.OK,
+                ServerRole.GENERAL_PURPOSE
+        );
+        Server secondServer = new Server(
+                new ServerLocation("C02", rackCode, "S01"),
+                config,
+                HardwareStatus.OK,
+                ServerRole.GENERAL_PURPOSE
+        );
         Datacenter datacenter = new Datacenter(List.of(firstRack, secondRack), List.of(firstServer, secondServer));
         TemperatureSystemOptions options = TemperatureSystemOptions.defaults();
         TemperatureSystem system = new TemperatureSystem(datacenter, options, new SimpleServerTemperatureModel());
@@ -199,7 +209,8 @@ class TemperatureSnapshotProviderTest {
         Server server = new Server(
                 new ServerLocation("A01", RACK_CODE, "U01"),
                 config,
-                status
+                status,
+                ServerRole.GENERAL_PURPOSE
         );
         server.setUtilization(utilization);
         server.updatePowerConsumption();

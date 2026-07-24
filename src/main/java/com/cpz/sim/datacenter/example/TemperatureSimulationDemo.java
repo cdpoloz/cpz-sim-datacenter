@@ -87,17 +87,20 @@ public class TemperatureSimulationDemo {
         Server serverA = new Server(
                 new ServerLocation("A01", rackCode, "U01"),
                 standardServerConfig,
-                HardwareStatus.OK
+                HardwareStatus.OK,
+                ServerRole.GENERAL_PURPOSE
         );
         Server serverB = new Server(
                 new ServerLocation("A01", rackCode, "U02"),
                 standardServerConfig,
-                HardwareStatus.OK
+                HardwareStatus.OK,
+                ServerRole.GENERAL_PURPOSE
         );
         Server offlineServer = new Server(
                 new ServerLocation("A01", rackCode, "U03"),
                 standardServerConfig,
-                HardwareStatus.OFFLINE
+                HardwareStatus.OFFLINE,
+                ServerRole.GENERAL_PURPOSE
         );
         return new Datacenter(
                 List.of(rack),

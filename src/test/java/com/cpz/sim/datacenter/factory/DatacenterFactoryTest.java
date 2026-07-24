@@ -9,6 +9,7 @@ import com.cpz.sim.datacenter.config.validation.DatacenterConfigValidationExcept
 import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.model.HardwareStatus;
 import com.cpz.sim.datacenter.model.Server;
+import com.cpz.sim.datacenter.model.ServerRole;
 import com.cpz.sim.datacenter.workload.ServerWorkloadFactorProvider;
 import org.junit.jupiter.api.Test;
 
@@ -49,13 +50,15 @@ class DatacenterFactoryTest {
                                 "RACK-A01-R01",
                                 "U01",
                                 "SRV-DEMO-001",
-                                "OK"
+                                "OK",
+                                ServerRole.GENERAL_PURPOSE
                         ),
                         new ServerDefinition(
                                 "RACK-A01-R01",
                                 "U02",
                                 "SRV-DEMO-001",
-                                "OK"
+                                "OK",
+                                ServerRole.GENERAL_PURPOSE
                         )
                 )
         );
@@ -91,7 +94,8 @@ class DatacenterFactoryTest {
                                 "RACK-A01-R01",
                                 "GPU-A",
                                 "SRV-DEMO-001",
-                                "OK"
+                                "OK",
+                                ServerRole.GENERAL_PURPOSE
                         )
                 )
         );
@@ -122,8 +126,24 @@ class DatacenterFactoryTest {
                         )
                 ),
                 List.of(
-                        new ServerDefinition("C01", "R01", "S01", "SRV-DEMO-001", "OK", 0.5f),
-                        new ServerDefinition("C02", "R01", "S01", "SRV-DEMO-001", "OK", 1.5f)
+                        new ServerDefinition(
+                                "C01",
+                                "R01",
+                                "S01",
+                                "SRV-DEMO-001",
+                                "OK",
+                                ServerRole.GENERAL_PURPOSE,
+                                0.5f
+                        ),
+                        new ServerDefinition(
+                                "C02",
+                                "R01",
+                                "S01",
+                                "SRV-DEMO-001",
+                                "OK",
+                                ServerRole.GENERAL_PURPOSE,
+                                1.5f
+                        )
                 )
         );
         Datacenter datacenter = new DatacenterFactory().create(definition);
@@ -174,7 +194,8 @@ class DatacenterFactoryTest {
                                 "RACK-A01-R01",
                                 "U01",
                                 "SRV-DEMO-001",
-                                "OFFLINE"
+                                "OFFLINE",
+                                ServerRole.GENERAL_PURPOSE
                         )
                 )
         );
@@ -182,6 +203,46 @@ class DatacenterFactoryTest {
         Datacenter datacenter = factory.create(definition);
         Server server = datacenter.getServers().getFirst();
         assertEquals(HardwareStatus.OFFLINE, server.getStatus());
+    }
+
+    @Test
+    void shouldPreserveExplicitRoleAndDefaultOmittedRole() {
+        DatacenterDefinition definition = new DatacenterDefinition(
+                "Role Datacenter",
+                validLayout(),
+                List.of(
+                        new ServerModelDefinition(
+                                "SRV-DEMO-001",
+                                "CPZ",
+                                "Demo Server",
+                                100.0f,
+                                300.0f
+                        )
+                ),
+                List.of(
+                        new ServerDefinition(
+                                "RACK-A01-R01",
+                                "U01",
+                                "SRV-DEMO-001",
+                                "OK",
+                                ServerRole.AI
+                        ),
+                        new ServerDefinition(
+                                "RACK-A01-R01",
+                                "U02",
+                                "SRV-DEMO-001",
+                                "OK",
+                                null
+                        )
+                )
+        );
+
+        Datacenter datacenter = new DatacenterFactory().create(definition);
+        Server explicitServer = datacenter.getServers().getFirst();
+        Server defaultedServer = datacenter.getServers().get(1);
+
+        assertEquals(ServerRole.AI, explicitServer.getRole());
+        assertEquals(ServerRole.GENERAL_PURPOSE, defaultedServer.getRole());
     }
 
     @Test
@@ -203,7 +264,8 @@ class DatacenterFactoryTest {
                                 "RACK-A01-R01",
                                 "U01",
                                 "UNKNOWN",
-                                "OK"
+                                "OK",
+                                ServerRole.GENERAL_PURPOSE
                         )
                 )
         );
@@ -230,13 +292,15 @@ class DatacenterFactoryTest {
                                 "RACK-A01-R01",
                                 "U01",
                                 "SRV-DEMO-001",
-                                "OK"
+                                "OK",
+                                ServerRole.GENERAL_PURPOSE
                         ),
                         new ServerDefinition(
                                 "RACK-A01-R01",
                                 "U01",
                                 "SRV-DEMO-001",
-                                "OK"
+                                "OK",
+                                ServerRole.GENERAL_PURPOSE
                         )
                 )
         );
@@ -263,7 +327,8 @@ class DatacenterFactoryTest {
                                 "UNKNOWN_RACK",
                                 "U01",
                                 "SRV-DEMO-001",
-                                "OK"
+                                "OK",
+                                ServerRole.GENERAL_PURPOSE
                         )
                 )
         );

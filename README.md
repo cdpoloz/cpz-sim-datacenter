@@ -32,6 +32,7 @@ Available in `0.1.0-alpha.1`:
 - JSON-configurable datacenter definitions with `layout.racks`, `serverModels` and `servers`.
 - Physical layout with existing racks, ordered slot codes, and empty racks.
 - Servers installed by `column`, `rackCode`, and `slot`.
+- Static per-server functional roles exposed through `Server#getRole()`.
 - Hardware states: `OK`, `ALERT`, `OFFLINE`, with automatic health evaluation from utilization and temperature.
 - Simulation systems: `WorkloadSystem`, `PowerConsumptionSystem`, `TemperatureSystem`, `ServerHealthSystem`, and `EnergyConsumptionSystem`.
 - Workload strategy through `WorkloadSource`, with noise-based and scaled workloads.
@@ -46,6 +47,7 @@ Important rules:
 - An empty rack represents physical infrastructure with no installed server.
 - An `OFFLINE` server represents an installed server that is powered off or not operational.
 - Rack identity is `column + rackCode`; server identity is `column + rackCode + slot`.
+- A missing JSON `role` is normalized to `ServerRole.GENERAL_PURPOSE` when the domain is built.
 - Slot codes are opaque identifiers declared by each rack. A UI should read rack slots from the backend and match servers by exact `column + rackCode + slot`.
 - `WorkloadSystem` forces `utilization = 0.0f` for `OFFLINE` servers and does not query the `WorkloadSource` for them.
 - `Server.updatePowerConsumption()` forces `currentPowerWatts = 0.0f` for `OFFLINE` servers.
@@ -147,6 +149,7 @@ Recommended local order when all projects are under development:
       "slot": "U01",
       "modelCode": "SRV-DEMO-001",
       "status": "OK",
+      "role": "AI",
       "workloadFactor": 1.5
     },
     {
@@ -163,7 +166,8 @@ Recommended local order when all projects are under development:
 
 `RACK-C01-R01` uses the legacy `slotCount` format, which generates `U01` through
 `U42`. `RACK-C01-R02` uses explicit opaque slot codes and exists even though it has
-no installed servers.
+no installed servers. The first server explicitly has role `AI`; the second omits
+`role` and is built as `GENERAL_PURPOSE`.
 
 The same `rackCode` may appear in different columns:
 

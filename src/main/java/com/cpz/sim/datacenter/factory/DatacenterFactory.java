@@ -73,9 +73,10 @@ public final class DatacenterFactory {
             Map<String, ServerConfig> serverConfigsByModelCode
     ) {
         HardwareStatus status = HardwareStatus.valueOf(serverDefinition.status());
+        ServerRole role = Objects.requireNonNullElse(serverDefinition.role(), ServerRole.GENERAL_PURPOSE);
         ServerLocation location = ServerDefinitionLocationResolver.resolve(datacenterDefinition, serverDefinition);
         ServerConfig config = serverConfigsByModelCode.get(serverDefinition.modelCode());
-        return new Server(location, config, status);
+        return new Server(location, config, status, role);
     }
 
     public Datacenter create(DatacenterDefinition definition) {

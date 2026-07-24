@@ -27,7 +27,8 @@ class DatacenterTest {
         return new Server(
                 new ServerLocation(column, rackCode, slot),
                 config,
-                HardwareStatus.OK
+                HardwareStatus.OK,
+                ServerRole.GENERAL_PURPOSE
         );
     }
 
@@ -104,7 +105,12 @@ class DatacenterTest {
 
     @Test
     void shouldRejectDuplicateServerLocations() {
-        Server duplicate = new Server(serverA.getLocation(), serverA.getConfig(), HardwareStatus.OK);
+        Server duplicate = new Server(
+                serverA.getLocation(),
+                serverA.getConfig(),
+                HardwareStatus.OK,
+                ServerRole.GENERAL_PURPOSE
+        );
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new Datacenter(List.of(rackA), List.of(serverA, duplicate))

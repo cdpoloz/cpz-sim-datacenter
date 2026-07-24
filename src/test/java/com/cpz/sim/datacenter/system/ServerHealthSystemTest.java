@@ -12,6 +12,7 @@ import com.cpz.sim.datacenter.model.RackLocation;
 import com.cpz.sim.datacenter.model.Server;
 import com.cpz.sim.datacenter.model.ServerConfig;
 import com.cpz.sim.datacenter.model.ServerLocation;
+import com.cpz.sim.datacenter.model.ServerRole;
 import com.cpz.sim.datacenter.temperature.SimpleServerTemperatureModel;
 import com.cpz.sim.datacenter.temperature.TemperatureSystemOptions;
 import com.cpz.sim.foundation.time.SimulationTick;
@@ -87,7 +88,12 @@ class ServerHealthSystemTest {
         RackCode rackCode = new RackCode("RACK-A01-R01");
         Rack rack = new Rack(rackCode, new RackLocation("A01", "R01"), 42);
         ServerConfig config = new ServerConfig("model-01", "Example", "Server X", 100.0f, 500.0f);
-        Server server = new Server(new ServerLocation("A01", rackCode, "U01"), config, status);
+        Server server = new Server(
+                new ServerLocation("A01", rackCode, "U01"),
+                config,
+                status,
+                ServerRole.GENERAL_PURPOSE
+        );
         server.setUtilization(utilization);
         server.updatePowerConsumption();
         Datacenter datacenter = new Datacenter(List.of(rack), List.of(server));

@@ -6,6 +6,7 @@ import com.cpz.sim.datacenter.config.definition.RackDefinition;
 import com.cpz.sim.datacenter.config.definition.ServerDefinition;
 import com.cpz.sim.datacenter.config.definition.ServerModelDefinition;
 import com.cpz.sim.datacenter.config.definition.TemperatureSystemOptionsDefinition;
+import com.cpz.sim.datacenter.model.ServerRole;
 import com.cpz.sim.datacenter.temperature.TemperatureSystemOptions;
 import org.junit.jupiter.api.Test;
 
@@ -42,6 +43,7 @@ class TemperatureSystemOptionsFactoryTest {
                                 "U01",
                                 "SRV-DEMO-001",
                                 "OK",
+                                ServerRole.GENERAL_PURPOSE,
                                 1.0f
                         )
                 ),

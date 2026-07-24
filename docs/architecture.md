@@ -10,7 +10,7 @@ backend.
 
 ## Main Packages
 
-- `com.cpz.sim.datacenter.model`: domain model (`Datacenter`, `Rack`, `Server`, `ServerLocation`, `HardwareStatus`, etc.).
+- `com.cpz.sim.datacenter.model`: domain model (`Datacenter`, `Rack`, `Server`, `ServerLocation`, `ServerRole`, `HardwareStatus`, etc.).
 - `com.cpz.sim.datacenter.config`: configuration loading contract.
 - `com.cpz.sim.datacenter.config.definition`: objects that represent JSON (`DatacenterDefinition`, `RackDefinition`, `ServerModelDefinition`, `ServerDefinition`) plus helpers for effective rack slots.
 - `com.cpz.sim.datacenter.config.json`: JSON loading with Jackson (`JsonDatacenterConfigLoader`).
@@ -52,9 +52,19 @@ capacity.
 
 - `ServerLocation location`, composed of `column`, `RackCode rackCode`, and `slot`
 - `ServerConfig config`
+- `ServerRole role`
 - `HardwareStatus status`
 - `utilization`
 - `currentPowerWatts`
+
+`ServerRole` is the server's non-null, primary functional role. It is static
+metadata: workload, power, temperature, and health systems neither calculate nor
+change it. A missing role in `ServerDefinition` is normalized by
+`DatacenterFactory` to `GENERAL_PURPOSE`.
+
+Consumers such as `sim-datacenter-ui` read this metadata directly with
+`Server#getRole()`. It is intentionally not duplicated in the dynamic energy,
+temperature, or health snapshots.
 
 `ServerLocation.code()` derives the server code as:
 
@@ -136,6 +146,9 @@ Each simulation concern owns its own state and snapshot model.
 - `ServerHealthSystem` exposes status, alert reasons, utilization, and temperature through `HealthSnapshotProvider`.
 
 There is intentionally no global `DatacenterSnapshot` at this stage.
+
+Static server metadata such as `ServerRole` remains on the domain `Server`; these
+snapshots contain only the state owned by their simulation concern.
 
 Providers that include a server status read the current `Server.status`. When
 they are invoked after the complete pipeline, that value is the status calculated

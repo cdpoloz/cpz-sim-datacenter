@@ -23,7 +23,7 @@ class ServerTest {
                 300.0f
         );
         ServerLocation location = new ServerLocation("A01", new RackCode("RACK-A01-R01"), "U01");
-        server = new Server(location, config, HardwareStatus.OK);
+        server = new Server(location, config, HardwareStatus.OK, ServerRole.GENERAL_PURPOSE);
     }
 
     @Test
@@ -67,5 +67,30 @@ class ServerTest {
     @Test
     void shouldExposeLocationCode() {
         assertEquals("A01-RACK-A01-R01-U01", server.getCode());
+    }
+
+    @Test
+    void shouldExposeExplicitRole() {
+        Server aiServer = new Server(
+                server.getLocation(),
+                server.getConfig(),
+                HardwareStatus.OK,
+                ServerRole.AI
+        );
+
+        assertEquals(ServerRole.AI, aiServer.getRole());
+    }
+
+    @Test
+    void shouldRejectNullRole() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new Server(
+                        server.getLocation(),
+                        server.getConfig(),
+                        HardwareStatus.OK,
+                        null
+                )
+        );
     }
 }

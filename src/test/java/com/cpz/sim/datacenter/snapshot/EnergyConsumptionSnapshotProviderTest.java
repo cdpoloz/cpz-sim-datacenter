@@ -32,8 +32,18 @@ class EnergyConsumptionSnapshotProviderTest {
                 100.0f,
                 300.0f
         );
-        Server firstServer = new Server(new ServerLocation("A01", rackCode, "U01"), config, HardwareStatus.OK);
-        Server secondServer = new Server(new ServerLocation("A01", rackCode, "U02"), config, HardwareStatus.OK);
+        Server firstServer = new Server(
+                new ServerLocation("A01", rackCode, "U01"),
+                config,
+                HardwareStatus.OK,
+                ServerRole.GENERAL_PURPOSE
+        );
+        Server secondServer = new Server(
+                new ServerLocation("A01", rackCode, "U02"),
+                config,
+                HardwareStatus.OK,
+                ServerRole.GENERAL_PURPOSE
+        );
         return new Datacenter(List.of(rack), List.of(firstServer, secondServer));
     }
 
@@ -86,8 +96,18 @@ class EnergyConsumptionSnapshotProviderTest {
                 100.0f,
                 300.0f
         );
-        Server firstServer = new Server(new ServerLocation("C01", rackCode, "S01"), config, HardwareStatus.OK);
-        Server secondServer = new Server(new ServerLocation("C02", rackCode, "S01"), config, HardwareStatus.ALERT);
+        Server firstServer = new Server(
+                new ServerLocation("C01", rackCode, "S01"),
+                config,
+                HardwareStatus.OK,
+                ServerRole.GENERAL_PURPOSE
+        );
+        Server secondServer = new Server(
+                new ServerLocation("C02", rackCode, "S01"),
+                config,
+                HardwareStatus.ALERT,
+                ServerRole.GENERAL_PURPOSE
+        );
         Datacenter datacenter = new Datacenter(List.of(firstRack, secondRack), List.of(firstServer, secondServer));
         EnergyConsumptionSystem energySystem = new EnergyConsumptionSystem(datacenter);
         EnergyConsumptionSnapshot snapshot = new EnergyConsumptionSnapshotProvider(datacenter, energySystem)

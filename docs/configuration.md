@@ -120,6 +120,7 @@ Each installed server is defined as:
   "slot": "S01",
   "modelCode": "SRV-DEMO-001",
   "status": "OK",
+  "role": "AI",
   "workloadFactor": 1.5
 }
 ```
@@ -131,6 +132,7 @@ Fields:
 - `slot`: exact slot code declared by the referenced rack.
 - `modelCode`: code of an existing model in `serverModels`.
 - `status`: initial `HardwareStatus` value: `OK`, `ALERT`, or `OFFLINE`.
+- `role`: optional primary functional `ServerRole`.
 - `workloadFactor`: non-negative factor used to scale workload per server.
 
 Rules:
@@ -142,8 +144,31 @@ Rules:
 - `slot` must exist in the referenced rack's effective slot list.
 - Two servers cannot share the same location `column + "/" + rackCode + "/" + slot`.
 - `status` must exactly match the enum name.
+- If present, `role` must be a non-null JSON string that exactly matches a
+  `ServerRole` name. Matching is case-sensitive.
 - `workloadFactor` must be finite and `>= 0`.
 - If `ServerDefinition` is built from Java using the constructor without `workloadFactor`, the default value is `1.0f`.
+
+Allowed `role` values are:
+
+- `GENERAL_PURPOSE`
+- `AI`
+- `STORAGE`
+- `DATABASE`
+- `EDGE`
+- `GPU`
+- `MANAGEMENT`
+
+When `role` is absent, `ServerDefinition.role()` remains `null` because the
+definition represents exactly what was declared. `DatacenterFactory` normalizes
+that absence to `ServerRole.GENERAL_PURPOSE`, so `Server.getRole()` never returns
+`null` for a successfully built server. An explicit `role: null`, a non-textual
+value, or an unknown value prevents the JSON configuration from loading.
+
+`AI` means that training or inference of artificial intelligence is the server's
+primary function. `GPU` means GPU-accelerated compute whose primary function is
+not specifically classified as AI. Each server has one primary role in this
+version.
 
 The JSON status is used when constructing the server. Once
 `ServerHealthSystem` runs, a non-`OFFLINE` status can evolve between `OK` and

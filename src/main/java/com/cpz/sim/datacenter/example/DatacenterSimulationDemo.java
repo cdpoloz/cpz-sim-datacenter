@@ -56,7 +56,12 @@ public class DatacenterSimulationDemo {
     }
 
     private static Server createServer(ServerConfig config, RackCode rackCode, String slot) {
-        return new Server(new ServerLocation("A01", rackCode, slot), config, HardwareStatus.OK);
+        return new Server(
+                new ServerLocation("A01", rackCode, slot),
+                config,
+                HardwareStatus.OK,
+                ServerRole.GENERAL_PURPOSE
+        );
     }
 
 }

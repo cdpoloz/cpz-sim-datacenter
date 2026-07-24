@@ -152,7 +152,8 @@ class TemperatureSystemTest {
         Server server = new Server(
                 new ServerLocation("A01", rackCode, "U01"),
                 config,
-                status
+                status,
+                ServerRole.GENERAL_PURPOSE
         );
         server.setUtilization(utilization);
         server.updatePowerConsumption();

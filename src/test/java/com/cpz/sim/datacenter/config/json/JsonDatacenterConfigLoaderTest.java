@@ -5,20 +5,31 @@ import com.cpz.sim.datacenter.config.definition.DatacenterDefinition;
 import com.cpz.sim.datacenter.config.definition.RackDefinition;
 import com.cpz.sim.datacenter.factory.DatacenterFactory;
 import com.cpz.sim.datacenter.model.Datacenter;
+import com.cpz.sim.datacenter.model.ServerRole;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
+import java.io.IOException;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * @author CPZ
  */
 class JsonDatacenterConfigLoaderTest {
+
+    @TempDir
+    Path tempDirectory;
 
     private static Path resourcePath(String resourceName) {
         try {
@@ -32,6 +43,54 @@ class JsonDatacenterConfigLoaderTest {
         } catch (URISyntaxException exception) {
             throw new AssertionError("Invalid test resource path: " + resourceName, exception);
         }
+    }
+
+    private Path writeSingleServerConfig(String roleProperty) throws IOException {
+        String json = """
+                {
+                  "name": "Role Test Datacenter",
+                  "layout": {
+                    "racks": [
+                      {
+                        "code": "R01",
+                        "column": "C01",
+                        "row": "R01",
+                        "slots": ["S01"]
+                      }
+                    ]
+                  },
+                  "serverModels": [
+                    {
+                      "modelCode": "MODEL-01",
+                      "manufacturer": "CPZ",
+                      "model": "Role Test Server",
+                      "idlePowerWatts": 100.0,
+                      "maxPowerWatts": 300.0
+                    }
+                  ],
+                  "servers": [
+                    {
+                      "column": "C01",
+                      "rackCode": "R01",
+                      "slot": "S01",
+                      "modelCode": "MODEL-01",
+                      "status": "OK"%s,
+                      "workloadFactor": 1.0
+                    }
+                  ]
+                }
+                """.formatted(roleProperty);
+        return Files.writeString(tempDirectory.resolve("server-role.json"), json);
+    }
+
+    private static String exceptionMessages(Throwable exception) {
+        StringBuilder messages = new StringBuilder();
+        Throwable current = exception;
+        while (current != null) {
+            if (current.getMessage() != null) messages.append(current.getMessage()).append(System.lineSeparator());
+            current = current.getCause();
+        }
+        return messages.toString();
     }
 
     @Test
@@ -53,7 +112,83 @@ class JsonDatacenterConfigLoaderTest {
         assertEquals("RACK-A01-R01", definition.servers().getFirst().rackCode());
         assertEquals("U01", definition.servers().getFirst().slot());
         assertEquals(1.5f, definition.servers().getFirst().workloadFactor());
+        assertNull(definition.servers().getFirst().role());
         assertEquals(null, definition.temperature());
+    }
+
+    @ParameterizedTest
+    @EnumSource(ServerRole.class)
+    void shouldLoadEveryServerRole(ServerRole role) throws IOException {
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(
+                writeSingleServerConfig(",\n      \"role\": \"" + role.name() + "\"")
+        );
+
+        assertEquals(role, definition.servers().getFirst().role());
+    }
+
+    @Test
+    void shouldKeepRoleNullWhenJsonFieldIsAbsent() throws IOException {
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(writeSingleServerConfig(""));
+
+        assertNull(definition.servers().getFirst().role());
+    }
+
+    @Test
+    void shouldRejectUnknownServerRole() throws IOException {
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(
+                        writeSingleServerConfig(",\n      \"role\": \"WEB_SERVER\"")
+                )
+        );
+
+        String messages = exceptionMessages(exception);
+        assertTrue(messages.contains("role"));
+        assertTrue(messages.contains("WEB_SERVER"));
+        assertTrue(messages.contains("ServerRole"));
+    }
+
+    @Test
+    void shouldRejectExplicitNullServerRole() throws IOException {
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(
+                        writeSingleServerConfig(",\n      \"role\": null")
+                )
+        );
+
+        String messages = exceptionMessages(exception);
+        assertTrue(messages.contains("role"));
+        assertTrue(messages.contains("cannot be null"));
+    }
+
+    @Test
+    void shouldRejectNonTextualServerRole() throws IOException {
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(
+                        writeSingleServerConfig(",\n      \"role\": 1")
+                )
+        );
+
+        String messages = exceptionMessages(exception);
+        assertTrue(messages.contains("role"));
+        assertTrue(messages.contains("must be a string"));
+    }
+
+    @Test
+    void shouldRejectLowercaseServerRole() throws IOException {
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(
+                        writeSingleServerConfig(",\n      \"role\": \"ai\"")
+                )
+        );
+
+        String messages = exceptionMessages(exception);
+        assertTrue(messages.contains("role"));
+        assertTrue(messages.contains("ai"));
+        assertTrue(messages.contains("ServerRole"));
     }
 
     @Test
@@ -104,6 +239,7 @@ class JsonDatacenterConfigLoaderTest {
         Datacenter datacenter = factory.create(definition);
         assertEquals(2, datacenter.getRackCount());
         assertEquals(2, datacenter.getServerCount());
+        assertEquals(ServerRole.GENERAL_PURPOSE, datacenter.getServers().getFirst().getRole());
     }
 
     @Test

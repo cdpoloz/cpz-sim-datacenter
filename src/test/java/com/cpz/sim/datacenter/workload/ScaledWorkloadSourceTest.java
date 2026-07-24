@@ -5,6 +5,7 @@ import com.cpz.sim.datacenter.model.RackCode;
 import com.cpz.sim.datacenter.model.Server;
 import com.cpz.sim.datacenter.model.ServerConfig;
 import com.cpz.sim.datacenter.model.ServerLocation;
+import com.cpz.sim.datacenter.model.ServerRole;
 import com.cpz.sim.foundation.time.SimulationTick;
 import org.junit.jupiter.api.Test;
 
@@ -25,7 +26,7 @@ class ScaledWorkloadSourceTest {
                 100.0f,
                 300.0f
         );
-        return new Server(location, config, HardwareStatus.OK);
+        return new Server(location, config, HardwareStatus.OK, ServerRole.GENERAL_PURPOSE);
     }
 
     private static SimulationTick createTick() {

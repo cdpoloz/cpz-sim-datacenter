@@ -8,6 +8,7 @@ import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.model.HardwareStatus;
 import com.cpz.sim.datacenter.model.RackCode;
 import com.cpz.sim.datacenter.model.Server;
+import com.cpz.sim.datacenter.model.ServerRole;
 import com.cpz.sim.datacenter.system.PowerConsumptionSystem;
 import com.cpz.sim.datacenter.system.WorkloadSystem;
 import com.cpz.sim.datacenter.workload.ConstantWorkloadSource;
@@ -60,6 +61,10 @@ class MediumJsonDatacenterIntegrationTest {
         Datacenter datacenter = loadMediumDatacenterFromJson();
         assertEquals(5, datacenter.getRackCount());
         assertEquals(8, datacenter.getServerCount());
+        assertTrue(datacenter.getServers().stream().anyMatch(server -> server.getRole() == ServerRole.STORAGE));
+        assertTrue(datacenter.getServers().stream().anyMatch(
+                server -> server.getRole() == ServerRole.GENERAL_PURPOSE
+        ));
     }
 
     @Test
