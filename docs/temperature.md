@@ -21,6 +21,9 @@ The current milestone implements a server-level thermal model with these classes
 The model uses `Server.currentPowerWatts` as thermal input and updates one
 representative internal temperature per installed server.
 
+That temperature is also an input to `ServerHealthSystem`, which can derive an
+`ALERT` status when the configured temperature threshold is active.
+
 `ServerTemperatureSnapshot` includes `column`, `rackCode`, and `slot`. The complete
 server identity is `column + rackCode + slot`, so temperature snapshots can
 distinguish `C01/R01/S01` from `C02/R01/S01`.
@@ -136,11 +139,23 @@ The intended causal order is:
 WorkloadSystem
 -> PowerConsumptionSystem
 -> TemperatureSystem
+-> ServerHealthSystem
 -> EnergyConsumptionSystem
 ```
 
 `TemperatureSystem` must run after `PowerConsumptionSystem` so it reads the
-current tick's `currentPowerWatts`.
+current tick's `currentPowerWatts`. `ServerHealthSystem` must run after
+`TemperatureSystem` so it evaluates the temperature produced for that tick.
+
+### `ServerHealthSystem`
+
+`ServerHealthSystem` reads the representative internal temperature together with
+current utilization. It applies the configured `temperatureCelsius` activation
+and clearing limits and records `HIGH_TEMPERATURE` while that condition is
+active. It then derives `HardwareStatus.ALERT` or `HardwareStatus.OK` for
+non-`OFFLINE` servers; `OFFLINE` is preserved.
+
+See [Server Health](server-health.md) for threshold behavior and configuration.
 
 ### `EnergyConsumptionSystem`
 
@@ -160,6 +175,10 @@ This snapshot is independent from `EnergyConsumptionSnapshotProvider`:
 - `TemperatureSnapshot` contains temperature-oriented data
 - `EnergyConsumptionSnapshot` contains energy and IT power data
 - there is no global combined `DatacenterSnapshot` in the current architecture
+
+`ServerTemperatureSnapshot.status()` reads the current server status. If the
+snapshot is taken after `ServerHealthSystem`, it contains the health-calculated
+status for the tick, or the preserved `OFFLINE` status.
 
 Temperature snapshots contain installed servers only. Empty physical slots are
 obtained from `Rack.getSlotCodes()` and correlated with
@@ -186,6 +205,11 @@ It demonstrates:
 - `TemperatureSnapshotProvider`
 - separate energy and temperature snapshots
 - an `OFFLINE` server with `0 W` power that trends toward ambient
+
+The demo does not register `ServerHealthSystem`; consequently, the status printed
+by that demo remains the status assigned when each server is constructed. Add
+the health system after `TemperatureSystem`, as shown above, when the output must
+show automatically calculated status.
 
 The exact numeric output depends on workload evolution and tick duration.
 

@@ -11,6 +11,9 @@ import com.cpz.sim.datacenter.model.RackCode;
  * <p>{@code temperatureCelsius} represents a simplified internal server
  * temperature derived from server power. It is not rack inlet or room
  * temperature.
+ *
+ * <p>When captured after the health system, {@code status} is the status
+ * calculated for the tick, with {@code OFFLINE} preserved.
  */
 public record ServerTemperatureSnapshot(
         String serverCode,

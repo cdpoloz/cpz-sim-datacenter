@@ -120,5 +120,16 @@ The load and power of an `OFFLINE` server are corrected in two steps:
 1. `WorkloadSystem` assigns `0.0f` utilization and does not call `WorkloadSource`.
 2. `PowerConsumptionSystem` calls `Server.updatePowerConsumption()`, which assigns `0.0f` power.
 
-To obtain coherent snapshots, register the systems using the causal order defined
-in the architecture.
+To obtain coherent health evaluation and snapshots, register systems in this
+causal order:
+
+```text
+WorkloadSystem
+-> PowerConsumptionSystem
+-> TemperatureSystem
+-> ServerHealthSystem
+-> EnergyConsumptionSystem
+```
+
+This ensures `ServerHealthSystem` evaluates the utilization generated for the
+current tick.

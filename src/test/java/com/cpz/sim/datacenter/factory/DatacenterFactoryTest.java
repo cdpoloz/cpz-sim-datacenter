@@ -150,7 +150,7 @@ class DatacenterFactoryTest {
         DatacenterFactory factory = new DatacenterFactory();
         Datacenter datacenter = factory.create(definition);
         Server firstServer = datacenter.getServers().getFirst();
-        firstServer.setUtilization(0.5f);
+        firstServer.setUtilization(0.5);
         firstServer.updatePowerConsumption();
         assertEquals(200.0f, firstServer.getCurrentPowerWatts());
     }

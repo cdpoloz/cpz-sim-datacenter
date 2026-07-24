@@ -54,8 +54,8 @@ class PowerConsumptionSystemTest {
 
     @Test
     void shouldUpdateServerPowerWhenEngineAdvances() {
-        serverA.setUtilization(0.5f);
-        serverB.setUtilization(1.0f);
+        serverA.setUtilization(0.5);
+        serverB.setUtilization(1.0);
         // setUtilization() alone does not recalculate power
         assertEquals(100.0f, serverA.getCurrentPowerWatts());
         assertEquals(100.0f, serverB.getCurrentPowerWatts());
@@ -67,17 +67,17 @@ class PowerConsumptionSystemTest {
 
     @Test
     void shouldRecalculatePowerOnEveryStep() {
-        serverA.setUtilization(0.25f);
+        serverA.setUtilization(0.25);
         engine.step();
         assertEquals(150.0f, serverA.getCurrentPowerWatts());
-        serverA.setUtilization(0.75f);
+        serverA.setUtilization(0.75);
         engine.step();
         assertEquals(250.0f, serverA.getCurrentPowerWatts());
     }
 
     @Test
     void shouldSetOfflineServerPowerToZero() {
-        serverA.setUtilization(1.0f);
+        serverA.setUtilization(1.0);
         serverA.setStatus(HardwareStatus.OFFLINE);
         engine.step();
         assertEquals(0.0f, serverA.getCurrentPowerWatts());

@@ -60,13 +60,13 @@ class WorkloadSystemTest {
         SimulationEngine engine = createEngine();
         engine.register(system);
         engine.step();
-        assertEquals(0.25f, serverA.getUtilization());
-        assertEquals(0.75f, serverB.getUtilization());
+        assertEquals(0.25, serverA.getUtilization());
+        assertEquals(0.75, serverB.getUtilization());
     }
 
     @Test
     void shouldKeepOfflineServersAtZeroUtilization() {
-        serverA.setUtilization(0.9f);
+        serverA.setUtilization(0.9);
         serverA.setStatus(HardwareStatus.OFFLINE);
 
         WorkloadSource source = (server, tick) -> server == serverA ? 0.25f : 0.75f;
@@ -76,14 +76,14 @@ class WorkloadSystemTest {
         engine.register(system);
         engine.step();
 
-        assertEquals(0.0f, serverA.getUtilization());
-        assertEquals(0.75f, serverB.getUtilization());
+        assertEquals(0.0, serverA.getUtilization());
+        assertEquals(0.75, serverB.getUtilization());
     }
 
     @Test
     void shouldNotQueryWorkloadSourceForOfflineServers() {
         serverA.setStatus(HardwareStatus.OFFLINE);
-        RecordingWorkloadSource source = new RecordingWorkloadSource(Map.of(serverB, 0.6f));
+        RecordingWorkloadSource source = new RecordingWorkloadSource(Map.of(serverB, 0.6));
         WorkloadSystem system = new WorkloadSystem(datacenter, source);
         SimulationEngine engine = createEngine();
 
@@ -92,8 +92,8 @@ class WorkloadSystemTest {
 
         assertEquals(0, source.invocationCount(serverA));
         assertEquals(1, source.invocationCount(serverB));
-        assertEquals(0.0f, serverA.getUtilization());
-        assertEquals(0.6f, serverB.getUtilization());
+        assertEquals(0.0, serverA.getUtilization());
+        assertEquals(0.6, serverB.getUtilization());
     }
 
     @Test
@@ -102,9 +102,9 @@ class WorkloadSystemTest {
         SimulationEngine engine = createEngine();
         engine.register(new WorkloadSystem(datacenter, source));
         engine.step();
-        assertEquals(0.25f, serverA.getUtilization());
+        assertEquals(0.25, serverA.getUtilization());
         engine.step();
-        assertEquals(0.75f, serverA.getUtilization());
+        assertEquals(0.75, serverA.getUtilization());
     }
 
     @Test
@@ -136,9 +136,9 @@ class WorkloadSystemTest {
         engine.register(new WorkloadSystem(datacenter, source));
         engine.register(new PowerConsumptionSystem(datacenter));
         engine.step();
-        assertEquals(0.5f, serverA.getUtilization());
+        assertEquals(0.5, serverA.getUtilization());
         assertEquals(200.0f, serverA.getCurrentPowerWatts());
-        assertEquals(1.0f, serverB.getUtilization());
+        assertEquals(1.0, serverB.getUtilization());
         assertEquals(300.0f, serverB.getCurrentPowerWatts());
         assertEquals(500.0f, datacenter.getTotalItPowerWatts());
     }
@@ -152,25 +152,25 @@ class WorkloadSystemTest {
         engine.step();
         assertEquals(600.0f, datacenter.getTotalItPowerWatts());
         engine.reset();
-        assertEquals(0.0f, serverA.getUtilization());
-        assertEquals(0.0f, serverB.getUtilization());
+        assertEquals(0.0, serverA.getUtilization());
+        assertEquals(0.0, serverB.getUtilization());
         assertEquals(200.0f, datacenter.getTotalItPowerWatts());
         assertEquals(0L, engine.currentTick().index());
     }
 
     private static final class RecordingWorkloadSource implements WorkloadSource {
 
-        private final Map<Server, Float> utilizationByServer;
+        private final Map<Server, Double> utilizationByServer;
         private final Map<Server, Integer> invocations = new HashMap<>();
 
-        private RecordingWorkloadSource(Map<Server, Float> utilizationByServer) {
+        private RecordingWorkloadSource(Map<Server, Double> utilizationByServer) {
             this.utilizationByServer = utilizationByServer;
         }
 
         @Override
-        public float getUtilization(Server server, com.cpz.sim.foundation.time.SimulationTick tick) {
+        public double getUtilization(Server server, com.cpz.sim.foundation.time.SimulationTick tick) {
             invocations.merge(server, 1, Integer::sum);
-            return utilizationByServer.getOrDefault(server, 0.0f);
+            return utilizationByServer.getOrDefault(server, 0.0);
         }
 
         private int invocationCount(Server server) {

@@ -38,7 +38,7 @@ class ScaledWorkloadSourceTest {
         WorkloadSource baseSource = (ignoredServer, ignoredTick) -> 0.5f;
         ServerWorkloadFactorProvider factorProvider = ignoredServer -> 1.5f;
         ScaledWorkloadSource source = new ScaledWorkloadSource(baseSource, factorProvider);
-        float utilization = source.getUtilization(server, createTick());
+        double utilization = source.getUtilization(server, createTick());
         assertEquals(0.75f, utilization);
     }
 
@@ -48,7 +48,7 @@ class ScaledWorkloadSourceTest {
         WorkloadSource baseSource = (ignoredServer, ignoredTick) -> 0.8f;
         ServerWorkloadFactorProvider factorProvider = ignoredServer -> 2.0f;
         ScaledWorkloadSource source = new ScaledWorkloadSource(baseSource, factorProvider);
-        float utilization = source.getUtilization(server, createTick());
+        double utilization = source.getUtilization(server, createTick());
         assertEquals(1.0f, utilization);
     }
 
@@ -58,7 +58,7 @@ class ScaledWorkloadSourceTest {
         WorkloadSource baseSource = (ignoredServer, ignoredTick) -> 0.8f;
         ServerWorkloadFactorProvider factorProvider = ignoredServer -> 0.5f;
         ScaledWorkloadSource source = new ScaledWorkloadSource(baseSource, factorProvider);
-        float utilization = source.getUtilization(server, createTick());
+        double utilization = source.getUtilization(server, createTick());
         assertEquals(0.4f, utilization);
     }
 

@@ -57,7 +57,7 @@ public class NoiseWorkloadSource implements WorkloadSource {
     }
 
     @Override
-    public float getUtilization(Server server, SimulationTick tick) {
+    public double getUtilization(Server server, SimulationTick tick) {
         Objects.requireNonNull(server, "server cannot be null");
         Objects.requireNonNull(tick, "tick cannot be null");
         double timePosition = (float) (tick.elapsedSeconds() * speed);

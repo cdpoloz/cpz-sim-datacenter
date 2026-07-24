@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+
 /**
  * @author CPZ
  */
@@ -137,7 +138,7 @@ class TemperatureSystemTest {
 
     private static Datacenter createDatacenterWithOneServer(
             HardwareStatus status,
-            float utilization
+            double utilization
     ) {
         RackCode rackCode = new RackCode("RACK-A01-R01");
         Rack rack = new Rack(rackCode, new RackLocation("A01", "R01"), 42);

@@ -124,7 +124,7 @@ class NoiseWorkloadSourceTest {
                 0.2f,
                 0.8f
         );
-        float utilization = workloadSource.getUtilization(
+        double utilization = workloadSource.getUtilization(
                 serverAt("RACK-A01-R01", "U01"),
                 tickAtSeconds(1, 60)
         );
@@ -140,7 +140,7 @@ class NoiseWorkloadSourceTest {
                 0.2f,
                 0.8f
         );
-        float utilization = workloadSource.getUtilization(
+        double utilization = workloadSource.getUtilization(
                 serverAt("RACK-A01-R01", "U01"),
                 tickAtSeconds(1, 60)
         );
@@ -156,7 +156,7 @@ class NoiseWorkloadSourceTest {
                 0.2f,
                 0.8f
         );
-        float utilization = workloadSource.getUtilization(
+        double utilization = workloadSource.getUtilization(
                 serverAt("RACK-A01-R01", "U01"),
                 tickAtSeconds(1, 60)
         );
@@ -206,8 +206,8 @@ class NoiseWorkloadSourceTest {
         );
         for (int i = 0; i < 10; i++) {
             SimulationTick tick = tickAtSeconds(i + 1, i * 60L);
-            float utilizationA = sourceA.getUtilization(server, tick);
-            float utilizationB = sourceB.getUtilization(server, tick);
+            double utilizationA = sourceA.getUtilization(server, tick);
+            double utilizationB = sourceB.getUtilization(server, tick);
             assertEquals(utilizationA, utilizationB, 0.000001f);
         }
     }
@@ -230,8 +230,8 @@ class NoiseWorkloadSourceTest {
         boolean foundDifference = false;
         for (int i = 0; i < 10; i++) {
             SimulationTick tick = tickAtSeconds(i + 1, i * 60L);
-            float utilizationA = sourceA.getUtilization(server, tick);
-            float utilizationB = sourceB.getUtilization(server, tick);
+            double utilizationA = sourceA.getUtilization(server, tick);
+            double utilizationB = sourceB.getUtilization(server, tick);
             if (Math.abs(utilizationA - utilizationB) > 0.000001f) {
                 foundDifference = true;
                 break;

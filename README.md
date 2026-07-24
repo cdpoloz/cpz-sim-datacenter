@@ -6,9 +6,10 @@
 [![GitHub](https://img.shields.io/badge/GitHub-cdpoloz-181717?logo=github)](https://github.com/cdpoloz)
 
 `cpz-sim-datacenter` is a pure Java backend for simulating server workload, IT
-power, simplified server temperature, and accumulated energy consumption in a
-datacenter. It is an independent Maven library intended to be consumed by other
-applications, for example a future UI such as `sim-datacenter-ui`.
+power, simplified server temperature, server health, and accumulated energy
+consumption in a datacenter. It is an independent Maven library intended to be
+consumed by other applications, for example a future UI such as
+`sim-datacenter-ui`.
 
 It does not include Processing, a graphical UI, client-specific logic, cooling
 modeling, airflow modeling, or room-level thermal modeling. The API is
@@ -31,13 +32,14 @@ Available in `0.1.0-alpha.1`:
 - JSON-configurable datacenter definitions with `layout.racks`, `serverModels` and `servers`.
 - Physical layout with existing racks, ordered slot codes, and empty racks.
 - Servers installed by `column`, `rackCode`, and `slot`.
-- Hardware states: `OK`, `ALERT`, `OFFLINE`.
-- Simulation systems: `WorkloadSystem`, `PowerConsumptionSystem`, `TemperatureSystem`, and `EnergyConsumptionSystem`.
+- Hardware states: `OK`, `ALERT`, `OFFLINE`, with automatic health evaluation from utilization and temperature.
+- Simulation systems: `WorkloadSystem`, `PowerConsumptionSystem`, `TemperatureSystem`, `ServerHealthSystem`, and `EnergyConsumptionSystem`.
 - Workload strategy through `WorkloadSource`, with noise-based and scaled workloads.
 - Integration with `FractalNoise` from `cpz-utils` for variable workloads.
 - Per-server `workloadFactor` read from JSON and applied through `ScaledWorkloadSource`.
 - Energy snapshots through `EnergyConsumptionSnapshotProvider`, `EnergyConsumptionSnapshot` and `ServerEnergySnapshot`.
 - Temperature snapshots through `TemperatureSnapshotProvider`, `TemperatureSnapshot`, and `ServerTemperatureSnapshot`.
+- Health snapshots through `HealthSnapshotProvider`, `HealthSnapshot`, and `ServerHealthSnapshot`.
 
 Important rules:
 
@@ -47,6 +49,10 @@ Important rules:
 - Slot codes are opaque identifiers declared by each rack. A UI should read rack slots from the backend and match servers by exact `column + rackCode + slot`.
 - `WorkloadSystem` forces `utilization = 0.0f` for `OFFLINE` servers and does not query the `WorkloadSource` for them.
 - `Server.updatePowerConsumption()` forces `currentPowerWatts = 0.0f` for `OFFLINE` servers.
+- The JSON `status` is the initial hardware status. On every tick,
+  `ServerHealthSystem` recalculates non-`OFFLINE` status as `OK` or `ALERT` from
+  current utilization and temperature using configured thresholds.
+- `OFFLINE` has priority and is never overwritten by `ServerHealthSystem`.
 - `workloadFactor` can be greater than `1.0`; the final utilization produced by `ScaledWorkloadSource` is clamped to `[0, 1]`.
 
 ---
@@ -182,9 +188,13 @@ Each rack must define exactly one of:
 
 `slotCount` and `slots` are mutually exclusive.
 
+Optional top-level `temperature` and `health` blocks configure the thermal model
+and health thresholds. If `health` is omitted, the health options factory uses
+documented defaults. See [JSON Configuration](docs/configuration.md).
+
 ---
 
-## Energy Snapshot
+## Simulation Pipeline and Snapshots
 
 The expected causal simulation order is:
 
@@ -192,6 +202,7 @@ The expected causal simulation order is:
 WorkloadSystem
 -> PowerConsumptionSystem
 -> TemperatureSystem
+-> ServerHealthSystem
 -> EnergyConsumptionSystem
 ```
 
@@ -201,8 +212,9 @@ Snapshot providers read resulting state after systems update:
 WorkloadSystem
 -> PowerConsumptionSystem
 -> TemperatureSystem
+-> ServerHealthSystem
 -> EnergyConsumptionSystem
--> EnergyConsumptionSnapshotProvider / TemperatureSnapshotProvider
+-> EnergyConsumptionSnapshotProvider / TemperatureSnapshotProvider / HealthSnapshotProvider
 ```
 
 Recommended flow using JSON `workloadFactor`, `FractalNoise`, `NoiseWorkloadSource`
@@ -226,18 +238,24 @@ ServerWorkloadFactorProvider factors =
         new WorkloadFactorProviderFactory().create(definition);
 WorkloadSource workload = new ScaledWorkloadSource(baseWorkload, factors);
 
-TemperatureSystemOptions temperatureOptions = TemperatureSystemOptions.defaults();
+TemperatureSystemOptions temperatureOptions =
+        new TemperatureSystemOptionsFactory().create(definition);
 TemperatureSystem temperatureSystem = new TemperatureSystem(
         datacenter,
         temperatureOptions,
         new SimpleServerTemperatureModel()
 );
+ServerHealthOptions healthOptions =
+        new ServerHealthOptionsFactory().create(definition);
+ServerHealthSystem healthSystem =
+        new ServerHealthSystem(datacenter, temperatureSystem, healthOptions);
 EnergyConsumptionSystem energySystem = new EnergyConsumptionSystem(datacenter);
 
 SimulationEngine engine = new SimulationEngine(new SimulationClock(Duration.ofMinutes(30)));
 engine.register(new WorkloadSystem(datacenter, workload));
 engine.register(new PowerConsumptionSystem(datacenter));
 engine.register(temperatureSystem);
+engine.register(healthSystem);
 engine.register(energySystem);
 
 SimulationTick tick = engine.step();
@@ -245,18 +263,24 @@ EnergyConsumptionSnapshotProvider energyProvider =
         new EnergyConsumptionSnapshotProvider(datacenter, energySystem);
 TemperatureSnapshotProvider temperatureProvider =
         new TemperatureSnapshotProvider(datacenter, temperatureSystem, temperatureOptions);
+HealthSnapshotProvider healthProvider =
+        new HealthSnapshotProvider(datacenter, healthSystem, temperatureSystem);
 EnergyConsumptionSnapshot energySnapshot = energyProvider.snapshot(tick);
 TemperatureSnapshot temperatureSnapshot = temperatureProvider.snapshot(tick);
+HealthSnapshot healthSnapshot = healthProvider.snapshot(tick);
 ```
 
-The snapshot captures tick index, elapsed seconds, total IT power, accumulated
-energy and one entry per server with rack, slot, status, utilization and current
-power. Per-server snapshots include column, rack code and slot. The slot value is
-the exact code from `ServerLocation`; it is not normalized or interpreted by the
-backend.
+The energy snapshot captures tick index, elapsed seconds, total IT power,
+accumulated energy and one entry per server with rack, slot, status, utilization
+and current power. Per-server snapshots include column, rack code and slot. The
+slot value is the exact code from `ServerLocation`; it is not normalized or
+interpreted by the backend.
 
-Temperature is exposed through a separate snapshot model. See
-[Temperature Model](docs/temperature.md).
+When providers run after the pipeline, every snapshot status is the
+`HardwareStatus` resulting from `ServerHealthSystem` for that tick (or the
+preserved `OFFLINE` status). Temperature and health are exposed through separate
+snapshot models. See [Temperature Model](docs/temperature.md) and
+[Server Health](docs/server-health.md).
 
 ---
 
@@ -267,8 +291,12 @@ The demos are located in `src/main/java/com/cpz/sim/datacenter/example`:
 - `DatacenterSimulationDemo`: in-code datacenter simulation.
 - `NoiseWorkloadSimulationDemo`: in-code datacenter using `FractalNoise`.
 - `JsonDatacenterSimulationDemo`: loads `data/config/demo-datacenter-medium.json`, uses `FractalNoise` and `ScaledWorkloadSource`.
-- `EnergySnapshotSimulationDemo`: loads JSON, simulates `FractalNoise + workloadFactor` and emits snapshots.
-- `TemperatureSimulationDemo`: in-code simulation with workload, power, temperature, and energy systems plus separate energy and temperature snapshots.
+- `EnergySnapshotSimulationDemo`: loads JSON, simulates `FractalNoise + workloadFactor` with the energy-only pipeline, and emits energy snapshots.
+- `TemperatureSimulationDemo`: in-code simulation with workload, power, temperature, and energy systems plus separate energy and temperature snapshots; it does not register `ServerHealthSystem`.
+
+The runnable demos above that omit `ServerHealthSystem` retain the configured
+server status. Use the complete pipeline shown earlier when snapshots must expose
+automatically calculated health status.
 
 From an IDE, run the `main` method of each class directly. With Maven, because no
 exec plugin is configured in `pom.xml`, use the Maven Exec Plugin explicitly:
@@ -290,14 +318,16 @@ argument; by default it uses `data/config/demo-datacenter-medium.json`.
 - [Workloads](docs/workloads.md)
 - [Energy Snapshot](docs/energy-snapshot.md)
 - [Temperature Model](docs/temperature.md)
+- [Server Health](docs/server-health.md)
 - [Using the Library from a Maven UI](docs/getting-started-ui.md)
 
 ---
 
 ## Roadmap
 
-This milestone closes the first functional base for energy simulation and the
-initial server temperature model. Future work outside the current scope:
+This milestone closes the first functional base for energy simulation, the
+initial server temperature model, and automatic server health evaluation. Future
+work outside the current scope:
 
 - Stable final `0.1.0` API.
 - Cooling model.

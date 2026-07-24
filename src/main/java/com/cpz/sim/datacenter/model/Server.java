@@ -11,7 +11,7 @@ public class Server {
     private final ServerConfig config;
 
     private HardwareStatus status;
-    private float utilization;
+    private double utilization;
     private float currentPowerWatts;
 
     public Server(ServerLocation location, ServerConfig config, HardwareStatus initialStatus) {
@@ -26,7 +26,7 @@ public class Server {
             currentPowerWatts = 0.0f;
             return;
         }
-        currentPowerWatts = config.idlePowerWatts() + utilization * (config.maxPowerWatts() - config.idlePowerWatts());
+        currentPowerWatts = (float) (config.idlePowerWatts() + utilization * (config.maxPowerWatts() - config.idlePowerWatts()));
     }
 
     public String getCode() {
@@ -49,14 +49,13 @@ public class Server {
         this.status = Objects.requireNonNull(status, "status cannot be null");
     }
 
-    public float getUtilization() {
+    public double getUtilization() {
         return utilization;
     }
 
-    public void setUtilization(float utilization) {
-        if (!Float.isFinite(utilization) || utilization < 0.0f || utilization > 1.0f) {
+    public void setUtilization(double utilization) {
+        if (!Double.isFinite(utilization) || utilization < 0.0f || utilization > 1.0f)
             throw new IllegalArgumentException("utilization must be finite and within [0, 1]");
-        }
         this.utilization = utilization;
     }
 

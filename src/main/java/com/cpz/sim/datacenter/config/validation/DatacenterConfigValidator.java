@@ -2,6 +2,8 @@ package com.cpz.sim.datacenter.config.validation;
 
 import com.cpz.sim.datacenter.config.definition.DatacenterDefinition;
 import com.cpz.sim.datacenter.config.definition.DatacenterLayoutDefinition;
+import com.cpz.sim.datacenter.config.definition.HealthSystemOptionsDefinition;
+import com.cpz.sim.datacenter.config.definition.HealthThresholdDefinition;
 import com.cpz.sim.datacenter.config.definition.RackDefinition;
 import com.cpz.sim.datacenter.config.definition.RackSlotResolver;
 import com.cpz.sim.datacenter.config.definition.ServerDefinition;
@@ -304,7 +306,40 @@ public final class DatacenterConfigValidator {
         validateServerModels(definition.serverModels(), errors);
         validateServers(definition.servers(), definition.serverModels(), layout, errors);
         validateTemperature(definition.temperature(), errors);
+        validateHealth(definition.health(), errors);
         if (!errors.isEmpty())
             throw new DatacenterConfigValidationException(String.join(System.lineSeparator(), errors));
+    }
+
+    private static void validateHealth(HealthSystemOptionsDefinition health, List<String> errors) {
+        if (health == null) return;
+        if (health.utilization() == null) errors.add("Health config utilization threshold cannot be null");
+        else validateUtilizationHealthThreshold(health.utilization(), errors);
+        if (health.temperatureCelsius() == null) errors.add("Health config temperatureCelsius threshold cannot be null");
+        else validateTemperatureHealthThreshold(health.temperatureCelsius(), errors);
+    }
+
+    private static void validateUtilizationHealthThreshold(HealthThresholdDefinition threshold, List<String> errors) {
+        String context = "Health config utilization";
+        validateHealthThreshold(threshold, context, errors);
+        if (Double.isFinite(threshold.alertAtOrAbove()) && (threshold.alertAtOrAbove() < 0.0 || threshold.alertAtOrAbove() > 1.0)) {
+            errors.add(context + " must have alertAtOrAbove within [0, 1]");
+        }
+        if (Double.isFinite(threshold.clearAtOrBelow()) && (threshold.clearAtOrBelow() < 0.0 || threshold.clearAtOrBelow() > 1.0)) {
+            errors.add(context + " must have clearAtOrBelow within [0, 1]");
+        }
+    }
+
+    private static void validateTemperatureHealthThreshold(HealthThresholdDefinition threshold, List<String> errors) {
+        validateHealthThreshold(threshold, "Health config temperatureCelsius", errors);
+    }
+
+    private static void validateHealthThreshold(HealthThresholdDefinition threshold, String context, List<String> errors) {
+        boolean alertFinite = Double.isFinite(threshold.alertAtOrAbove());
+        boolean clearFinite = Double.isFinite(threshold.clearAtOrBelow());
+        if (!alertFinite) errors.add(context + " must have finite alertAtOrAbove");
+        if (!clearFinite) errors.add(context + " must have finite clearAtOrBelow");
+        if (alertFinite && clearFinite && threshold.clearAtOrBelow() >= threshold.alertAtOrAbove())
+            errors.add(context + " must have clearAtOrBelow < alertAtOrAbove");
     }
 }

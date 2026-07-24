@@ -291,7 +291,7 @@ class TemperatureSimulationIntegrationTest {
         );
     }
 
-    private static WorkloadSource fixedWorkload(float utilization) {
+    private static WorkloadSource fixedWorkload(double utilization) {
         return (server, tick) -> utilization;
     }
 

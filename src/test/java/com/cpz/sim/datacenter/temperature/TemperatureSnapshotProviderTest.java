@@ -186,7 +186,7 @@ class TemperatureSnapshotProviderTest {
 
     private static Datacenter createDatacenterWithOneServer(
             HardwareStatus status,
-            float utilization
+            double utilization
     ) {
         Rack rack = new Rack(RACK_CODE, new RackLocation("A01", "R01"), 42);
         ServerConfig config = new ServerConfig(

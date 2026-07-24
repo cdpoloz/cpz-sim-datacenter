@@ -27,10 +27,10 @@ public class WorkloadSystem implements Simulatable {
         Objects.requireNonNull(tick, "tick cannot be null");
         for (Server server : datacenter.getServers()) {
             if (server.getStatus() == HardwareStatus.OFFLINE) {
-                server.setUtilization(0.0f);
+                server.setUtilization(0.0);
                 continue;
             }
-            float utilization = workloadSource.getUtilization(server, tick);
+            double utilization = workloadSource.getUtilization(server, tick);
             server.setUtilization(utilization);
         }
     }
@@ -38,7 +38,7 @@ public class WorkloadSystem implements Simulatable {
     @Override
     public void reset() {
         workloadSource.reset();
-        for (Server server : datacenter.getServers()) server.setUtilization(0.0f);
+        for (Server server : datacenter.getServers()) server.setUtilization(0.0);
     }
 
 }

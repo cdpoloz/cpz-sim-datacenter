@@ -39,7 +39,7 @@ mvn clean install
 3. Create a `NoiseWorkloadSource` with `FractalNoise`.
 4. Register systems in `SimulationEngine` in the correct order.
 5. Run ticks.
-6. Convert each resulting tick to one or more snapshots such as `EnergyConsumptionSnapshot` and `TemperatureSnapshot`.
+6. Convert each resulting tick to one or more snapshots such as `EnergyConsumptionSnapshot`, `TemperatureSnapshot`, and `HealthSnapshot`.
 7. Render the UI from rack slot definitions and snapshots, not from direct domain mutations.
 
 Example:
@@ -62,27 +62,46 @@ ServerWorkloadFactorProvider factors =
 WorkloadSource workload = new ScaledWorkloadSource(baseWorkload, factors);
 
 EnergyConsumptionSystem energySystem = new EnergyConsumptionSystem(datacenter);
-TemperatureSystemOptions temperatureOptions = TemperatureSystemOptions.defaults();
+TemperatureSystemOptions temperatureOptions =
+        new TemperatureSystemOptionsFactory().create(definition);
 TemperatureSystem temperatureSystem = new TemperatureSystem(
         datacenter,
         temperatureOptions,
         new SimpleServerTemperatureModel()
 );
+ServerHealthOptions healthOptions =
+        new ServerHealthOptionsFactory().create(definition);
+ServerHealthSystem healthSystem =
+        new ServerHealthSystem(datacenter, temperatureSystem, healthOptions);
 
 SimulationEngine engine = new SimulationEngine(new SimulationClock(Duration.ofMinutes(30)));
 engine.register(new WorkloadSystem(datacenter, workload));
 engine.register(new PowerConsumptionSystem(datacenter));
 engine.register(temperatureSystem);
+engine.register(healthSystem);
 engine.register(energySystem);
 
 EnergyConsumptionSnapshotProvider energySnapshots =
         new EnergyConsumptionSnapshotProvider(datacenter, energySystem);
 TemperatureSnapshotProvider temperatureSnapshots =
         new TemperatureSnapshotProvider(datacenter, temperatureSystem, temperatureOptions);
+HealthSnapshotProvider healthSnapshots =
+        new HealthSnapshotProvider(datacenter, healthSystem, temperatureSystem);
 
 SimulationTick tick = engine.step();
 EnergyConsumptionSnapshot energySnapshot = energySnapshots.snapshot(tick);
 TemperatureSnapshot temperatureSnapshot = temperatureSnapshots.snapshot(tick);
+HealthSnapshot healthSnapshot = healthSnapshots.snapshot(tick);
+```
+
+The required system registration order is:
+
+```text
+WorkloadSystem
+-> PowerConsumptionSystem
+-> TemperatureSystem
+-> ServerHealthSystem
+-> EnergyConsumptionSystem
 ```
 
 ## Useful Contract for a UI
@@ -147,14 +166,31 @@ Independent temperature data:
 - `temperatureSnapshot.maxTemperatureCelsius()`
 - `server.temperatureCelsius()`
 
-The temperature snapshot is separate from the energy snapshot. This lets a UI
-consume temperature and energy independently without introducing a global
+Independent health data:
+
+- `healthSnapshot.alertServerCount()`
+- `healthSnapshot.countByReason(reason)`
+- `server.status()`
+- `server.alertReasons()`
+- `server.utilization()`
+- `server.temperatureCelsius()`
+
+The temperature and health snapshots are separate from the energy snapshot. This
+lets a UI consume each concern independently without introducing a global
 combined snapshot.
+
+All per-server snapshot statuses read the server's current state. After the
+pipeline above, this is the status calculated by `ServerHealthSystem` from
+utilization and temperature for that tick. The UI should not treat the JSON
+status as permanent or reproduce the threshold calculation itself.
 
 Slot state should be represented as:
 
 - declared slot without an installed server: empty slot
 - installed server with `OFFLINE` status: server present but powered off or not operational
+
+`OFFLINE` has priority over health evaluation and is never changed automatically
+to `OK` or `ALERT`.
 
 Snapshots contain installed servers only. Empty slots come from
 `Rack.getSlotCodes()` combined with `Datacenter.getServer(...)`.

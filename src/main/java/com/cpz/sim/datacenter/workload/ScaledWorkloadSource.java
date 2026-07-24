@@ -23,12 +23,12 @@ public class ScaledWorkloadSource implements WorkloadSource {
     }
 
     @Override
-    public float getUtilization(Server server, SimulationTick tick) {
+    public double getUtilization(Server server, SimulationTick tick) {
         Objects.requireNonNull(server, "server cannot be null");
         Objects.requireNonNull(tick, "tick cannot be null");
-        float baseUtilization = delegate.getUtilization(server, tick);
+        double baseUtilization = delegate.getUtilization(server, tick);
         float factor = factorProvider.getFactor(server);
-        return clamp(baseUtilization * factor, 0.0f, 1.0f);
+        return clamp((float) (baseUtilization * factor), 0.0f, 1.0f);
     }
 
     @Override

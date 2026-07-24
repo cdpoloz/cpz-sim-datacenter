@@ -50,9 +50,9 @@ class DatacenterTest {
         serverB = createServer(config, rackB.getCode(), rackB.getColumn(), "U01");
         serverC = createServer(config, rackC.getCode(), rackC.getColumn(), "U01");
 
-        serverA.setUtilization(0.5f);  // 200 W
-        serverB.setUtilization(1.0f);  // 300 W
-        serverC.setUtilization(0.25f); // 150 W
+        serverA.setUtilization(0.5);  // 200 W
+        serverB.setUtilization(1.0);  // 300 W
+        serverC.setUtilization(0.25); // 150 W
 
         serverA.updatePowerConsumption();
         serverB.updatePowerConsumption();
@@ -96,7 +96,7 @@ class DatacenterTest {
 
     @Test
     void shouldReflectChangesInServerPower() {
-        serverA.setUtilization(1.0f);
+        serverA.setUtilization(1.0);
         serverA.updatePowerConsumption();
         assertEquals(750.0f, datacenter.getTotalItPowerWatts());
         assertEquals(600.0f, datacenter.getItPowerWattsByColumn("A01"));

@@ -8,21 +8,21 @@ import com.cpz.sim.foundation.time.SimulationTick;
  */
 public class ConstantWorkloadSource implements WorkloadSource {
 
-    private final float utilization;
+    private final double utilization;
 
-    public ConstantWorkloadSource(float utilization) {
-        if (!Float.isFinite(utilization) || utilization < 0.0f || utilization > 1.0f) {
+    public ConstantWorkloadSource(double utilization) {
+        if (!Double.isFinite(utilization) || utilization < 0.0 || utilization > 1.0) {
             throw new IllegalArgumentException("utilization must be finite and within [0, 1]");
         }
         this.utilization = utilization;
     }
 
     @Override
-    public float getUtilization(Server server, SimulationTick tick) {
+    public double getUtilization(Server server, SimulationTick tick) {
         return utilization;
     }
 
-    public float getUtilization() {
+    public double getUtilization() {
         return utilization;
     }
 }

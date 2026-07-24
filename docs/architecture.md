@@ -15,9 +15,10 @@ backend.
 - `com.cpz.sim.datacenter.config.definition`: objects that represent JSON (`DatacenterDefinition`, `RackDefinition`, `ServerModelDefinition`, `ServerDefinition`) plus helpers for effective rack slots.
 - `com.cpz.sim.datacenter.config.json`: JSON loading with Jackson (`JsonDatacenterConfigLoader`).
 - `com.cpz.sim.datacenter.config.validation`: validation of definitions before building the domain.
-- `com.cpz.sim.datacenter.factory`: domain construction and helper providers (`DatacenterFactory`, `WorkloadFactorProviderFactory`).
+- `com.cpz.sim.datacenter.factory`: domain construction and option/provider factories (`DatacenterFactory`, `WorkloadFactorProviderFactory`, `TemperatureSystemOptionsFactory`, `ServerHealthOptionsFactory`).
 - `com.cpz.sim.datacenter.workload`: workload strategies (`WorkloadSource` and its implementations).
 - `com.cpz.sim.datacenter.temperature`: server thermal state and temperature model contracts.
+- `com.cpz.sim.datacenter.health`: health thresholds, alert reasons, and per-server health state.
 - `com.cpz.sim.datacenter.system`: systems updated on each tick.
 - `com.cpz.sim.datacenter.snapshot`: snapshot DTOs and providers.
 - `com.cpz.sim.datacenter.example`: runnable demos.
@@ -85,6 +86,12 @@ slot and returns `Optional.empty()` when the slot is valid but empty.
 - `ALERT`
 - `OFFLINE`
 
+The value loaded from each server's JSON `status` field is its initial state, not
+an immutable classification. During simulation, `ServerHealthSystem`
+automatically changes non-`OFFLINE` servers between `OK` and `ALERT` according to
+their current utilization and internal temperature. `OFFLINE` always has priority
+and the health system does not overwrite it.
+
 ## Systems
 
 The systems implement `Simulatable` from `cpz-sim-foundation` and are registered in
@@ -96,6 +103,7 @@ Registration order matters:
 WorkloadSystem
 -> PowerConsumptionSystem
 -> TemperatureSystem
+-> ServerHealthSystem
 -> EnergyConsumptionSystem
 ```
 
@@ -107,11 +115,17 @@ simulation systems and do not advance the simulation.
 1. `WorkloadSystem` computes `Server.utilization` for each operational server.
 2. `PowerConsumptionSystem` recalculates `Server.currentPowerWatts`.
 3. `TemperatureSystem` updates a representative internal server temperature from current server power.
-4. `EnergyConsumptionSystem` integrates accumulated energy using total IT power and `tick.deltaSeconds()`.
-5. Snapshot providers such as `EnergyConsumptionSnapshotProvider` and `TemperatureSnapshotProvider` read the resulting state and build immutable DTOs.
+4. `ServerHealthSystem` evaluates current utilization and temperature, updates active alert reasons, and derives `HardwareStatus` for every non-`OFFLINE` server.
+5. `EnergyConsumptionSystem` integrates accumulated energy using total IT power and `tick.deltaSeconds()`.
+6. Snapshot providers such as `EnergyConsumptionSnapshotProvider`, `TemperatureSnapshotProvider`, and `HealthSnapshotProvider` read the resulting state and build immutable DTOs.
 
-If this order is changed, power, temperature, or energy values may reflect the
-previous tick.
+If this order is changed, power, temperature, health, or energy values may not
+represent the same tick.
+
+`ServerHealthSystem` produces `OK` when no monitored condition is active and
+`ALERT` when utilization, temperature, or both have an active alert. Each
+condition uses configured activation and clearing limits, with hysteresis between
+them. The system also retains the active reasons in `ServerHealthState`.
 
 ## Snapshot Ownership
 
@@ -119,8 +133,14 @@ Each simulation concern owns its own state and snapshot model.
 
 - `EnergyConsumptionSystem` exposes energy data through `EnergyConsumptionSnapshotProvider`.
 - `TemperatureSystem` exposes temperature data through `TemperatureSnapshotProvider`.
+- `ServerHealthSystem` exposes status, alert reasons, utilization, and temperature through `HealthSnapshotProvider`.
 
 There is intentionally no global `DatacenterSnapshot` at this stage.
+
+Providers that include a server status read the current `Server.status`. When
+they are invoked after the complete pipeline, that value is the status calculated
+by `ServerHealthSystem` for the tick, except that an existing `OFFLINE` status is
+preserved.
 
 ## Current Energy Rules
 

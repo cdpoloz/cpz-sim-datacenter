@@ -95,7 +95,7 @@ class MediumJsonDatacenterIntegrationTest {
                 .filter(server -> server.getStatus() == HardwareStatus.OFFLINE)
                 .findFirst()
                 .orElseThrow();
-        assertEquals(0.0f, offlineServer.getUtilization());
+        assertEquals(0.0, offlineServer.getUtilization());
         assertEquals(0.0f, offlineServer.getCurrentPowerWatts());
     }
 
@@ -112,6 +112,6 @@ class MediumJsonDatacenterIntegrationTest {
                 .filter(server -> server.getCode().equals("A01-RACK-A01-R01-U01"))
                 .findFirst()
                 .orElseThrow();
-        assertEquals(0.75f, firstServer.getUtilization());
+        assertEquals(0.75, firstServer.getUtilization());
     }
 }

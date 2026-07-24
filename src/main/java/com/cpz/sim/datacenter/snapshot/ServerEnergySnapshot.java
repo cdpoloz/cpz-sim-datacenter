@@ -8,6 +8,8 @@ import java.util.Objects;
  * Immutable per-server energy data for one tick.
  *
  * <p>{@code column + rackCode + slot} identifies the physical server location.
+ * When captured after the health system, {@code status} is the status calculated
+ * for the tick, with {@code OFFLINE} preserved.
  *
  * @author CPZ
  */
@@ -17,7 +19,7 @@ public record ServerEnergySnapshot(
         RackCode rackCode,
         String slot,
         String status,
-        float utilization,
+        double utilization,
         float currentPowerWatts
 ) {
     public ServerEnergySnapshot {
@@ -26,7 +28,7 @@ public record ServerEnergySnapshot(
         Objects.requireNonNull(rackCode, "rackCode must not be null");
         slot = requireText(slot, "slot");
         status = requireText(status, "status");
-        if (!Float.isFinite(utilization) || utilization < 0.0f || utilization > 1.0f)
+        if (!Double.isFinite(utilization) || utilization < 0.0 || utilization > 1.0)
             throw new IllegalArgumentException("utilization must be finite and between 0 and 1");
         if (!Float.isFinite(currentPowerWatts) || currentPowerWatts < 0.0f)
             throw new IllegalArgumentException("currentPowerWatts must be finite and >= 0");

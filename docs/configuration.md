@@ -31,6 +31,8 @@ Main fields:
 - `layout.racks`: available physical infrastructure.
 - `serverModels`: server model catalog.
 - `servers`: servers installed in specific racks and slots.
+- `temperature`: optional thermal model configuration.
+- `health`: optional server health threshold configuration.
 
 ## layout.racks
 
@@ -74,7 +76,7 @@ part, and does not infer position from the text. Valid examples include `U01`,
 Rules:
 
 - `code`, `column`, and `row` cannot be null or blank.
-- `code` must be unique.
+- `code` must be unique within a column.
 - Each rack must define exactly one of `slotCount` or `slots`.
 - If `slotCount` is used, it must be greater than `0` and generates legacy `Uxx` codes.
 - If `slots` is used, the list cannot be null or empty.
@@ -128,7 +130,7 @@ Fields:
 - `rackCode`: code of an existing rack in `layout.racks`.
 - `slot`: exact slot code declared by the referenced rack.
 - `modelCode`: code of an existing model in `serverModels`.
-- `status`: `HardwareStatus` value: `OK`, `ALERT`, or `OFFLINE`.
+- `status`: initial `HardwareStatus` value: `OK`, `ALERT`, or `OFFLINE`.
 - `workloadFactor`: non-negative factor used to scale workload per server.
 
 Rules:
@@ -142,6 +144,12 @@ Rules:
 - `status` must exactly match the enum name.
 - `workloadFactor` must be finite and `>= 0`.
 - If `ServerDefinition` is built from Java using the constructor without `workloadFactor`, the default value is `1.0f`.
+
+The JSON status is used when constructing the server. Once
+`ServerHealthSystem` runs, a non-`OFFLINE` status can evolve between `OK` and
+`ALERT` based on current utilization and temperature. An initial `ALERT` is
+therefore reevaluated like any other operational status. `OFFLINE` always has
+priority and is never overwritten by the health system.
 
 ## workloadFactor
 
@@ -253,7 +261,7 @@ for (String slot : rack.getSlotCodes()) {
 }
 ```
 
-## Temperature Configuration Status
+## Temperature Configuration
 
 An optional `temperature` block can be added to the top-level JSON definition.
 If it is omitted, consumers can use `TemperatureSystemOptions.defaults()`.
@@ -282,3 +290,53 @@ Rules:
 
 This configuration feeds the simplified internal server temperature model only.
 It does not enable room temperature, rack inlet, cooling, or airflow modeling.
+
+## Server Health Configuration
+
+An optional top-level `health` block configures the utilization and temperature
+limits used by `ServerHealthSystem`:
+
+```json
+{
+  "health": {
+    "utilization": {
+      "alertAtOrAbove": 0.90,
+      "clearAtOrBelow": 0.85
+    },
+    "temperatureCelsius": {
+      "alertAtOrAbove": 80.0,
+      "clearAtOrBelow": 75.0
+    }
+  }
+}
+```
+
+For both monitored values:
+
+- `alertAtOrAbove` activates the corresponding alert when the current value is
+  greater than or equal to this limit.
+- `clearAtOrBelow` clears an active alert when the current value is less than or
+  equal to this limit.
+- While the value is strictly between both limits, the previous condition state
+  is retained. This hysteresis prevents status oscillation near a single
+  threshold.
+
+`utilization` controls `HIGH_UTILIZATION` and uses the server's current
+utilization. Both limits must be finite and within `[0, 1]`.
+
+`temperatureCelsius` controls `HIGH_TEMPERATURE` and uses the representative
+internal server temperature from `TemperatureSystem`. Both limits must be
+finite.
+
+For each threshold, `clearAtOrBelow` must be strictly less than
+`alertAtOrAbove`. The whole `health` block is optional. If it is absent,
+`ServerHealthOptionsFactory` returns `ServerHealthOptions.defaults()`, whose
+limits are:
+
+- utilization: alert at `0.90`, clear at `0.85`
+- temperature: alert at `80.0 °C`, clear at `75.0 °C`
+
+If `health` is present, both `utilization` and `temperatureCelsius` are required,
+as are both fields inside each threshold. A JSON `null` health block is rejected.
+These values configure runtime behavior; the health system does not use separate
+hard-coded evaluation limits.

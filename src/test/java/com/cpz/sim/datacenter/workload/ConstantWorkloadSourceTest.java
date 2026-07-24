@@ -30,19 +30,19 @@ class ConstantWorkloadSourceTest {
 
     @Test
     void shouldReturnConfiguredUtilization() {
-        ConstantWorkloadSource source = new ConstantWorkloadSource(0.65f);
+        ConstantWorkloadSource source = new ConstantWorkloadSource(0.65);
         Server server = createServer();
         SimulationTick tick = new SimulationTick(1, Duration.ofSeconds(1), Duration.ofSeconds(1));
-        assertEquals(0.65f, source.getUtilization(server, tick));
-        assertEquals(0.65f, source.getUtilization());
+        assertEquals(0.65, source.getUtilization(server, tick));
+        assertEquals(0.65, source.getUtilization());
     }
 
     @Test
     void shouldAcceptBoundaryValues() {
         ConstantWorkloadSource zero = new ConstantWorkloadSource(0.0f);
         ConstantWorkloadSource full = new ConstantWorkloadSource(1.0f);
-        assertEquals(0.0f, zero.getUtilization());
-        assertEquals(1.0f, full.getUtilization());
+        assertEquals(0.0, zero.getUtilization());
+        assertEquals(1.0, full.getUtilization());
     }
 
     @Test
