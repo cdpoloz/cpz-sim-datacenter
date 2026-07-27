@@ -10,6 +10,7 @@ import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.model.HardwareStatus;
 import com.cpz.sim.datacenter.model.Server;
 import com.cpz.sim.datacenter.model.ServerRole;
+import com.cpz.sim.datacenter.model.ServerThermalProperties;
 import com.cpz.sim.datacenter.workload.ServerWorkloadFactorProvider;
 import org.junit.jupiter.api.Test;
 
@@ -173,6 +174,39 @@ class DatacenterFactoryTest {
         firstServer.setUtilization(0.5);
         firstServer.updatePowerConsumption();
         assertEquals(200.0f, firstServer.getCurrentPowerWatts());
+    }
+
+    @Test
+    void shouldUseServerModelThermalProperties() {
+        DatacenterDefinition definition = new DatacenterDefinition(
+                "Thermal Datacenter",
+                validLayout(),
+                List.of(new ServerModelDefinition(
+                        "SRV-THERMAL-001",
+                        "CPZ",
+                        "Thermal Server",
+                        100.0f,
+                        300.0f,
+                        7500.0,
+                        12.5
+                )),
+                List.of(new ServerDefinition(
+                        "RACK-A01-R01",
+                        "U01",
+                        "SRV-THERMAL-001",
+                        "OK",
+                        ServerRole.AI
+                ))
+        );
+
+        ServerThermalProperties thermalProperties = new DatacenterFactory()
+                .create(definition)
+                .getServers()
+                .getFirst()
+                .getConfig()
+                .thermalProperties();
+
+        assertEquals(new ServerThermalProperties(7500.0, 12.5), thermalProperties);
     }
 
     @Test

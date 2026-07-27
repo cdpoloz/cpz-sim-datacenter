@@ -102,12 +102,40 @@ Each model is defined as:
 }
 ```
 
+Thermal properties may be declared for a model that needs behavior different
+from the global temperature configuration:
+
+```json
+{
+  "modelCode": "SRV-AI-001",
+  "manufacturer": "CPZ",
+  "model": "AI Accelerator Server",
+  "idlePowerWatts": 150.0,
+  "maxPowerWatts": 500.0,
+  "thermalCapacityJoulesPerCelsius": 9000.0,
+  "heatDissipationWattsPerCelsius": 14.0
+}
+```
+
 Rules:
 
 - `modelCode`, `manufacturer`, and `model` cannot be null or blank.
 - `modelCode` must be unique.
 - `idlePowerWatts` must be finite and `>= 0`.
 - `maxPowerWatts` must be finite and greater than `idlePowerWatts`.
+- `thermalCapacityJoulesPerCelsius` and
+  `heatDissipationWattsPerCelsius` are optional only as a pair: both must be
+  present or both must be absent.
+- When present, both thermal values must be JSON numbers, finite, and `> 0`.
+- Explicit `null` is invalid for either thermal field.
+- When both fields are absent, `ServerConfig.thermalProperties()` is `null` and
+  `TemperatureSystem` uses the global values from `TemperatureSystemOptions`.
+- Existing JSON files without these fields remain valid and retain their
+  previous global thermal behavior.
+
+These values belong to the reusable server model and are independent of
+`ServerRole`. Assigning role `AI`, `GPU`, or any other role does not select
+thermal physics.
 
 ## servers
 
@@ -315,6 +343,16 @@ Rules:
 
 This configuration feeds the simplified internal server temperature model only.
 It does not enable room temperature, rack inlet, cooling, or airflow modeling.
+For each server, `TemperatureSystem` resolves the thermal capacity and heat
+dissipation with this precedence:
+
+1. the pair declared by the server's referenced `serverModels` entry
+2. these global `temperature` values
+
+`ambientTemperatureCelsius` and `defaultInitialTemperatureCelsius` are always
+global. A missing top-level `temperature` block uses
+`TemperatureSystemOptions.defaults()`, including when a server model overrides
+the two model-specific properties.
 
 ## Server Health Configuration
 

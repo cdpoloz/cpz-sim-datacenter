@@ -36,7 +36,9 @@
       "manufacturer": "CPZ",
       "model": "High Density Demo Server",
       "idlePowerWatts": 150.0,
-      "maxPowerWatts": 500.0
+      "maxPowerWatts": 500.0,
+      "thermalCapacityJoulesPerCelsius": 9000.0,
+      "heatDissipationWattsPerCelsius": 14.0
     }
   ],
   "servers": [

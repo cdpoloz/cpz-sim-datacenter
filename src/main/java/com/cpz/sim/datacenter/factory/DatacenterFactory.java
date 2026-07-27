@@ -33,16 +33,34 @@ public final class DatacenterFactory {
     private static Map<String, ServerConfig> createServerConfigMap(List<ServerModelDefinition> serverModels) {
         Map<String, ServerConfig> configs = new HashMap<>();
         for (ServerModelDefinition modelDefinition : serverModels) {
+            ServerThermalProperties thermalProperties = createServerThermalProperties(modelDefinition);
             ServerConfig config = new ServerConfig(
                     modelDefinition.modelCode(),
                     modelDefinition.manufacturer(),
                     modelDefinition.model(),
                     modelDefinition.idlePowerWatts(),
-                    modelDefinition.maxPowerWatts()
+                    modelDefinition.maxPowerWatts(),
+                    thermalProperties
             );
             configs.put(modelDefinition.modelCode(), config);
         }
         return configs;
+    }
+
+    private static ServerThermalProperties createServerThermalProperties(ServerModelDefinition modelDefinition) {
+        Double thermalCapacity = modelDefinition.thermalCapacityJoulesPerCelsius();
+        Double heatDissipation = modelDefinition.heatDissipationWattsPerCelsius();
+        if (thermalCapacity == null && heatDissipation == null) return null;
+        if (thermalCapacity == null || heatDissipation == null) {
+            throw new IllegalArgumentException(
+                    "Server model '"
+                            + modelDefinition.modelCode()
+                            + "' must specify both "
+                            + "thermalCapacityJoulesPerCelsius and "
+                            + "heatDissipationWattsPerCelsius, or neither"
+            );
+        }
+        return new ServerThermalProperties(thermalCapacity, heatDissipation);
     }
 
     private static List<Server> createServers(

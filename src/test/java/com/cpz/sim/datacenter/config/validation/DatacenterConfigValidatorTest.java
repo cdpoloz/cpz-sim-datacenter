@@ -443,6 +443,86 @@ class DatacenterConfigValidatorTest {
     }
 
     @Test
+    void shouldAcceptValidServerModelThermalProperties() {
+        DatacenterDefinition definition = new DatacenterDefinition(
+                "Demo Datacenter",
+                layout(List.of(rack("RACK-A01-R01"))),
+                List.of(new ServerModelDefinition(
+                        "SRV-DEMO-001",
+                        "CPZ",
+                        "Demo Server",
+                        100.0f,
+                        300.0f,
+                        7500.0,
+                        12.5
+                )),
+                List.of()
+        );
+
+        assertDoesNotThrow(() -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectIncompleteServerModelThermalProperties() {
+        DatacenterDefinition definition = new DatacenterDefinition(
+                "Demo Datacenter",
+                layout(List.of(rack("RACK-A01-R01"))),
+                List.of(new ServerModelDefinition(
+                        "SRV-DEMO-001",
+                        "CPZ",
+                        "Demo Server",
+                        100.0f,
+                        300.0f,
+                        7500.0,
+                        null
+                )),
+                List.of()
+        );
+
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectNonPositiveServerModelThermalProperties() {
+        DatacenterDefinition definition = new DatacenterDefinition(
+                "Demo Datacenter",
+                layout(List.of(rack("RACK-A01-R01"))),
+                List.of(new ServerModelDefinition(
+                        "SRV-DEMO-001",
+                        "CPZ",
+                        "Demo Server",
+                        100.0f,
+                        300.0f,
+                        0.0,
+                        -1.0
+                )),
+                List.of()
+        );
+
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectNonFiniteServerModelThermalProperties() {
+        DatacenterDefinition definition = new DatacenterDefinition(
+                "Demo Datacenter",
+                layout(List.of(rack("RACK-A01-R01"))),
+                List.of(new ServerModelDefinition(
+                        "SRV-DEMO-001",
+                        "CPZ",
+                        "Demo Server",
+                        100.0f,
+                        300.0f,
+                        Double.NaN,
+                        Double.POSITIVE_INFINITY
+                )),
+                List.of()
+        );
+
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
     void shouldAcceptMissingTemperatureBlock() {
         DatacenterDefinition definition = definition(
                 layout(List.of(rack("RACK-A01-R01"))),

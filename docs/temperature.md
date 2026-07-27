@@ -33,6 +33,12 @@ An optional top-level JSON `temperature` block can be used to configure
 remains the fallback behavior. If the block is present, all current fields are
 required.
 
+Each `serverModels` entry may additionally declare
+`thermalCapacityJoulesPerCelsius` and
+`heatDissipationWattsPerCelsius`. They are optional as a pair. Existing model
+definitions that omit both fields continue to use the global values and preserve
+the previous behavior.
+
 ## What `temperatureCelsius` Represents
 
 `ServerTemperatureSnapshot.temperatureCelsius()` is a simplified representative
@@ -113,7 +119,32 @@ This controls thermal inertia.
 This controls how strongly the server exchanges heat with the ambient reference.
 
 - larger values pull temperature toward ambient more aggressively
-- `0.0` disables that dissipation term
+- in global `TemperatureSystemOptions`, `0.0` disables that dissipation term
+- a model-specific value must be greater than zero
+
+## Effective Properties per Server Model
+
+`TemperatureSystem` is the layer that knows both the installed `Server` and the
+global options. For every server it resolves:
+
+```text
+thermal capacity and heat dissipation:
+    ServerConfig.thermalProperties, when present
+    otherwise TemperatureSystemOptions
+
+ambient and default initial temperature:
+    TemperatureSystemOptions
+```
+
+The resolved values are then passed to `ServerTemperatureModel` for the
+mathematical update. `SimpleServerTemperatureModel` does not inspect
+`ServerRole`, and roles such as `AI` or `GPU` never activate thermal behavior.
+
+In JSON, both model-specific fields must be present together or both omitted.
+Explicit `null`, non-numeric values, non-finite values, zero, and negative values
+are rejected. The example `SRV-DEMO-002` model in
+`data/config/datacenter-ui-test.json` declares a differentiated pair; the other
+model in that file demonstrates fallback to the global values.
 
 ## OFFLINE Server Behavior
 
@@ -221,7 +252,7 @@ The exact numeric output depends on workload evolution and tick duration.
 - no cooling model
 - no airflow model
 - no rack-to-rack thermal coupling
-- no calibration against specific server hardware
+- no claim of calibration against real server hardware
 
 ## Future Work
 

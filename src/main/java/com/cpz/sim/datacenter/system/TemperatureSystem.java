@@ -2,6 +2,7 @@ package com.cpz.sim.datacenter.system;
 
 import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.model.Server;
+import com.cpz.sim.datacenter.model.ServerThermalProperties;
 import com.cpz.sim.datacenter.temperature.ServerTemperatureModel;
 import com.cpz.sim.datacenter.temperature.ServerThermalState;
 import com.cpz.sim.datacenter.temperature.TemperatureSystemOptions;
@@ -17,6 +18,11 @@ import java.util.*;
  * {@link PowerConsumptionSystem} and updates a representative internal server
  * temperature for each installed server. It does not model room temperature,
  * rack inlet temperature, airflow, or cooling equipment.
+ *
+ * <p>Thermal capacity and heat dissipation are resolved per server from
+ * {@link com.cpz.sim.datacenter.model.ServerConfig#thermalProperties()} first,
+ * falling back to the global {@link TemperatureSystemOptions}. Ambient and
+ * initial temperatures always come from the global options.</p>
  */
 public final class TemperatureSystem implements Simulatable {
 
@@ -24,6 +30,7 @@ public final class TemperatureSystem implements Simulatable {
     private final TemperatureSystemOptions options;
     private final ServerTemperatureModel temperatureModel;
     private final Map<String, ServerThermalState> thermalStates = new HashMap<>();
+    private final Map<String, TemperatureSystemOptions> effectiveOptionsByServer = new HashMap<>();
 
     public TemperatureSystem(
             Datacenter datacenter,
@@ -53,6 +60,7 @@ public final class TemperatureSystem implements Simulatable {
             if (previous != null)
                 throw new IllegalArgumentException("Duplicate server code found while initializing thermal states: " + serverCode
             );
+            effectiveOptionsByServer.put(serverCode, resolveEffectiveOptions(server));
         }
     }
 
@@ -69,14 +77,29 @@ public final class TemperatureSystem implements Simulatable {
                     )
             );
             double currentPowerWatts = server.getCurrentPowerWatts();
+            TemperatureSystemOptions effectiveOptions = effectiveOptionsByServer.computeIfAbsent(
+                    server.getCode(),
+                    code -> resolveEffectiveOptions(server)
+            );
             double nextTemperature = temperatureModel.nextTemperatureCelsius(
                     state.getTemperatureCelsius(),
                     currentPowerWatts,
                     deltaSeconds,
-                    options
+                    effectiveOptions
             );
             state.setTemperatureCelsius(nextTemperature);
         }
+    }
+
+    private TemperatureSystemOptions resolveEffectiveOptions(Server server) {
+        ServerThermalProperties thermalProperties = server.getConfig().thermalProperties();
+        if (thermalProperties == null) return options;
+        return new TemperatureSystemOptions(
+                options.ambientTemperatureCelsius(),
+                options.defaultInitialTemperatureCelsius(),
+                thermalProperties.thermalCapacityJoulesPerCelsius(),
+                thermalProperties.heatDissipationWattsPerCelsius()
+        );
     }
 
     public ServerThermalState getThermalState(String serverCode) {

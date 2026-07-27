@@ -136,6 +136,85 @@ class TemperatureSystemTest {
         assertTrue(state.getTemperatureCelsius() > 25.0);
     }
 
+    @Test
+    void modelSpecificThermalPropertiesOverrideGlobalPropertiesPerServer() {
+        RackCode rackCode = new RackCode("RACK-A01-R01");
+        Rack rack = new Rack(rackCode, new RackLocation("A01", "R01"), 42);
+        Server slowerServer = createServer(
+                rackCode,
+                "U01",
+                new ServerThermalProperties(10000.0, 4.0),
+                HardwareStatus.OK,
+                0.75
+        );
+        Server fasterServer = createServer(
+                rackCode,
+                "U02",
+                new ServerThermalProperties(2500.0, 16.0),
+                HardwareStatus.OK,
+                0.75
+        );
+        TemperatureSystem system = new TemperatureSystem(
+                new Datacenter(List.of(rack), List.of(slowerServer, fasterServer)),
+                new TemperatureSystemOptions(25.0, 35.0, 5000.0, 8.0),
+                new SimpleServerTemperatureModel()
+        );
+
+        system.update(tickAtSeconds(1, 60, 60));
+
+        // Both servers consume 400 W and start 10 °C above ambient.
+        // Slow: heat loss = 4 * 10 = 40 W; delta = 360 / 10000 * 60 = 2.16 °C.
+        // Fast: heat loss = 16 * 10 = 160 W; delta = 240 / 2500 * 60 = 5.76 °C.
+        assertEquals(37.16, system.getThermalState(slowerServer.getCode()).getTemperatureCelsius(), EPSILON);
+        assertEquals(40.76, system.getThermalState(fasterServer.getCode()).getTemperatureCelsius(), EPSILON);
+    }
+
+    @Test
+    void serverWithoutModelSpecificPropertiesUsesGlobalThermalProperties() {
+        Datacenter datacenter = createDatacenterWithOneServer(HardwareStatus.OK, 0.75f);
+        TemperatureSystem system = new TemperatureSystem(
+                datacenter,
+                new TemperatureSystemOptions(25.0, 25.0, 10000.0, 4.0),
+                new SimpleServerTemperatureModel()
+        );
+
+        system.update(tickAtSeconds(1, 60, 60));
+
+        assertEquals(
+                27.4,
+                system.getThermalState(SERVER_CODE).getTemperatureCelsius(),
+                EPSILON
+        );
+    }
+
+    @Test
+    void offlineServerKeepsCoolingBehaviorWithModelSpecificProperties() {
+        RackCode rackCode = new RackCode("RACK-A01-R01");
+        Rack rack = new Rack(rackCode, new RackLocation("A01", "R01"), 42);
+        Server server = createServer(
+                rackCode,
+                "U01",
+                new ServerThermalProperties(10000.0, 4.0),
+                HardwareStatus.OFFLINE,
+                1.0
+        );
+        TemperatureSystem system = new TemperatureSystem(
+                new Datacenter(List.of(rack), List.of(server)),
+                new TemperatureSystemOptions(25.0, 40.0, 5000.0, 8.0),
+                new SimpleServerTemperatureModel()
+        );
+
+        system.update(tickAtSeconds(1, 60, 60));
+
+        // OFFLINE still means 0 W. The model-specific loss is 4 * (40 - 25)
+        // = 60 W, so delta = -60 / 10000 * 60 = -0.36 °C.
+        assertEquals(
+                39.64,
+                system.getThermalState(server.getCode()).getTemperatureCelsius(),
+                EPSILON
+        );
+    }
+
     private static Datacenter createDatacenterWithOneServer(
             HardwareStatus status,
             double utilization
@@ -158,6 +237,32 @@ class TemperatureSystemTest {
         server.setUtilization(utilization);
         server.updatePowerConsumption();
         return new Datacenter(List.of(rack), List.of(server));
+    }
+
+    private static Server createServer(
+            RackCode rackCode,
+            String slot,
+            ServerThermalProperties thermalProperties,
+            HardwareStatus status,
+            double utilization
+    ) {
+        ServerConfig config = new ServerConfig(
+                "model-" + slot,
+                "Example",
+                "Server " + slot,
+                100.0f,
+                500.0f,
+                thermalProperties
+        );
+        Server server = new Server(
+                new ServerLocation("A01", rackCode, slot),
+                config,
+                status,
+                ServerRole.GENERAL_PURPOSE
+        );
+        server.setUtilization(utilization);
+        server.updatePowerConsumption();
+        return server;
     }
 
     private static SimulationTick tickAtSeconds(

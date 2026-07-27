@@ -40,6 +40,7 @@ Available in `0.1.0-alpha.1`:
 - Per-server `workloadFactor` read from JSON and applied through `ScaledWorkloadSource`.
 - Energy snapshots through `EnergyConsumptionSnapshotProvider`, `EnergyConsumptionSnapshot` and `ServerEnergySnapshot`.
 - Temperature snapshots through `TemperatureSnapshotProvider`, `TemperatureSnapshot`, and `ServerTemperatureSnapshot`.
+- Optional model-specific thermal capacity and heat dissipation in `serverModels`, with global fallback.
 - Health snapshots through `HealthSnapshotProvider`, `HealthSnapshot`, and `ServerHealthSnapshot`.
 
 Important rules:
@@ -48,6 +49,9 @@ Important rules:
 - An `OFFLINE` server represents an installed server that is powered off or not operational.
 - Rack identity is `column + rackCode`; server identity is `column + rackCode + slot`.
 - A missing JSON `role` is normalized to `ServerRole.GENERAL_PURPOSE` when the domain is built.
+- Model-specific thermal capacity and heat dissipation must be declared together.
+  When absent, the global `TemperatureSystemOptions` values are used. These
+  properties are independent of `ServerRole`.
 - Slot codes are opaque identifiers declared by each rack. A UI should read rack slots from the backend and match servers by exact `column + rackCode + slot`.
 - `WorkloadSystem` forces `utilization = 0.0f` for `OFFLINE` servers and does not query the `WorkloadSource` for them.
 - `Server.updatePowerConsumption()` forces `currentPowerWatts = 0.0f` for `OFFLINE` servers.
@@ -194,7 +198,9 @@ Each rack must define exactly one of:
 
 Optional top-level `temperature` and `health` blocks configure the thermal model
 and health thresholds. If `health` is omitted, the health options factory uses
-documented defaults. See [JSON Configuration](docs/configuration.md).
+documented defaults. Server models may optionally override thermal capacity and
+heat dissipation as a pair; old JSON without that pair keeps using the global
+temperature values. See [JSON Configuration](docs/configuration.md).
 
 ---
 

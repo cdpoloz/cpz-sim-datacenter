@@ -3,13 +3,16 @@ package com.cpz.sim.datacenter.config.json;
 import com.cpz.sim.datacenter.config.DatacenterConfigException;
 import com.cpz.sim.datacenter.config.definition.DatacenterDefinition;
 import com.cpz.sim.datacenter.config.definition.RackDefinition;
+import com.cpz.sim.datacenter.config.validation.DatacenterConfigValidationException;
 import com.cpz.sim.datacenter.factory.DatacenterFactory;
 import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.model.ServerRole;
+import com.cpz.sim.datacenter.model.ServerThermalProperties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -19,6 +22,7 @@ import java.util.List;
 import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -46,6 +50,10 @@ class JsonDatacenterConfigLoaderTest {
     }
 
     private Path writeSingleServerConfig(String roleProperty) throws IOException {
+        return writeSingleServerConfig("", roleProperty);
+    }
+
+    private Path writeSingleServerConfig(String thermalProperties, String roleProperty) throws IOException {
         String json = """
                 {
                   "name": "Role Test Datacenter",
@@ -65,7 +73,7 @@ class JsonDatacenterConfigLoaderTest {
                       "manufacturer": "CPZ",
                       "model": "Role Test Server",
                       "idlePowerWatts": 100.0,
-                      "maxPowerWatts": 300.0
+                      "maxPowerWatts": 300.0%s
                     }
                   ],
                   "servers": [
@@ -79,7 +87,7 @@ class JsonDatacenterConfigLoaderTest {
                     }
                   ]
                 }
-                """.formatted(roleProperty);
+                """.formatted(thermalProperties, roleProperty);
         return Files.writeString(tempDirectory.resolve("server-role.json"), json);
     }
 
@@ -108,12 +116,153 @@ class JsonDatacenterConfigLoaderTest {
         assertEquals(1, definition.serverModels().size());
         assertEquals(2, definition.servers().size());
         assertEquals("SRV-DEMO-001", definition.serverModels().getFirst().modelCode());
+        assertNull(definition.serverModels().getFirst().thermalCapacityJoulesPerCelsius());
+        assertNull(definition.serverModels().getFirst().heatDissipationWattsPerCelsius());
         assertEquals(null, definition.servers().getFirst().column());
         assertEquals("RACK-A01-R01", definition.servers().getFirst().rackCode());
         assertEquals("U01", definition.servers().getFirst().slot());
         assertEquals(1.5f, definition.servers().getFirst().workloadFactor());
         assertNull(definition.servers().getFirst().role());
         assertEquals(null, definition.temperature());
+    }
+
+    @Test
+    void shouldLoadAndBuildModelSpecificThermalProperties() throws IOException {
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(
+                writeSingleServerConfig(
+                        """
+                        ,
+                              "thermalCapacityJoulesPerCelsius": 7500.0,
+                              "heatDissipationWattsPerCelsius": 12.5""",
+                        ""
+                )
+        );
+
+        assertEquals(7500.0, definition.serverModels().getFirst().thermalCapacityJoulesPerCelsius());
+        assertEquals(12.5, definition.serverModels().getFirst().heatDissipationWattsPerCelsius());
+        ServerThermalProperties thermalProperties = new DatacenterFactory()
+                .create(definition)
+                .getServers()
+                .getFirst()
+                .getConfig()
+                .thermalProperties();
+        assertNotNull(thermalProperties);
+        assertEquals(7500.0, thermalProperties.thermalCapacityJoulesPerCelsius());
+        assertEquals(12.5, thermalProperties.heatDissipationWattsPerCelsius());
+    }
+
+    @Test
+    void shouldKeepModelSpecificThermalPropertiesAbsentForLegacyJson() throws IOException {
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(
+                writeSingleServerConfig("", "")
+        );
+
+        assertNull(definition.serverModels().getFirst().thermalCapacityJoulesPerCelsius());
+        assertNull(definition.serverModels().getFirst().heatDissipationWattsPerCelsius());
+        assertNull(
+                new DatacenterFactory()
+                        .create(definition)
+                        .getServers()
+                        .getFirst()
+                        .getConfig()
+                        .thermalProperties()
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            ",\n      \"thermalCapacityJoulesPerCelsius\": 5000.0",
+            ",\n      \"heatDissipationWattsPerCelsius\": 8.0"
+    })
+    void shouldRejectIncompleteModelSpecificThermalProperties(String thermalProperties) throws IOException {
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(
+                        writeSingleServerConfig(thermalProperties, "")
+                )
+        );
+
+        String messages = exceptionMessages(exception);
+        assertTrue(messages.contains("must specify both"));
+        assertTrue(messages.contains("thermalCapacityJoulesPerCelsius"));
+        assertTrue(messages.contains("heatDissipationWattsPerCelsius"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            ",\n      \"thermalCapacityJoulesPerCelsius\": null,\n      \"heatDissipationWattsPerCelsius\": 8.0",
+            ",\n      \"thermalCapacityJoulesPerCelsius\": 5000.0,\n      \"heatDissipationWattsPerCelsius\": null"
+    })
+    void shouldRejectExplicitNullModelSpecificThermalProperties(String thermalProperties) throws IOException {
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(
+                        writeSingleServerConfig(thermalProperties, "")
+                )
+        );
+
+        assertTrue(exceptionMessages(exception).contains("cannot be null"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            ",\n      \"thermalCapacityJoulesPerCelsius\": \"5000.0\",\n      \"heatDissipationWattsPerCelsius\": 8.0",
+            ",\n      \"thermalCapacityJoulesPerCelsius\": 5000.0,\n      \"heatDissipationWattsPerCelsius\": false"
+    })
+    void shouldRejectNonNumericModelSpecificThermalProperties(String thermalProperties) throws IOException {
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(
+                        writeSingleServerConfig(thermalProperties, "")
+                )
+        );
+
+        assertTrue(exceptionMessages(exception).contains("must be a number"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            ",\n      \"thermalCapacityJoulesPerCelsius\": 0.0,\n      \"heatDissipationWattsPerCelsius\": 8.0",
+            ",\n      \"thermalCapacityJoulesPerCelsius\": -1.0,\n      \"heatDissipationWattsPerCelsius\": 8.0",
+            ",\n      \"thermalCapacityJoulesPerCelsius\": 1e999,\n      \"heatDissipationWattsPerCelsius\": 8.0",
+            ",\n      \"thermalCapacityJoulesPerCelsius\": 5000.0,\n      \"heatDissipationWattsPerCelsius\": 0.0",
+            ",\n      \"thermalCapacityJoulesPerCelsius\": 5000.0,\n      \"heatDissipationWattsPerCelsius\": -1.0",
+            ",\n      \"thermalCapacityJoulesPerCelsius\": 5000.0,\n      \"heatDissipationWattsPerCelsius\": 1e999"
+    })
+    void shouldRejectInvalidModelSpecificThermalValues(String thermalProperties) throws IOException {
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(
+                writeSingleServerConfig(thermalProperties, "")
+        );
+
+        assertThrows(
+                DatacenterConfigValidationException.class,
+                () -> new DatacenterFactory().create(definition)
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"NaN", "Infinity", "-Infinity"})
+    void shouldRejectNonStandardNonFiniteThermalJsonNumbers(String value) {
+        assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(
+                        writeSingleServerConfig(
+                                ",\n      \"thermalCapacityJoulesPerCelsius\": " + value
+                                        + ",\n      \"heatDissipationWattsPerCelsius\": 8.0",
+                                ""
+                        )
+                )
+        );
+    }
+
+    @Test
+    void shouldRejectUnknownServerModelField() {
+        assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(
+                        writeSingleServerConfig(",\n      \"unknownThermalField\": 8.0", "")
+                )
+        );
     }
 
     @ParameterizedTest

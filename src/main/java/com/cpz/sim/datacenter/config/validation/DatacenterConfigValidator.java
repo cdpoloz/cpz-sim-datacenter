@@ -132,6 +132,30 @@ public final class DatacenterConfigValidator {
                 errors.add(context + " must have finite maxPowerWatts >= 0");
             if (Float.isFinite(model.idlePowerWatts()) && Float.isFinite(model.maxPowerWatts()) && model.maxPowerWatts() <= model.idlePowerWatts())
                 errors.add(context + " must have maxPowerWatts > idlePowerWatts");
+            validateServerModelThermalProperties(model, context, errors);
+        }
+    }
+
+    private static void validateServerModelThermalProperties(
+            ServerModelDefinition model,
+            String context,
+            List<String> errors
+    ) {
+        Double thermalCapacity = model.thermalCapacityJoulesPerCelsius();
+        Double heatDissipation = model.heatDissipationWattsPerCelsius();
+        if (thermalCapacity == null && heatDissipation == null) return;
+        if (thermalCapacity == null || heatDissipation == null) {
+            errors.add(
+                    context + " must specify both thermalCapacityJoulesPerCelsius"
+                            + " and heatDissipationWattsPerCelsius, or neither"
+            );
+            return;
+        }
+        if (!Double.isFinite(thermalCapacity) || thermalCapacity <= 0.0) {
+            errors.add(context + " must have finite thermalCapacityJoulesPerCelsius > 0");
+        }
+        if (!Double.isFinite(heatDissipation) || heatDissipation <= 0.0) {
+            errors.add(context + " must have finite heatDissipationWattsPerCelsius > 0");
         }
     }
 

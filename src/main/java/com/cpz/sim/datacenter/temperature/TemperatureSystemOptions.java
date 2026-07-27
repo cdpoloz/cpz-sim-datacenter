@@ -5,7 +5,9 @@ package com.cpz.sim.datacenter.temperature;
  *
  * <p>The values describe a first server-level thermal approximation driven by
  * server power, an ambient reference temperature, a lumped thermal capacity,
- * and a linear heat dissipation coefficient.
+ * and a linear heat dissipation coefficient. Thermal capacity and heat
+ * dissipation act as global fallback values when a server configuration does
+ * not provide model-specific properties.</p>
  */
 public record TemperatureSystemOptions(
         double ambientTemperatureCelsius,
