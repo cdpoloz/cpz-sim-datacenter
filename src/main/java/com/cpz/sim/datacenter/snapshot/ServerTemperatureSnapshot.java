@@ -2,6 +2,7 @@ package com.cpz.sim.datacenter.snapshot;
 
 import com.cpz.sim.datacenter.model.HardwareStatus;
 import com.cpz.sim.datacenter.model.RackCode;
+import com.cpz.sim.datacenter.model.ServerLocation;
 
 /**
  * Immutable per-server temperature data for one tick.
@@ -25,4 +26,14 @@ public record ServerTemperatureSnapshot(
         double currentPowerWatts,
         double temperatureCelsius
 ) {
+    /**
+     * Returns the physical location represented by this snapshot.
+     */
+    public ServerLocation location() {
+        return new ServerLocation(
+                column,
+                rackCode,
+                slot
+        );
+    }
 }

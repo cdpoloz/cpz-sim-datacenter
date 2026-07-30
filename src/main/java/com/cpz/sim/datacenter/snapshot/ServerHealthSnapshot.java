@@ -3,6 +3,7 @@ package com.cpz.sim.datacenter.snapshot;
 import com.cpz.sim.datacenter.health.ServerAlertReason;
 import com.cpz.sim.datacenter.model.HardwareStatus;
 import com.cpz.sim.datacenter.model.RackCode;
+import com.cpz.sim.datacenter.model.ServerLocation;
 
 import java.util.Objects;
 import java.util.Set;
@@ -44,5 +45,16 @@ public record ServerHealthSnapshot(
 
     public boolean hasAlertReason(ServerAlertReason reason) {
         return alertReasons.contains(reason);
+    }
+
+    /**
+     * Returns the physical location represented by this snapshot.
+     */
+    public ServerLocation location() {
+        return new ServerLocation(
+                column,
+                rackCode,
+                slot
+        );
     }
 }
