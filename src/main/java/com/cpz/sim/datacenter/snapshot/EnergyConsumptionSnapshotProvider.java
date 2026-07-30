@@ -44,6 +44,8 @@ public final class EnergyConsumptionSnapshotProvider {
                 server.getLocation().slot(),
                 server.getStatus().name(),
                 server.getUtilization(),
+                server.getConfig().idlePowerWatts(),
+                server.getConfig().maxPowerWatts(),
                 server.getCurrentPowerWatts()
         );
     }
