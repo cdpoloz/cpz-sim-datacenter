@@ -1,5 +1,6 @@
 package com.cpz.sim.datacenter.snapshot;
 
+import com.cpz.sim.datacenter.model.HardwareStatus;
 import com.cpz.sim.datacenter.model.RackCode;
 import com.cpz.sim.datacenter.model.ServerLocation;
 
@@ -19,7 +20,7 @@ public record ServerEnergySnapshot(
         String column,
         RackCode rackCode,
         String slot,
-        String status,
+        HardwareStatus status,
         double utilization,
         float idlePowerWatts,
         float maxPowerWatts,
@@ -30,7 +31,7 @@ public record ServerEnergySnapshot(
         column = requireText(column, "column");
         Objects.requireNonNull(rackCode, "rackCode must not be null");
         slot = requireText(slot, "slot");
-        status = requireText(status, "status");
+        Objects.requireNonNull(status, "status must not be null");
         if (!Double.isFinite(utilization) || utilization < 0.0 || utilization > 1.0)
             throw new IllegalArgumentException("utilization must be finite and between 0 and 1");
         if (!Float.isFinite(idlePowerWatts) || idlePowerWatts < 0.0f)

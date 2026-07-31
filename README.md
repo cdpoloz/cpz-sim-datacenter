@@ -281,8 +281,8 @@ HealthSnapshot healthSnapshot = healthProvider.snapshot(tick);
 ```
 
 The energy snapshot captures tick index, elapsed seconds, total IT power,
-accumulated energy and one entry per server with rack, slot, status, utilization
-and current power. Per-server snapshots include column, rack code and slot. The
+accumulated energy and one entry per server with rack, slot, `HardwareStatus`,
+utilization and current power. Per-server snapshots include column, rack code and slot. The
 slot value is the exact code from `ServerLocation`; it is not normalized or
 interpreted by the backend.
 

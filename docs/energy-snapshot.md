@@ -31,7 +31,7 @@ It also exposes:
 - `column`
 - `rackCode`
 - `slot`
-- `status`
+- `status` (`HardwareStatus`)
 - `utilization`
 - `currentPowerWatts`
 

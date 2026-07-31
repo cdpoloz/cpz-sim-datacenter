@@ -42,7 +42,7 @@ public final class EnergyConsumptionSnapshotProvider {
                 server.getLocation().column(),
                 server.getLocation().rackCode(),
                 server.getLocation().slot(),
-                server.getStatus().name(),
+                server.getStatus(),
                 server.getUtilization(),
                 server.getConfig().idlePowerWatts(),
                 server.getConfig().maxPowerWatts(),

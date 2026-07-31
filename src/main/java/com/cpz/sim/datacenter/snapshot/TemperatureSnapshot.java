@@ -8,6 +8,8 @@ import java.util.List;
  * <p>{@code ambientTemperatureCelsius} is the ambient input used by the
  * simplified model. Per-server temperatures are representative internal server
  * temperatures, not room or inlet air temperatures.
+ *
+ * @author CPZ
  */
 public record TemperatureSnapshot(
         long tickIndex,
@@ -15,6 +17,16 @@ public record TemperatureSnapshot(
         double ambientTemperatureCelsius,
         List<ServerTemperatureSnapshot> servers
 ) {
+
+    public TemperatureSnapshot {
+        if (tickIndex < 0L) throw new IllegalArgumentException("tickIndex must be greater than or equal to zero.");
+        if (!Double.isFinite(elapsedSeconds) || elapsedSeconds < 0.0)
+            throw new IllegalArgumentException("elapsedSeconds must be finite and greater than or equal to zero.");
+        if (!Double.isFinite(ambientTemperatureCelsius))
+            throw new IllegalArgumentException("ambientTemperatureCelsius must be finite.");
+        servers = List.copyOf(java.util.Objects.requireNonNull(servers, "servers must not be null."));
+    }
+
     public int serverCount() {
         return servers.size();
     }

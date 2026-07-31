@@ -214,4 +214,90 @@ class RackOperationalSnapshotTest {
                 exception.getMessage()
         );
     }
+
+    @Test
+    void shouldAllowAllInstalledServersToBeOnline() {
+        RackOperationalSnapshot snapshot =
+                new RackOperationalSnapshot(
+                        RACK_LOCATION,
+                        3,
+                        3,
+                        300.0,
+                        1500.0,
+                        900.0,
+                        55.0,
+                        0.60
+                );
+
+        assertAll(
+                () -> assertEquals(
+                        3,
+                        snapshot.installedServerCount()
+                ),
+                () -> assertEquals(
+                        3,
+                        snapshot.onlineServerCount()
+                ),
+                () -> assertTrue(snapshot.hasInstalledServers()),
+                () -> assertTrue(snapshot.hasOnlineServers())
+        );
+    }
+
+    @Test
+    void shouldAllowAverageOnlineUtilizationBoundaries() {
+        RackOperationalSnapshot zeroUtilization =
+                new RackOperationalSnapshot(
+                        RACK_LOCATION,
+                        3,
+                        2,
+                        300.0,
+                        1500.0,
+                        300.0,
+                        40.0,
+                        0.0
+                );
+
+        RackOperationalSnapshot fullUtilization =
+                new RackOperationalSnapshot(
+                        RACK_LOCATION,
+                        3,
+                        2,
+                        300.0,
+                        1500.0,
+                        1500.0,
+                        80.0,
+                        1.0
+                );
+
+        assertAll(
+                () -> assertEquals(
+                        0.0,
+                        zeroUtilization.averageOnlineUtilization()
+                ),
+                () -> assertEquals(
+                        1.0,
+                        fullUtilization.averageOnlineUtilization()
+                )
+        );
+    }
+
+    @Test
+    void shouldAllowNegativeFiniteAverageOnlineTemperature() {
+        RackOperationalSnapshot snapshot =
+                new RackOperationalSnapshot(
+                        RACK_LOCATION,
+                        3,
+                        2,
+                        300.0,
+                        1500.0,
+                        760.0,
+                        -10.0,
+                        0.70
+                );
+
+        assertEquals(
+                -10.0,
+                snapshot.averageOnlineTemperatureCelsius()
+        );
+    }
 }

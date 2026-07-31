@@ -71,7 +71,7 @@ class EnergyConsumptionSnapshotProviderTest {
         assertEquals("A01", firstServer.column());
         assertEquals(new RackCode("RACK-A01-R01"), firstServer.rackCode());
         assertEquals("U01", firstServer.slot());
-        assertEquals("OK", firstServer.status());
+        assertEquals(HardwareStatus.OK, firstServer.status());
         assertEquals(0.5f, firstServer.utilization(), EPSILON);
         assertEquals(100.0f, firstServer.idlePowerWatts(), EPSILON);
         assertEquals(300.0f, firstServer.maxPowerWatts(), EPSILON);
@@ -82,7 +82,7 @@ class EnergyConsumptionSnapshotProviderTest {
         assertEquals("A01", secondServer.column());
         assertEquals(new RackCode("RACK-A01-R01"), secondServer.rackCode());
         assertEquals("U02", secondServer.slot());
-        assertEquals("OK", secondServer.status());
+        assertEquals(HardwareStatus.OK, secondServer.status());
         assertEquals(0.5f, secondServer.utilization(), EPSILON);
         assertEquals(100.0f, secondServer.idlePowerWatts(), EPSILON);
         assertEquals(300.0f, secondServer.maxPowerWatts(), EPSILON);
