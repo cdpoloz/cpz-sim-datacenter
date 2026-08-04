@@ -5,6 +5,7 @@ import com.cpz.sim.datacenter.model.*;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -362,6 +363,89 @@ class DatacenterOperationalSnapshotProviderTest {
                 () -> assertFalse(emptyRack.hasInstalledServers()),
                 () -> assertFalse(emptyRack.hasOnlineServers())
         );
+    }
+
+    @Test
+    void shouldAggregateApplicationDefinedServerGroups() {
+        DatacenterOperationalSnapshotProvider provider =
+                new DatacenterOperationalSnapshotProvider(
+                        createDatacenter(),
+                        List.of(
+                                new ServerGroupDefinition(
+                                        "HA01",
+                                        Set.of(
+                                                OK_SERVER_LOCATION,
+                                                ALERT_SERVER_LOCATION,
+                                                OFFLINE_SERVER_LOCATION
+                                        )
+                                ),
+                                new ServerGroupDefinition("EMPTY", Set.of())
+                        )
+                );
+
+        DatacenterOperationalSnapshot snapshot = provider.snapshot(
+                createEnergySnapshot(),
+                createTemperatureSnapshot(),
+                createHealthSnapshot()
+        );
+        ServerGroupOperationalSnapshot hotAisle = snapshot.getServerGroup("HA01");
+        ServerGroupOperationalSnapshot empty = snapshot.getServerGroup("EMPTY");
+
+        assertAll(
+                () -> assertEquals(2, snapshot.serverGroupCount()),
+                () -> assertEquals(3, hotAisle.installedServerCount()),
+                () -> assertEquals(2, hotAisle.onlineServerCount()),
+                () -> assertEquals(300.0, hotAisle.idlePowerWatts(), EPSILON),
+                () -> assertEquals(1500.0, hotAisle.maxPowerWatts(), EPSILON),
+                () -> assertEquals(760.0, hotAisle.currentPowerWatts(), EPSILON),
+                () -> assertEquals(60.0, hotAisle.averageOnlineTemperatureCelsius(), EPSILON),
+                () -> assertEquals(0.70, hotAisle.averageOnlineUtilization(), EPSILON),
+                () -> assertEquals(70.0, hotAisle.maximumTemperatureCelsius(), EPSILON),
+                () -> assertEquals(Optional.of(ALERT_SERVER_LOCATION), hotAisle.maximumTemperatureLocation()),
+                () -> assertTrue(empty.maximumTemperatureLocation().isEmpty()),
+                () -> assertTrue(Double.isNaN(empty.maximumTemperatureCelsius())),
+                () -> assertTrue(Double.isNaN(empty.averageOnlineTemperatureCelsius())),
+                () -> assertTrue(Double.isNaN(empty.averageOnlineUtilization()))
+        );
+    }
+
+    @Test
+    void shouldKeepExistingProviderConstructorCompatible() {
+        DatacenterOperationalSnapshot snapshot =
+                new DatacenterOperationalSnapshotProvider(createDatacenter()).snapshot(
+                        createEnergySnapshot(),
+                        createTemperatureSnapshot(),
+                        createHealthSnapshot()
+                );
+
+        assertEquals(0, snapshot.serverGroupCount());
+        assertTrue(snapshot.findServerGroup("HA01").isEmpty());
+    }
+
+    @Test
+    void shouldRejectInvalidServerGroupDefinitions() {
+        ServerGroupDefinition group =
+                new ServerGroupDefinition("HA01", Set.of(OK_SERVER_LOCATION));
+        ServerLocation unknown =
+                new ServerLocation("C99", new RackCode("R99"), "S99");
+
+        IllegalArgumentException duplicateCode = assertThrows(
+                IllegalArgumentException.class,
+                () -> new DatacenterOperationalSnapshotProvider(
+                        createDatacenter(),
+                        List.of(group, group)
+                )
+        );
+        IllegalArgumentException unknownLocation = assertThrows(
+                IllegalArgumentException.class,
+                () -> new DatacenterOperationalSnapshotProvider(
+                        createDatacenter(),
+                        List.of(new ServerGroupDefinition("UNKNOWN", Set.of(unknown)))
+                )
+        );
+
+        assertEquals("Duplicate server group code: HA01", duplicateCode.getMessage());
+        assertTrue(unknownLocation.getMessage().contains("references unknown server location"));
     }
 
     @Test

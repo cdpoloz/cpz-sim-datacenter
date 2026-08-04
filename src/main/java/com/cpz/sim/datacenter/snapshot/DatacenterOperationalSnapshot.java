@@ -23,6 +23,7 @@ public record DatacenterOperationalSnapshot(
         double elapsedSeconds,
         Map<RackLocation, RackOperationalSnapshot> racks,
         Map<String, ColumnOperationalSnapshot> columns,
+        Map<String, ServerGroupOperationalSnapshot> serverGroups,
         double roomTemperatureCelsius,
         Optional<RackLocation> hottestRackLocation,
         double hottestRackAverageTemperatureCelsius,
@@ -55,6 +56,14 @@ public record DatacenterOperationalSnapshot(
                 throw new IllegalArgumentException("Column map key does not match snapshot code: " + columnCode);
         }
         columns = Map.copyOf(columns);
+        Objects.requireNonNull(serverGroups, "serverGroups must not be null");
+        for (Map.Entry<String, ServerGroupOperationalSnapshot> entry : serverGroups.entrySet()) {
+            String groupCode = Objects.requireNonNull(entry.getKey(), "server group code must not be null");
+            ServerGroupOperationalSnapshot groupSnapshot = Objects.requireNonNull(entry.getValue(), "server group snapshot must not be null");
+            if (!groupCode.equals(groupSnapshot.groupCode()))
+                throw new IllegalArgumentException("Server group map key does not match snapshot code: " + groupCode);
+        }
+        serverGroups = Map.copyOf(serverGroups);
         if (!Double.isFinite(roomTemperatureCelsius)) throw new IllegalArgumentException("roomTemperatureCelsius must be finite");
         Objects.requireNonNull(hottestRackLocation, "hottestRackLocation must not be null");
         if (hottestRackLocation.isPresent()) {
@@ -88,6 +97,41 @@ public record DatacenterOperationalSnapshot(
         requireNaN(pue, "pue");
     }
 
+    public DatacenterOperationalSnapshot(
+            long tickIndex,
+            double elapsedSeconds,
+            Map<RackLocation, RackOperationalSnapshot> racks,
+            Map<String, ColumnOperationalSnapshot> columns,
+            double roomTemperatureCelsius,
+            Optional<RackLocation> hottestRackLocation,
+            double hottestRackAverageTemperatureCelsius,
+            double totalItUtilization,
+            double idleItPowerWatts,
+            double maxItPowerWatts,
+            double currentItPowerWatts,
+            double coolingPowerWatts,
+            double totalFacilityPowerWatts,
+            double pue
+    ) {
+        this(
+                tickIndex,
+                elapsedSeconds,
+                racks,
+                columns,
+                Map.of(),
+                roomTemperatureCelsius,
+                hottestRackLocation,
+                hottestRackAverageTemperatureCelsius,
+                totalItUtilization,
+                idleItPowerWatts,
+                maxItPowerWatts,
+                currentItPowerWatts,
+                coolingPowerWatts,
+                totalFacilityPowerWatts,
+                pue
+        );
+    }
+
     public Optional<RackOperationalSnapshot> findRack(RackLocation location) {
         Objects.requireNonNull(location, "location must not be null");
         return Optional.ofNullable(racks.get(location));
@@ -104,6 +148,19 @@ public record DatacenterOperationalSnapshot(
 
     public ColumnOperationalSnapshot getColumn(String columnCode) {
         return findColumn(columnCode).orElseThrow(() -> new IllegalArgumentException("No operational snapshot for column: " + columnCode));
+    }
+
+    public Optional<ServerGroupOperationalSnapshot> findServerGroup(String groupCode) {
+        Objects.requireNonNull(groupCode, "groupCode must not be null");
+        return Optional.ofNullable(serverGroups.get(groupCode));
+    }
+
+    public ServerGroupOperationalSnapshot getServerGroup(String groupCode) {
+        return findServerGroup(groupCode).orElseThrow(() -> new IllegalArgumentException("No operational snapshot for server group: " + groupCode));
+    }
+
+    public int serverGroupCount() {
+        return serverGroups.size();
     }
 
     public int rackCount() {
