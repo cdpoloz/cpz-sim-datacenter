@@ -1,12 +1,27 @@
 package com.cpz.sim.datacenter.system;
 
 import com.cpz.sim.datacenter.cooling.CoolingConfiguration;
+import com.cpz.sim.datacenter.cooling.CoolingTickInput;
 import com.cpz.sim.datacenter.cooling.CoolingUnitDefinition;
 import com.cpz.sim.datacenter.cooling.CoolingUnitState;
+import com.cpz.sim.datacenter.cooling.CoolingZoneDefinition;
+import com.cpz.sim.datacenter.cooling.CoolingZoneInfluence;
+import com.cpz.sim.datacenter.cooling.ExhaustCoolingUnitDefinition;
+import com.cpz.sim.datacenter.cooling.ServerHeatLoad;
+import com.cpz.sim.datacenter.cooling.SupplyCoolingUnitDefinition;
+import com.cpz.sim.datacenter.model.ServerLocation;
+import com.cpz.sim.datacenter.snapshot.CoolingSnapshot;
+import com.cpz.sim.datacenter.snapshot.CoolingUnitSnapshot;
+import com.cpz.sim.datacenter.snapshot.CoolingZoneSnapshot;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Manages the operational state and simulation of the configured cooling
@@ -26,6 +41,7 @@ public final class CoolingSystem {
     private final CoolingConfiguration configuration;
     private final Map<String, CoolingUnitDefinition> definitionsByUnitCode;
     private final Map<String, CoolingUnitState> statesByUnitCode;
+    private final Map<ServerLocation, String> zoneCodeByServerLocation;
 
     /**
      * Creates a cooling system from the given configuration.
@@ -41,10 +57,37 @@ public final class CoolingSystem {
         this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
         this.definitionsByUnitCode = new LinkedHashMap<>();
         this.statesByUnitCode = new LinkedHashMap<>();
+        this.zoneCodeByServerLocation = new HashMap<>();
         for (CoolingUnitDefinition definition : configuration.units()) {
             definitionsByUnitCode.put(definition.code(), definition);
             statesByUnitCode.put(definition.code(), new CoolingUnitState(definition.code(), definition.initiallyEnabled()));
         }
+        for (CoolingZoneDefinition zone : configuration.zones()) {
+            for (ServerLocation location : zone.serverLocations()) zoneCodeByServerLocation.put(location, zone.code());
+        }
+    }
+
+    /**
+     * Processes one cooling-system tick.
+     *
+     * <p>The method aggregates server heat by zone and calculates the airflow,
+     * cooling capacity, cooling deficit and air temperatures produced by the
+     * cooling units that are enabled for this tick.</p>
+     *
+     * @param input thermal load processed during the tick
+     * @return immutable cooling snapshot
+     *
+     * @throws NullPointerException if {@code input} is {@code null}
+     * @throws IllegalArgumentException if a heat load references a server
+     *         location not assigned to any configured cooling zone, or if the
+     *         same server location occurs more than once
+     */
+    public CoolingSnapshot tick(CoolingTickInput input) {
+        Objects.requireNonNull(input, "input must not be null");
+        Map<String, Double> generatedHeatByZone = aggregateGeneratedHeatByZone(input.serverHeatLoads());
+        List<CoolingUnitSnapshot> unitSnapshots = createUnitSnapshots();
+        List<CoolingZoneSnapshot> zoneSnapshots = createZoneSnapshots(generatedHeatByZone);
+        return new CoolingSnapshot(input.tickIndex(), unitSnapshots, zoneSnapshots);
     }
 
     /**
@@ -90,9 +133,6 @@ public final class CoolingSystem {
      * Enables a cooling unit.
      *
      * @param unitCode cooling-unit code
-     *
-     * @throws NullPointerException if {@code unitCode} is {@code null}
-     * @throws IllegalArgumentException if no unit has the requested code
      */
     public void enable(String unitCode) {
         setEnabled(unitCode, true);
@@ -102,9 +142,6 @@ public final class CoolingSystem {
      * Disables a cooling unit.
      *
      * @param unitCode cooling-unit code
-     *
-     * @throws NullPointerException if {@code unitCode} is {@code null}
-     * @throws IllegalArgumentException if no unit has the requested code
      */
     public void disable(String unitCode) {
         setEnabled(unitCode, false);
@@ -115,9 +152,6 @@ public final class CoolingSystem {
      *
      * @param unitCode cooling-unit code
      * @return the new enabled state
-     *
-     * @throws NullPointerException if {@code unitCode} is {@code null}
-     * @throws IllegalArgumentException if no unit has the requested code
      */
     public boolean toggle(String unitCode) {
         CoolingUnitState newState = stateOf(unitCode).toggled();
@@ -130,9 +164,6 @@ public final class CoolingSystem {
      *
      * @param unitCode cooling-unit code
      * @return current cooling-unit state
-     *
-     * @throws NullPointerException if {@code unitCode} is {@code null}
-     * @throws IllegalArgumentException if no unit has the requested code
      */
     public CoolingUnitState stateOf(String unitCode) {
         Objects.requireNonNull(unitCode, "unitCode must not be null");
@@ -146,9 +177,6 @@ public final class CoolingSystem {
      *
      * @param unitCode cooling-unit code
      * @return cooling-unit definition
-     *
-     * @throws NullPointerException if {@code unitCode} is {@code null}
-     * @throws IllegalArgumentException if no unit has the requested code
      */
     public CoolingUnitDefinition definitionOf(String unitCode) {
         Objects.requireNonNull(unitCode, "unitCode must not be null");
@@ -157,4 +185,142 @@ public final class CoolingSystem {
         return definition;
     }
 
+    private Map<String, Double> aggregateGeneratedHeatByZone(List<ServerHeatLoad> serverHeatLoads) {
+        Map<String, Double> result = new LinkedHashMap<>();
+        for (CoolingZoneDefinition zone : configuration.zones()) result.put(zone.code(), 0.0);
+        Set<ServerLocation> encounteredLocations = new HashSet<>();
+        for (ServerHeatLoad heatLoad : serverHeatLoads) {
+            ServerLocation location = heatLoad.serverLocation();
+            if (!encounteredLocations.add(location))
+                throw new IllegalArgumentException("cooling input must not contain duplicate server locations: " + location);
+            String zoneCode = zoneCodeByServerLocation.get(location);
+            if (zoneCode == null)
+                throw new IllegalArgumentException("server location is not assigned to a cooling zone: " + location);
+            result.merge(zoneCode, heatLoad.generatedHeatWatts(), Double::sum);
+        }
+        return result;
+    }
+
+    private List<CoolingUnitSnapshot> createUnitSnapshots() {
+        List<CoolingUnitSnapshot> snapshots = new ArrayList<>();
+        for (CoolingUnitDefinition definition : configuration.units()) {
+            boolean enabled = stateOf(definition.code()).enabled();
+            double currentAirflow = enabled ? definition.ratedAirflowCubicMetersPerSecond() : 0.0;
+            double currentCoolingPower = 0.0;
+            if (enabled && definition instanceof SupplyCoolingUnitDefinition supply)
+                currentCoolingPower = supply.ratedCoolingCapacityWatts();
+            snapshots.add(new CoolingUnitSnapshot(definition.code(), definition.type(), enabled, currentAirflow, currentCoolingPower));
+        }
+        return snapshots;
+    }
+
+    private List<CoolingZoneSnapshot> createZoneSnapshots(Map<String, Double> generatedHeatByZone) {
+        List<CoolingZoneSnapshot> snapshots = new ArrayList<>();
+        for (CoolingZoneDefinition zone : configuration.zones())
+            snapshots.add(createZoneSnapshot(zone, generatedHeatByZone.get(zone.code())));
+        return snapshots;
+    }
+
+    private CoolingZoneSnapshot createZoneSnapshot(CoolingZoneDefinition zone, double generatedHeatWatts) {
+        ZoneCoolingResources resources = calculateZoneCoolingResources(zone.code());
+        double usedCoolingCapacityWatts = Math.min(generatedHeatWatts, resources.availableCoolingCapacityWatts());
+        double coolingDeficitWatts = Math.max(0.0, generatedHeatWatts - resources.availableCoolingCapacityWatts());
+        double recirculationFraction = calculateRecirculationFraction(
+                resources.supplyAirflowCubicMetersPerSecond(),
+                resources.exhaustAirflowCubicMetersPerSecond()
+        );
+        ZoneTemperatures temperatures = calculateZoneTemperatures(
+                generatedHeatWatts,
+                resources.supplyAirflowCubicMetersPerSecond(),
+                resources.weightedSupplyTemperatureCelsius(),
+                recirculationFraction
+        );
+        return new CoolingZoneSnapshot(
+                zone.code(),
+                generatedHeatWatts,
+                resources.availableCoolingCapacityWatts(),
+                usedCoolingCapacityWatts,
+                coolingDeficitWatts,
+                resources.supplyAirflowCubicMetersPerSecond(),
+                resources.exhaustAirflowCubicMetersPerSecond(),
+                temperatures.inletAirTemperatureCelsius(),
+                temperatures.exhaustAirTemperatureCelsius(),
+                recirculationFraction
+        );
+    }
+
+    private ZoneCoolingResources calculateZoneCoolingResources(String zoneCode) {
+        double supplyAirflow = 0.0;
+        double exhaustAirflow = 0.0;
+        double availableCoolingCapacity = 0.0;
+        double supplyTemperatureAirflowProduct = 0.0;
+        for (CoolingUnitDefinition definition : configuration.units()) {
+            if (!stateOf(definition.code()).enabled()) continue;
+            double influenceWeight = influenceWeightFor(definition, zoneCode);
+            if (influenceWeight == 0.0) continue;
+            double influencedAirflow = definition.ratedAirflowCubicMetersPerSecond() * influenceWeight;
+            if (definition instanceof SupplyCoolingUnitDefinition supply) {
+                supplyAirflow += influencedAirflow;
+                availableCoolingCapacity += supply.ratedCoolingCapacityWatts() * influenceWeight;
+                supplyTemperatureAirflowProduct += supply.supplyAirTemperatureCelsius() * influencedAirflow;
+            } else if (definition instanceof ExhaustCoolingUnitDefinition) {
+                exhaustAirflow += influencedAirflow;
+            }
+        }
+        double weightedSupplyTemperature
+                = supplyAirflow == 0.0
+                ? configuration.options().initialInletAirTemperatureCelsius()
+                : supplyTemperatureAirflowProduct / supplyAirflow;
+        return new ZoneCoolingResources(supplyAirflow, exhaustAirflow, availableCoolingCapacity, weightedSupplyTemperature);
+    }
+
+    private double influenceWeightFor(CoolingUnitDefinition definition, String zoneCode) {
+        return definition.influences().stream()
+                .filter(influence -> influence.zoneCode().equals(zoneCode))
+                .mapToDouble(CoolingZoneInfluence::weight)
+                .findFirst()
+                .orElse(0.0);
+    }
+
+    private double calculateRecirculationFraction(double supplyAirflow, double exhaustAirflow) {
+        if (supplyAirflow == 0.0) return configuration.options().maximumRecirculationFraction();
+        double airflowImbalanceFraction = Math.max(0.0, (supplyAirflow - exhaustAirflow) / supplyAirflow);
+        return Math.min(airflowImbalanceFraction, configuration.options().maximumRecirculationFraction());
+    }
+
+    private ZoneTemperatures calculateZoneTemperatures(
+            double generatedHeatWatts,
+            double supplyAirflow,
+            double supplyAirTemperatureCelsius,
+            double recirculationFraction
+    ) {
+        if (supplyAirflow == 0.0) {
+            double fallbackTemperature = configuration.options().initialInletAirTemperatureCelsius();
+            return new ZoneTemperatures(fallbackTemperature, fallbackTemperature);
+        }
+        double airTemperatureRise =
+                generatedHeatWatts
+                        / (
+                        configuration.options()
+                                .airVolumetricHeatCapacityJoulesPerCubicMeterKelvin()
+                                * supplyAirflow
+                );
+        double inletAirTemperature = supplyAirTemperatureCelsius + (recirculationFraction/ (1.0 - recirculationFraction)) * airTemperatureRise;
+        double exhaustAirTemperature = inletAirTemperature + airTemperatureRise;
+        return new ZoneTemperatures(inletAirTemperature, exhaustAirTemperature);
+    }
+
+    private record ZoneCoolingResources(
+            double supplyAirflowCubicMetersPerSecond,
+            double exhaustAirflowCubicMetersPerSecond,
+            double availableCoolingCapacityWatts,
+            double weightedSupplyTemperatureCelsius
+    ) {
+    }
+
+    private record ZoneTemperatures(
+            double inletAirTemperatureCelsius,
+            double exhaustAirTemperatureCelsius
+    ) {
+    }
 }
