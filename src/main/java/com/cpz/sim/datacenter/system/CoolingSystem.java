@@ -160,6 +160,18 @@ public final class CoolingSystem {
     }
 
     /**
+     * Restores every cooling unit to the enabled state declared by its
+     * immutable definition.
+     *
+     * <p>Any operational changes made through enable, disable, setEnabled or
+     * toggle are discarded.</p>
+     */
+    public void reset() {
+        for (CoolingUnitDefinition definition : configuration.units())
+            statesByUnitCode.put(definition.code(), new CoolingUnitState(definition.code(), definition.initiallyEnabled()));
+    }
+
+    /**
      * Returns the current immutable state of a cooling unit.
      *
      * @param unitCode cooling-unit code

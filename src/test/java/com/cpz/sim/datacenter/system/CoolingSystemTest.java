@@ -354,4 +354,17 @@ class CoolingSystemTest {
         assertEquals(6_000.0, secondZone.usedCoolingCapacityWatts());
         assertEquals(2_000.0, secondZone.coolingDeficitWatts());
     }
+
+
+    @Test
+    void shouldResetUnitsToTheirInitiallyEnabledStates() {
+        CoolingSystem system = new CoolingSystem(configuration());
+        system.disable("SUPPLY-01");
+        system.enable("EXHAUST-01");
+        assertFalse(system.isEnabled("SUPPLY-01"));
+        assertTrue(system.isEnabled("EXHAUST-01"));
+        system.reset();
+        assertTrue(system.isEnabled("SUPPLY-01"));
+        assertFalse(system.isEnabled("EXHAUST-01"));
+    }
 }
