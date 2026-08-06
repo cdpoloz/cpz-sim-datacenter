@@ -18,13 +18,16 @@ import java.util.*;
  *
  * <p>This system reads the current server power already computed by
  * {@link PowerConsumptionSystem} and updates a representative internal server
- * temperature for each installed server. It does not model room temperature,
- * rack inlet temperature, airflow, or cooling equipment.
+ * temperature for each installed server. The external reference temperature
+ * used by the thermal model is supplied independently for every server through
+ * a {@link ServerTemperatureReferenceProvider}.</p>
  *
  * <p>Thermal capacity and heat dissipation are resolved per server from
  * {@link com.cpz.sim.datacenter.model.ServerConfig#thermalProperties()} first,
- * falling back to the global {@link TemperatureSystemOptions}. Ambient and
- * initial temperatures always come from the global options.</p>
+ * falling back to the global {@link TemperatureSystemOptions}. The initial
+ * server temperature always comes from the global options.</p>
+ *
+ * @author CPZ
  */
 public final class TemperatureSystem implements Simulatable {
 
