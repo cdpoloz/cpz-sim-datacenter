@@ -3,7 +3,9 @@ package com.cpz.sim.datacenter.system;
 import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.model.Server;
 import com.cpz.sim.datacenter.model.ServerThermalProperties;
+import com.cpz.sim.datacenter.temperature.ConstantServerTemperatureReferenceProvider;
 import com.cpz.sim.datacenter.temperature.ServerTemperatureModel;
+import com.cpz.sim.datacenter.temperature.ServerTemperatureReferenceProvider;
 import com.cpz.sim.datacenter.temperature.ServerThermalState;
 import com.cpz.sim.datacenter.temperature.TemperatureSystemOptions;
 import com.cpz.sim.foundation.engine.Simulatable;
@@ -30,22 +32,46 @@ public final class TemperatureSystem implements Simulatable {
     private final TemperatureSystemOptions options;
     private final ServerTemperatureModel temperatureModel;
     private final Map<String, ServerThermalState> thermalStates = new HashMap<>();
-    private final Map<String, TemperatureSystemOptions> effectiveOptionsByServer = new HashMap<>();
+    private final ServerTemperatureReferenceProvider temperatureReferenceProvider;
 
+    /**
+     * Creates a temperature system using the globally configured ambient
+     * temperature as the reference temperature for every server.
+     */
     public TemperatureSystem(
             Datacenter datacenter,
             TemperatureSystemOptions options,
             ServerTemperatureModel temperatureModel
     ) {
+        this(
+                datacenter,
+                options,
+                temperatureModel,
+                defaultTemperatureReferenceProvider(options)
+        );
+    }
+
+    /**
+     * Creates a temperature system using an external reference-temperature
+     * provider.
+     *
+     * <p>The provider is consulted independently for every installed server on
+     * every simulation tick.</p>
+     */
+    public TemperatureSystem(
+            Datacenter datacenter,
+            TemperatureSystemOptions options,
+            ServerTemperatureModel temperatureModel,
+            ServerTemperatureReferenceProvider temperatureReferenceProvider
+    ) {
         this.datacenter = Objects.requireNonNull(datacenter, "datacenter must not be null.");
         this.options = Objects.requireNonNull(options, "options must not be null.");
-        this.temperatureModel = Objects.requireNonNull(
-                temperatureModel,
-                "temperatureModel must not be null."
-        );
-
+        this.temperatureModel = Objects.requireNonNull(temperatureModel, "temperatureModel must not be null.");
+        this.temperatureReferenceProvider = Objects.requireNonNull(temperatureReferenceProvider, "temperatureReferenceProvider must not be null.");
         initializeThermalStates();
     }
+
+
 
     private void initializeThermalStates() {
         for (Server server : datacenter.getServers()) {
@@ -57,10 +83,7 @@ public final class TemperatureSystem implements Simulatable {
                             options.defaultInitialTemperatureCelsius()
                     )
             );
-            if (previous != null)
-                throw new IllegalArgumentException("Duplicate server code found while initializing thermal states: " + serverCode
-            );
-            effectiveOptionsByServer.put(serverCode, resolveEffectiveOptions(server));
+            if (previous != null) throw new IllegalArgumentException("Duplicate server code found while initializing thermal states: " + serverCode);
         }
     }
 
@@ -71,16 +94,13 @@ public final class TemperatureSystem implements Simulatable {
         for (Server server : datacenter.getServers()) {
             ServerThermalState state = thermalStates.computeIfAbsent(
                     server.getCode(),
-                    code -> new ServerThermalState(
-                            code,
-                            options.defaultInitialTemperatureCelsius()
-                    )
+                    code -> new ServerThermalState(code, options.defaultInitialTemperatureCelsius())
             );
             double currentPowerWatts = server.getCurrentPowerWatts();
-            TemperatureSystemOptions effectiveOptions = effectiveOptionsByServer.computeIfAbsent(
-                    server.getCode(),
-                    code -> resolveEffectiveOptions(server)
-            );
+            double referenceTemperatureCelsius = temperatureReferenceProvider.temperatureCelsiusFor(server);
+            if (!Double.isFinite(referenceTemperatureCelsius))
+                throw new IllegalStateException("temperatureReferenceProvider returned a non-finite temperature for server: " + server.getCode());
+            TemperatureSystemOptions effectiveOptions = resolveEffectiveOptions(server, referenceTemperatureCelsius);
             double nextTemperature = temperatureModel.nextTemperatureCelsius(
                     state.getTemperatureCelsius(),
                     currentPowerWatts,
@@ -91,14 +111,21 @@ public final class TemperatureSystem implements Simulatable {
         }
     }
 
-    private TemperatureSystemOptions resolveEffectiveOptions(Server server) {
+    private TemperatureSystemOptions resolveEffectiveOptions(Server server, double referenceTemperatureCelsius) {
         ServerThermalProperties thermalProperties = server.getConfig().thermalProperties();
-        if (thermalProperties == null) return options;
+        double thermalCapacityJoulesPerCelsius =
+                thermalProperties != null
+                        ? thermalProperties.thermalCapacityJoulesPerCelsius()
+                        : options.thermalCapacityJoulesPerCelsius();
+        double heatDissipationWattsPerCelsius =
+                thermalProperties != null
+                        ? thermalProperties.heatDissipationWattsPerCelsius()
+                        : options.heatDissipationWattsPerCelsius();
         return new TemperatureSystemOptions(
-                options.ambientTemperatureCelsius(),
+                referenceTemperatureCelsius,
                 options.defaultInitialTemperatureCelsius(),
-                thermalProperties.thermalCapacityJoulesPerCelsius(),
-                thermalProperties.heatDissipationWattsPerCelsius()
+                thermalCapacityJoulesPerCelsius,
+                heatDissipationWattsPerCelsius
         );
     }
 
@@ -116,5 +143,10 @@ public final class TemperatureSystem implements Simulatable {
     private static String requireNonBlank(String value, String name) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be null or blank.");
         return value;
+    }
+
+    private static ServerTemperatureReferenceProvider defaultTemperatureReferenceProvider(TemperatureSystemOptions options) {
+        Objects.requireNonNull(options, "options must not be null.");
+        return new ConstantServerTemperatureReferenceProvider(options.ambientTemperatureCelsius());
     }
 }

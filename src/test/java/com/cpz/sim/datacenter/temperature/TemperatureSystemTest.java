@@ -3,6 +3,9 @@ package com.cpz.sim.datacenter.temperature;
 
 import com.cpz.sim.datacenter.model.*;
 import com.cpz.sim.datacenter.system.TemperatureSystem;
+
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import com.cpz.sim.foundation.time.SimulationTick;
 import org.junit.jupiter.api.Test;
 
@@ -215,6 +218,73 @@ class TemperatureSystemTest {
         );
     }
 
+    @Test
+    void usesDifferentReferenceTemperatureForEachServer() {
+        RackCode rackCode = new RackCode("RACK-A01-R01");
+        Rack rack = new Rack(
+                rackCode,
+                new RackLocation("A01", "R01"),
+                42
+        );
+
+        Server firstServer = createServer(
+                rackCode,
+                "U01",
+                null,
+                HardwareStatus.OFFLINE,
+                0.0
+        );
+        Server secondServer = createServer(
+                rackCode,
+                "U02",
+                null,
+                HardwareStatus.OFFLINE,
+                0.0
+        );
+
+        ServerTemperatureReferenceProvider referenceProvider =
+                server -> server == firstServer ? 20.0 : 25.0;
+
+        TemperatureSystem system = new TemperatureSystem(
+                new Datacenter(
+                        List.of(rack),
+                        List.of(firstServer, secondServer)
+                ),
+                new TemperatureSystemOptions(
+                        24.0,
+                        30.0,
+                        5000.0,
+                        8.0
+                ),
+                new SimpleServerTemperatureModel(),
+                referenceProvider
+        );
+
+        system.update(tickAtSeconds(1, 60, 60));
+
+        // Both servers are OFFLINE, so their power is 0 W.
+        //
+        // First server:
+        // Heat loss = 8 * (30 - 20) = 80 W
+        // Delta = -80 / 5000 * 60 = -0.96 °C
+        //
+        // Second server:
+        // Heat loss = 8 * (30 - 25) = 40 W
+        // Delta = -40 / 5000 * 60 = -0.48 °C
+        assertEquals(
+                29.04,
+                system.getThermalState(firstServer.getCode())
+                        .getTemperatureCelsius(),
+                EPSILON
+        );
+        assertEquals(
+                29.52,
+                system.getThermalState(secondServer.getCode())
+                        .getTemperatureCelsius(),
+                EPSILON
+        );
+    }
+
     private static Datacenter createDatacenterWithOneServer(
             HardwareStatus status,
             double utilization
@@ -275,5 +345,167 @@ class TemperatureSystemTest {
                 Duration.ofSeconds(elapsedSeconds),
                 Duration.ofSeconds(deltaSeconds)
         );
+    }
+
+    @Test
+    void rejectsNullTemperatureReferenceProvider() {
+        Datacenter datacenter =
+                createDatacenterWithOneServer(HardwareStatus.OK, 0.75f);
+
+        NullPointerException exception = assertThrows(
+                NullPointerException.class,
+                () -> new TemperatureSystem(
+                        datacenter,
+                        TemperatureSystemOptions.defaults(),
+                        new SimpleServerTemperatureModel(),
+                        null
+                )
+        );
+
+        assertEquals(
+                "temperatureReferenceProvider must not be null.",
+                exception.getMessage()
+        );
+    }
+
+    @Test
+    void usesUpdatedReferenceTemperatureOnEachTick() {
+        Datacenter datacenter =
+                createDatacenterWithOneServer(HardwareStatus.OFFLINE, 0.0);
+
+        Server server = datacenter.getServers().getFirst();
+
+        AtomicReference<Double> referenceTemperature =
+                new AtomicReference<>(20.0);
+
+        ServerTemperatureReferenceProvider referenceProvider =
+                ignored -> referenceTemperature.get();
+
+        TemperatureSystem system = new TemperatureSystem(
+                datacenter,
+                new TemperatureSystemOptions(
+                        24.0,
+                        30.0,
+                        5000.0,
+                        8.0
+                ),
+                new SimpleServerTemperatureModel(),
+                referenceProvider
+        );
+
+        system.update(tickAtSeconds(1, 60, 60));
+
+        assertEquals(
+                29.04,
+                system.getThermalState(server.getCode())
+                        .getTemperatureCelsius(),
+                EPSILON
+        );
+
+        referenceTemperature.set(25.0);
+
+        system.update(tickAtSeconds(2, 120, 60));
+
+        assertEquals(
+                28.65216,
+                system.getThermalState(server.getCode())
+                        .getTemperatureCelsius(),
+                EPSILON
+        );
+    }
+
+    @Test
+    void consultsReferenceProviderOncePerServerAndTick() {
+        RackCode rackCode = new RackCode("RACK-A01-R01");
+        Rack rack = new Rack(
+                rackCode,
+                new RackLocation("A01", "R01"),
+                42
+        );
+
+        Server firstServer = createServer(
+                rackCode,
+                "U01",
+                null,
+                HardwareStatus.OFFLINE,
+                0.0
+        );
+        Server secondServer = createServer(
+                rackCode,
+                "U02",
+                null,
+                HardwareStatus.OFFLINE,
+                0.0
+        );
+
+        AtomicInteger invocationCount = new AtomicInteger();
+
+        ServerTemperatureReferenceProvider referenceProvider = server -> {
+            invocationCount.incrementAndGet();
+            return 24.0;
+        };
+
+        TemperatureSystem system = new TemperatureSystem(
+                new Datacenter(
+                        List.of(rack),
+                        List.of(firstServer, secondServer)
+                ),
+                TemperatureSystemOptions.defaults(),
+                new SimpleServerTemperatureModel(),
+                referenceProvider
+        );
+
+        assertEquals(0, invocationCount.get());
+
+        system.update(tickAtSeconds(1, 60, 60));
+
+        assertEquals(2, invocationCount.get());
+
+        system.update(tickAtSeconds(2, 120, 60));
+
+        assertEquals(4, invocationCount.get());
+    }
+
+    @Test
+    void rejectsNonFiniteReferenceTemperature() {
+        List<Double> nonFiniteTemperatures = List.of(
+                Double.NaN,
+                Double.POSITIVE_INFINITY,
+                Double.NEGATIVE_INFINITY
+        );
+
+        for (double nonFiniteTemperature : nonFiniteTemperatures) {
+            Datacenter datacenter =
+                    createDatacenterWithOneServer(
+                            HardwareStatus.OFFLINE,
+                            0.0
+                    );
+
+            Server server = datacenter.getServers().getFirst();
+
+            ServerTemperatureReferenceProvider referenceProvider =
+                    ignored -> nonFiniteTemperature;
+
+            TemperatureSystem system = new TemperatureSystem(
+                    datacenter,
+                    TemperatureSystemOptions.defaults(),
+                    new SimpleServerTemperatureModel(),
+                    referenceProvider
+            );
+
+            IllegalStateException exception = assertThrows(
+                    IllegalStateException.class,
+                    () -> system.update(
+                            tickAtSeconds(1, 60, 60)
+                    )
+            );
+
+            assertEquals(
+                    "temperatureReferenceProvider returned a non-finite "
+                            + "temperature for server: "
+                            + server.getCode(),
+                    exception.getMessage()
+            );
+        }
     }
 }
