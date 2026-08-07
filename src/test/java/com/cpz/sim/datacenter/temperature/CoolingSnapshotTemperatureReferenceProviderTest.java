@@ -186,6 +186,25 @@ class CoolingSnapshotTemperatureReferenceProviderTest {
         );
     }
 
+    private static CoolingSnapshot createSnapshot(
+            CoolingZoneSnapshot... zoneSnapshots
+    ) {
+        CoolingUnitSnapshot unitSnapshot =
+                new CoolingUnitSnapshot(
+                        "SUPPLY-01",
+                        CoolingUnitType.SUPPLY,
+                        true,
+                        10.0,
+                        20_000.0
+                );
+
+        return new CoolingSnapshot(
+                1L,
+                List.of(unitSnapshot),
+                List.of(zoneSnapshots)
+        );
+    }
+
     @Test
     void rejectsNullSnapshot() {
         CoolingSnapshotTemperatureReferenceProvider provider =
@@ -271,6 +290,150 @@ class CoolingSnapshotTemperatureReferenceProviderTest {
                 "server location is not assigned to a cooling zone: "
                         + unassignedLocation,
                 exception.getMessage()
+        );
+    }
+
+    @Test
+    void rejectsAssignedCoolingZoneMissingFromSnapshot() {
+        CoolingSnapshotTemperatureReferenceProvider provider =
+                new CoolingSnapshotTemperatureReferenceProvider(
+                        createConfiguration()
+                );
+
+        provider.updateSnapshot(
+                createSnapshot(
+                        "ZONE-02",
+                        19.5
+                )
+        );
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> provider.temperatureCelsiusFor(createServer())
+        );
+
+        assertEquals(
+                "cooling snapshot does not contain zone: ZONE-01",
+                exception.getMessage()
+        );
+    }
+
+    @Test
+    void rejectsNullServer() {
+        CoolingSnapshotTemperatureReferenceProvider provider =
+                new CoolingSnapshotTemperatureReferenceProvider(
+                        createConfiguration()
+                );
+
+        provider.updateSnapshot(
+                createSnapshot(
+                        "ZONE-01",
+                        19.5
+                )
+        );
+
+        NullPointerException exception = assertThrows(
+                NullPointerException.class,
+                () -> provider.temperatureCelsiusFor(null)
+        );
+
+        assertEquals(
+                "server must not be null",
+                exception.getMessage()
+        );
+    }
+
+    @Test
+    void returnsTemperatureFromEachServersAssignedCoolingZone() {
+        ServerLocation firstLocation = SERVER_LOCATION;
+
+        ServerLocation secondLocation = new ServerLocation(
+                "A02",
+                new RackCode("RACK-A02-R01"),
+                "U01"
+        );
+
+        CoolingZoneDefinition firstZone = new CoolingZoneDefinition(
+                "ZONE-01",
+                Set.of(firstLocation)
+        );
+
+        CoolingZoneDefinition secondZone = new CoolingZoneDefinition(
+                "ZONE-02",
+                Set.of(secondLocation)
+        );
+
+        SupplyCoolingUnitDefinition supply =
+                new SupplyCoolingUnitDefinition(
+                        "SUPPLY-01",
+                        10.0,
+                        20_000.0,
+                        18.0,
+                        List.of(
+                                new CoolingZoneInfluence(
+                                        firstZone.code(),
+                                        0.5
+                                ),
+                                new CoolingZoneInfluence(
+                                        secondZone.code(),
+                                        0.5
+                                )
+                        ),
+                        true
+                );
+
+        CoolingConfiguration configuration = new CoolingConfiguration(
+                List.of(firstZone, secondZone),
+                List.of(supply),
+                CoolingSystemOptions.defaults()
+        );
+
+        CoolingSnapshotTemperatureReferenceProvider provider =
+                new CoolingSnapshotTemperatureReferenceProvider(
+                        configuration
+                );
+
+        provider.updateSnapshot(
+                createSnapshot(
+                        new CoolingZoneSnapshot(
+                                "ZONE-01",
+                                5_000.0,
+                                10_000.0,
+                                5_000.0,
+                                0.0,
+                                5.0,
+                                4.0,
+                                19.0,
+                                24.0,
+                                0.1
+                        ),
+                        new CoolingZoneSnapshot(
+                                "ZONE-02",
+                                5_000.0,
+                                10_000.0,
+                                5_000.0,
+                                0.0,
+                                5.0,
+                                4.0,
+                                22.0,
+                                27.0,
+                                0.1
+                        )
+                )
+        );
+
+        assertEquals(
+                19.0,
+                provider.temperatureCelsiusFor(
+                        createServer(firstLocation)
+                )
+        );
+
+        assertEquals(
+                22.0,
+                provider.temperatureCelsiusFor(
+                        createServer(secondLocation)
+                )
         );
     }
 }
