@@ -2,12 +2,7 @@ package com.cpz.sim.datacenter.config.json;
 
 import com.cpz.sim.datacenter.config.DatacenterConfigException;
 import com.cpz.sim.datacenter.config.DatacenterConfigLoader;
-import com.cpz.sim.datacenter.config.definition.DatacenterDefinition;
-import com.cpz.sim.datacenter.config.definition.DatacenterLayoutDefinition;
-import com.cpz.sim.datacenter.config.definition.HealthSystemOptionsDefinition;
-import com.cpz.sim.datacenter.config.definition.ServerDefinition;
-import com.cpz.sim.datacenter.config.definition.ServerModelDefinition;
-import com.cpz.sim.datacenter.config.definition.TemperatureSystemOptionsDefinition;
+import com.cpz.sim.datacenter.config.definition.*;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -45,7 +40,8 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
                     readRequired(root, "serverModels", path, SERVER_MODELS_TYPE),
                     readRequired(root, "servers", path, SERVERS_TYPE),
                     readOptionalTemperature(root, path),
-                    readOptionalHealth(root, path)
+                    readOptionalHealth(root, path),
+                    readOptionalCooling(root, path)
             );
         } catch (IOException exception) {
             throw new DatacenterConfigException("Could not load datacenter config from path: " + path, exception);
@@ -66,6 +62,13 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
         if (healthNode.isNull())
             throw new DatacenterConfigException("Health block cannot be null in datacenter config: " + path);
         return JSON_MAPPER.readValue(healthNode.traverse(JSON_MAPPER), HealthSystemOptionsDefinition.class);
+    }
+
+    private static CoolingConfigDefinition readOptionalCooling(JsonNode root, Path path) throws IOException {
+        JsonNode coolingNode = root.get("cooling");
+        if (coolingNode == null) return null;
+        if (coolingNode.isNull()) throw new DatacenterConfigException("Cooling block cannot be null in datacenter config: " + path);
+        return JSON_MAPPER.readValue(coolingNode.traverse(JSON_MAPPER), CoolingConfigDefinition.class);
     }
 
     private static <T> T readRequired(JsonNode root, String propertyName, Path path, Class<T> type) throws IOException {

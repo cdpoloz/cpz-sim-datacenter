@@ -123,7 +123,9 @@ class JsonDatacenterConfigLoaderTest {
         assertEquals("U01", definition.servers().getFirst().slot());
         assertEquals(1.5f, definition.servers().getFirst().workloadFactor());
         assertNull(definition.servers().getFirst().role());
-        assertEquals(null, definition.temperature());
+        assertNull(definition.temperature());
+        assertNull(definition.health());
+        assertNull(definition.cooling());
     }
 
     @Test
@@ -131,9 +133,9 @@ class JsonDatacenterConfigLoaderTest {
         DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(
                 writeSingleServerConfig(
                         """
-                        ,
-                              "thermalCapacityJoulesPerCelsius": 7500.0,
-                              "heatDissipationWattsPerCelsius": 12.5""",
+                                ,
+                                      "thermalCapacityJoulesPerCelsius": 7500.0,
+                                      "heatDissipationWattsPerCelsius": 12.5""",
                         ""
                 )
         );
@@ -433,4 +435,191 @@ class JsonDatacenterConfigLoaderTest {
         }
     }
 
+    private Path writeConfigWithCooling(String coolingValue) throws IOException {
+        String originalJson = Files.readString(
+                resourcePath("datacenter/valid-datacenter.json")
+        );
+
+        int closingBraceIndex = originalJson.lastIndexOf('}');
+
+        if (closingBraceIndex < 0) {
+            throw new AssertionError(
+                    "Valid datacenter test resource must contain a root object"
+            );
+        }
+
+        String jsonWithCooling =
+                originalJson.substring(0, closingBraceIndex)
+                        + ",\n  \"cooling\": "
+                        + coolingValue
+                        + "\n"
+                        + originalJson.substring(closingBraceIndex);
+
+        return Files.writeString(
+                tempDirectory.resolve("datacenter-with-cooling.json"),
+                jsonWithCooling
+        );
+    }
+
+    @Test
+    void shouldLoadDatacenterDefinitionWithCoolingBlock() throws IOException {
+        Path path = writeConfigWithCooling("""
+                {
+                  "zones": [
+                    {
+                      "code": "ZONE-C01-R01",
+                      "columns": ["A01"],
+                      "rackCodes": ["R01"]
+                    }
+                  ],
+                  "supplyUnits": [
+                    {
+                      "code": "SUPPLY-01",
+                      "ratedAirflowCubicMetersPerSecond": 8.0,
+                      "ratedCoolingCapacityWatts": 100000.0,
+                      "supplyAirTemperatureCelsius": 18.0,
+                      "influences": [
+                        {
+                          "zoneCode": "ZONE-C01-R01",
+                          "weight": 1.0
+                        }
+                      ],
+                      "initiallyEnabled": false
+                    }
+                  ],
+                  "exhaustUnits": [
+                    {
+                      "code": "EXHAUST-01",
+                      "ratedAirflowCubicMetersPerSecond": 8.0,
+                      "influences": [
+                        {
+                          "zoneCode": "ZONE-C01-R01",
+                          "weight": 1.0
+                        }
+                      ],
+                      "initiallyEnabled": false
+                    }
+                  ],
+                  "options": {
+                    "airDensityKilogramsPerCubicMeter": 1.204,
+                    "airSpecificHeatJoulesPerKilogramKelvin": 1005.0,
+                    "initialInletAirTemperatureCelsius": 24.0,
+                    "maximumRecirculationFraction": 0.95
+                  }
+                }
+                """);
+
+        DatacenterDefinition definition =
+                new JsonDatacenterConfigLoader().load(path);
+
+        assertNotNull(definition.cooling());
+
+        assertEquals(1, definition.cooling().zones().size());
+        assertEquals(
+                "ZONE-C01-R01",
+                definition.cooling().zones().getFirst().code()
+        );
+        assertEquals(
+                List.of("A01"),
+                definition.cooling().zones().getFirst().columns()
+        );
+        assertEquals(
+                List.of("R01"),
+                definition.cooling().zones().getFirst().rackCodes()
+        );
+
+        assertEquals(1, definition.cooling().supplyUnits().size());
+        assertEquals(
+                "SUPPLY-01",
+                definition.cooling().supplyUnits().getFirst().code()
+        );
+        assertEquals(
+                100000.0,
+                definition.cooling()
+                        .supplyUnits()
+                        .getFirst()
+                        .ratedCoolingCapacityWatts()
+        );
+        assertEquals(
+                18.0,
+                definition.cooling()
+                        .supplyUnits()
+                        .getFirst()
+                        .supplyAirTemperatureCelsius()
+        );
+        assertEquals(
+                1.0,
+                definition.cooling()
+                        .supplyUnits()
+                        .getFirst()
+                        .influences()
+                        .getFirst()
+                        .weight()
+        );
+        assertEquals(
+                false,
+                definition.cooling()
+                        .supplyUnits()
+                        .getFirst()
+                        .initiallyEnabled()
+        );
+
+        assertEquals(1, definition.cooling().exhaustUnits().size());
+        assertEquals(
+                "EXHAUST-01",
+                definition.cooling().exhaustUnits().getFirst().code()
+        );
+
+        assertEquals(
+                1.204,
+                definition.cooling()
+                        .options()
+                        .airDensityKilogramsPerCubicMeter()
+        );
+        assertEquals(
+                1005.0,
+                definition.cooling()
+                        .options()
+                        .airSpecificHeatJoulesPerKilogramKelvin()
+        );
+        assertEquals(
+                24.0,
+                definition.cooling()
+                        .options()
+                        .initialInletAirTemperatureCelsius()
+        );
+        assertEquals(
+                0.95,
+                definition.cooling()
+                        .options()
+                        .maximumRecirculationFraction()
+        );
+    }
+
+    @Test
+    void shouldRejectExplicitNullCoolingBlock() throws IOException {
+        Path path = writeConfigWithCooling("null");
+
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(path)
+        );
+
+        assertTrue(
+                exceptionMessages(exception)
+                        .contains("Cooling block cannot be null")
+        );
+    }
+
+    @Test
+    void shouldRejectNonObjectCoolingBlock() throws IOException {
+        Path path = writeConfigWithCooling("[]");
+
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(path)
+        );
+
+        assertTrue(exceptionMessages(exception).contains("CoolingConfigDefinition"));
+    }
 }
