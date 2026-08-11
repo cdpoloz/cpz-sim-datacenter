@@ -7,11 +7,14 @@ import com.cpz.sim.datacenter.config.definition.ServerDefinition;
 import com.cpz.sim.datacenter.config.definition.ServerModelDefinition;
 import com.cpz.sim.datacenter.cooling.CoolingConfiguration;
 import com.cpz.sim.datacenter.model.Datacenter;
+import com.cpz.sim.datacenter.model.ServerLocation;
 import com.cpz.sim.datacenter.model.ServerRole;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+
 import com.cpz.sim.datacenter.config.definition.CoolingConfigDefinition;
 import com.cpz.sim.datacenter.config.definition.CoolingSystemOptionsDefinition;
 import com.cpz.sim.datacenter.config.definition.CoolingZoneConfigDefinition;
@@ -295,4 +298,272 @@ class CoolingConfigurationFactoryTest {
                         .maximumRecirculationFraction()
         );
     }
+
+    private static DatacenterDefinition multiZoneDefinition() {
+        List<CoolingZoneInfluenceConfigDefinition> influences =
+                List.of(
+                        new CoolingZoneInfluenceConfigDefinition(
+                                "ZONE-C01",
+                                0.5
+                        ),
+                        new CoolingZoneInfluenceConfigDefinition(
+                                "ZONE-C02-R02",
+                                0.5
+                        )
+                );
+
+        CoolingConfigDefinition cooling =
+                new CoolingConfigDefinition(
+                        List.of(
+                                new CoolingZoneConfigDefinition(
+                                        "ZONE-C01",
+                                        List.of("C01"),
+                                        List.of("R01", "R02")
+                                ),
+                                new CoolingZoneConfigDefinition(
+                                        "ZONE-C02-R02",
+                                        List.of("C02"),
+                                        List.of("R02")
+                                )
+                        ),
+                        List.of(
+                                new SupplyCoolingUnitConfigDefinition(
+                                        "SUPPLY-01",
+                                        8.0,
+                                        100_000.0,
+                                        18.0,
+                                        influences,
+                                        true
+                                )
+                        ),
+                        List.of(
+                                new ExhaustCoolingUnitConfigDefinition(
+                                        "EXHAUST-01",
+                                        8.0,
+                                        influences,
+                                        true
+                                )
+                        ),
+                        new CoolingSystemOptionsDefinition(
+                                1.2,
+                                1_000.0,
+                                22.0,
+                                0.8
+                        )
+                );
+
+        return new DatacenterDefinition(
+                "Multi-zone Datacenter",
+                new DatacenterLayoutDefinition(
+                        List.of(
+                                new RackDefinition(
+                                        "R01",
+                                        "C01",
+                                        "R01",
+                                        List.of("S01")
+                                ),
+                                new RackDefinition(
+                                        "R02",
+                                        "C01",
+                                        "R02",
+                                        List.of("S01")
+                                ),
+                                new RackDefinition(
+                                        "R01",
+                                        "C02",
+                                        "R01",
+                                        List.of("S01")
+                                ),
+                                new RackDefinition(
+                                        "R02",
+                                        "C02",
+                                        "R02",
+                                        List.of("S01")
+                                )
+                        )
+                ),
+                List.of(
+                        new ServerModelDefinition(
+                                "SRV-DEMO-001",
+                                "CPZ",
+                                "Demo Server",
+                                100.0f,
+                                300.0f
+                        )
+                ),
+                List.of(
+                        new ServerDefinition(
+                                "C01",
+                                "R01",
+                                "S01",
+                                "SRV-DEMO-001",
+                                "OK",
+                                ServerRole.GENERAL_PURPOSE,
+                                1.0f
+                        ),
+                        new ServerDefinition(
+                                "C01",
+                                "R02",
+                                "S01",
+                                "SRV-DEMO-001",
+                                "OK",
+                                ServerRole.GENERAL_PURPOSE,
+                                1.0f
+                        ),
+                        new ServerDefinition(
+                                "C02",
+                                "R01",
+                                "S01",
+                                "SRV-DEMO-001",
+                                "OK",
+                                ServerRole.GENERAL_PURPOSE,
+                                1.0f
+                        ),
+                        new ServerDefinition(
+                                "C02",
+                                "R02",
+                                "S01",
+                                "SRV-DEMO-001",
+                                "OK",
+                                ServerRole.GENERAL_PURPOSE,
+                                1.0f
+                        )
+                ),
+                null,
+                null,
+                cooling
+        );
+    }
+
+    @Test
+    void shouldAssignOnlyMatchingServersToEachCoolingZone() {
+        DatacenterDefinition definition =
+                multiZoneDefinition();
+
+        Datacenter datacenter =
+                createDatacenter(definition);
+
+        CoolingConfiguration configuration =
+                new CoolingConfigurationFactory()
+                        .create(definition, datacenter)
+                        .orElseThrow();
+
+        assertEquals(2, configuration.zones().size());
+
+        assertEquals(
+                "ZONE-C01",
+                configuration.zones().get(0).code()
+        );
+
+        assertEquals(
+                Set.of(
+                        new ServerLocation("C01", "R01", "S01"),
+                        new ServerLocation("C01", "R02", "S01")
+                ),
+                configuration.zones()
+                        .get(0)
+                        .serverLocations()
+        );
+
+        assertEquals(
+                "ZONE-C02-R02",
+                configuration.zones().get(1).code()
+        );
+
+        assertEquals(
+                Set.of(
+                        new ServerLocation("C02", "R02", "S01")
+                ),
+                configuration.zones()
+                        .get(1)
+                        .serverLocations()
+        );
+    }
+
+    private static DatacenterDefinition definitionWithEmptyCoolingZone() {
+        CoolingZoneInfluenceConfigDefinition influence =
+                new CoolingZoneInfluenceConfigDefinition(
+                        "ZONE-EMPTY",
+                        1.0
+                );
+
+        CoolingConfigDefinition cooling =
+                new CoolingConfigDefinition(
+                        List.of(
+                                new CoolingZoneConfigDefinition(
+                                        "ZONE-EMPTY",
+                                        List.of("C01"),
+                                        List.of("R02")
+                                )
+                        ),
+                        List.of(
+                                new SupplyCoolingUnitConfigDefinition(
+                                        "SUPPLY-01",
+                                        8.0,
+                                        100_000.0,
+                                        18.0,
+                                        List.of(influence),
+                                        true
+                                )
+                        ),
+                        List.of(
+                                new ExhaustCoolingUnitConfigDefinition(
+                                        "EXHAUST-01",
+                                        8.0,
+                                        List.of(influence),
+                                        true
+                                )
+                        ),
+                        new CoolingSystemOptionsDefinition(
+                                1.2,
+                                1_000.0,
+                                22.0,
+                                0.8
+                        )
+                );
+
+        return new DatacenterDefinition(
+                "Datacenter with empty cooling zone",
+                new DatacenterLayoutDefinition(
+                        List.of(
+                                new RackDefinition(
+                                        "R01",
+                                        "C01",
+                                        "R01",
+                                        List.of("S01")
+                                ),
+                                new RackDefinition(
+                                        "R02",
+                                        "C01",
+                                        "R02",
+                                        List.of("S01")
+                                )
+                        )
+                ),
+                List.of(
+                        new ServerModelDefinition(
+                                "SRV-DEMO-001",
+                                "CPZ",
+                                "Demo Server",
+                                100.0f,
+                                300.0f
+                        )
+                ),
+                List.of(
+                        new ServerDefinition(
+                                "C01",
+                                "R01",
+                                "S01",
+                                "SRV-DEMO-001",
+                                "OK",
+                                ServerRole.GENERAL_PURPOSE,
+                                1.0f
+                        )
+                ),
+                null,
+                null,
+                cooling
+        );
+    }
+
 }
