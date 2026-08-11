@@ -1629,4 +1629,359 @@ class DatacenterConfigValidatorTest {
                 )
         );
     }
+
+    private static CoolingConfigDefinition coolingWithExhaustUnits(
+            List<ExhaustCoolingUnitConfigDefinition> exhaustUnits
+    ) {
+        return new CoolingConfigDefinition(
+                List.of(coolingZone()),
+                List.of(supplyUnit()),
+                exhaustUnits,
+                coolingOptions()
+        );
+    }
+
+    @Test
+    void shouldRejectNullCoolingExhaustUnit() {
+        CoolingConfigDefinition cooling =
+                coolingWithExhaustUnits(
+                        java.util.Collections.singletonList(null)
+                );
+
+        assertThrows(
+                DatacenterConfigValidationException.class,
+                () -> validator.validate(
+                        definitionWithCooling(cooling)
+                )
+        );
+    }
+
+    @Test
+    void shouldRejectBlankCoolingExhaustUnitCode() {
+        ExhaustCoolingUnitConfigDefinition unit =
+                new ExhaustCoolingUnitConfigDefinition(
+                        " ",
+                        8.0,
+                        List.of(coolingInfluence()),
+                        false
+                );
+
+        assertThrows(
+                DatacenterConfigValidationException.class,
+                () -> validator.validate(
+                        definitionWithCooling(
+                                coolingWithExhaustUnits(List.of(unit))
+                        )
+                )
+        );
+    }
+
+    @Test
+    void shouldRejectDuplicatedCoolingExhaustUnitCode() {
+        ExhaustCoolingUnitConfigDefinition first =
+                new ExhaustCoolingUnitConfigDefinition(
+                        "EXHAUST-01",
+                        8.0,
+                        List.of(coolingInfluence()),
+                        false
+                );
+
+        ExhaustCoolingUnitConfigDefinition second =
+                new ExhaustCoolingUnitConfigDefinition(
+                        "EXHAUST-01",
+                        6.0,
+                        List.of(coolingInfluence()),
+                        true
+                );
+
+        assertThrows(
+                DatacenterConfigValidationException.class,
+                () -> validator.validate(
+                        definitionWithCooling(
+                                coolingWithExhaustUnits(
+                                        List.of(first, second)
+                                )
+                        )
+                )
+        );
+    }
+
+    @Test
+    void shouldRejectInvalidCoolingExhaustUnitAirflow() {
+        double[] invalidValues = {
+                0.0,
+                -1.0,
+                Double.NaN,
+                Double.POSITIVE_INFINITY,
+                Double.NEGATIVE_INFINITY
+        };
+
+        for (double invalidValue : invalidValues) {
+            ExhaustCoolingUnitConfigDefinition unit =
+                    new ExhaustCoolingUnitConfigDefinition(
+                            "EXHAUST-01",
+                            invalidValue,
+                            List.of(coolingInfluence()),
+                            false
+                    );
+
+            assertThrows(
+                    DatacenterConfigValidationException.class,
+                    () -> validator.validate(
+                            definitionWithCooling(
+                                    coolingWithExhaustUnits(
+                                            List.of(unit)
+                                    )
+                            )
+                    ),
+                    "Expected rejection for exhaust airflow: "
+                            + invalidValue
+            );
+        }
+    }
+
+    private static ExhaustCoolingUnitConfigDefinition exhaustUnitWithInfluences(
+            List<CoolingZoneInfluenceConfigDefinition> influences
+    ) {
+        return new ExhaustCoolingUnitConfigDefinition(
+                "EXHAUST-01",
+                8.0,
+                influences,
+                false
+        );
+    }
+
+    @Test
+    void shouldRejectNullCoolingExhaustUnitInfluences() {
+        ExhaustCoolingUnitConfigDefinition unit =
+                exhaustUnitWithInfluences(null);
+
+        assertThrows(
+                DatacenterConfigValidationException.class,
+                () -> validator.validate(
+                        definitionWithCooling(
+                                coolingWithExhaustUnits(List.of(unit))
+                        )
+                )
+        );
+    }
+
+    @Test
+    void shouldRejectEmptyCoolingExhaustUnitInfluences() {
+        ExhaustCoolingUnitConfigDefinition unit =
+                exhaustUnitWithInfluences(List.of());
+
+        assertThrows(
+                DatacenterConfigValidationException.class,
+                () -> validator.validate(
+                        definitionWithCooling(
+                                coolingWithExhaustUnits(List.of(unit))
+                        )
+                )
+        );
+    }
+
+    @Test
+    void shouldRejectNullCoolingExhaustUnitInfluence() {
+        ExhaustCoolingUnitConfigDefinition unit =
+                exhaustUnitWithInfluences(
+                        java.util.Collections.singletonList(null)
+                );
+
+        assertThrows(
+                DatacenterConfigValidationException.class,
+                () -> validator.validate(
+                        definitionWithCooling(
+                                coolingWithExhaustUnits(List.of(unit))
+                        )
+                )
+        );
+    }
+
+    @Test
+    void shouldRejectBlankCoolingExhaustInfluenceZoneCode() {
+        CoolingZoneInfluenceConfigDefinition influence =
+                new CoolingZoneInfluenceConfigDefinition(
+                        " ",
+                        1.0
+                );
+
+        ExhaustCoolingUnitConfigDefinition unit =
+                exhaustUnitWithInfluences(List.of(influence));
+
+        assertThrows(
+                DatacenterConfigValidationException.class,
+                () -> validator.validate(
+                        definitionWithCooling(
+                                coolingWithExhaustUnits(List.of(unit))
+                        )
+                )
+        );
+    }
+
+    @Test
+    void shouldRejectUnknownCoolingExhaustInfluenceZone() {
+        CoolingZoneInfluenceConfigDefinition influence =
+                new CoolingZoneInfluenceConfigDefinition(
+                        "UNKNOWN-ZONE",
+                        1.0
+                );
+
+        ExhaustCoolingUnitConfigDefinition unit =
+                exhaustUnitWithInfluences(List.of(influence));
+
+        assertThrows(
+                DatacenterConfigValidationException.class,
+                () -> validator.validate(
+                        definitionWithCooling(
+                                coolingWithExhaustUnits(List.of(unit))
+                        )
+                )
+        );
+    }
+
+    @Test
+    void shouldRejectDuplicatedCoolingExhaustInfluenceZone() {
+        String existingZoneCode = coolingZone().code();
+
+        CoolingZoneInfluenceConfigDefinition first =
+                new CoolingZoneInfluenceConfigDefinition(
+                        existingZoneCode,
+                        0.5
+                );
+
+        CoolingZoneInfluenceConfigDefinition second =
+                new CoolingZoneInfluenceConfigDefinition(
+                        existingZoneCode,
+                        0.5
+                );
+
+        ExhaustCoolingUnitConfigDefinition unit =
+                exhaustUnitWithInfluences(
+                        List.of(first, second)
+                );
+
+        assertThrows(
+                DatacenterConfigValidationException.class,
+                () -> validator.validate(
+                        definitionWithCooling(
+                                coolingWithExhaustUnits(List.of(unit))
+                        )
+                )
+        );
+    }
+
+    @Test
+    void shouldRejectInvalidCoolingExhaustInfluenceWeight() {
+        String existingZoneCode = coolingZone().code();
+
+        double[] invalidValues = {
+                0.0,
+                -1.0,
+                Double.NaN,
+                Double.POSITIVE_INFINITY,
+                Double.NEGATIVE_INFINITY
+        };
+
+        for (double invalidValue : invalidValues) {
+            CoolingZoneInfluenceConfigDefinition influence =
+                    new CoolingZoneInfluenceConfigDefinition(
+                            existingZoneCode,
+                            invalidValue
+                    );
+
+            ExhaustCoolingUnitConfigDefinition unit =
+                    exhaustUnitWithInfluences(List.of(influence));
+
+            assertThrows(
+                    DatacenterConfigValidationException.class,
+                    () -> validator.validate(
+                            definitionWithCooling(
+                                    coolingWithExhaustUnits(List.of(unit))
+                            )
+                    ),
+                    "Expected rejection for exhaust influence weight: "
+                            + invalidValue
+            );
+        }
+    }
+
+    @Test
+    void shouldRejectCoolingExhaustInfluenceWeightsNotSummingToOne() {
+        CoolingZoneInfluenceConfigDefinition influence =
+                new CoolingZoneInfluenceConfigDefinition(
+                        coolingZone().code(),
+                        0.75
+                );
+
+        ExhaustCoolingUnitConfigDefinition unit =
+                exhaustUnitWithInfluences(List.of(influence));
+
+        assertThrows(
+                DatacenterConfigValidationException.class,
+                () -> validator.validate(
+                        definitionWithCooling(
+                                coolingWithExhaustUnits(List.of(unit))
+                        )
+                )
+        );
+    }
+
+    @Test
+    void shouldAcceptValidCoolingExhaustInfluence() {
+        CoolingZoneInfluenceConfigDefinition influence =
+                new CoolingZoneInfluenceConfigDefinition(
+                        coolingZone().code(),
+                        1.0
+                );
+
+        ExhaustCoolingUnitConfigDefinition unit =
+                exhaustUnitWithInfluences(List.of(influence));
+
+        assertDoesNotThrow(
+                () -> validator.validate(
+                        definitionWithCooling(
+                                coolingWithExhaustUnits(List.of(unit))
+                        )
+                )
+        );
+    }
+
+    @Test
+    void shouldRejectCoolingUnitCodeSharedBySupplyAndExhaust() {
+        String sharedCode = "COOLING-UNIT-01";
+
+        SupplyCoolingUnitConfigDefinition supply =
+                new SupplyCoolingUnitConfigDefinition(
+                        sharedCode,
+                        8.0,
+                        100_000.0,
+                        18.0,
+                        List.of(coolingInfluence()),
+                        false
+                );
+
+        ExhaustCoolingUnitConfigDefinition exhaust =
+                new ExhaustCoolingUnitConfigDefinition(
+                        sharedCode,
+                        8.0,
+                        List.of(coolingInfluence()),
+                        false
+                );
+
+        CoolingConfigDefinition cooling =
+                new CoolingConfigDefinition(
+                        List.of(coolingZone()),
+                        List.of(supply),
+                        List.of(exhaust),
+                        coolingOptions()
+                );
+
+        assertThrows(
+                DatacenterConfigValidationException.class,
+                () -> validator.validate(
+                        definitionWithCooling(cooling)
+                )
+        );
+    }
 }

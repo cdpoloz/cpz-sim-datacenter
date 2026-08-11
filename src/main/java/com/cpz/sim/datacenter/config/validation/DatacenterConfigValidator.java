@@ -326,6 +326,9 @@ public final class DatacenterConfigValidator {
         validateCoolingOptions(definition.cooling(), errors);
         validateCoolingSupplyUnits(definition.cooling(), errors);
         validateCoolingSupplyUnitInfluences(definition.cooling(), errors);
+        validateCoolingExhaustUnits(definition.cooling(), errors);
+        validateCoolingExhaustUnitInfluences(definition.cooling(), errors);
+        validateCoolingUnitCodesGloballyUnique(definition.cooling(), errors);
         validateCoolingZones(definition.cooling(), layout, errors);
         validateCoolingZoneMembership(definition.cooling(), definition.servers(), layout, errors);
         if (!errors.isEmpty()) throw new DatacenterConfigValidationException(String.join(System.lineSeparator(), errors));
@@ -474,6 +477,67 @@ public final class DatacenterConfigValidator {
             errors.add(context + " must have finite ratedCoolingCapacityWatts > 0");
         if (!Double.isFinite(unit.supplyAirTemperatureCelsius()))
             errors.add(context + " must have finite supplyAirTemperatureCelsius");
+    }
+
+    private static void validateCoolingExhaustUnits(CoolingConfigDefinition cooling, List<String> errors) {
+        if (cooling == null || cooling.exhaustUnits() == null) return;
+        Set<String> unitCodes = new HashSet<>();
+        for (int i = 0; i < cooling.exhaustUnits().size(); i++) {
+            ExhaustCoolingUnitConfigDefinition unit = cooling.exhaustUnits().get(i);
+            if (unit == null) {
+                errors.add("Cooling exhaust unit at index " + i + " cannot be null");
+                continue;
+            }
+            String context = "Cooling exhaust unit at index " + i;
+            validateCoolingExhaustUnitCode(unit, context, unitCodes, errors);
+            validateCoolingExhaustUnitMagnitudes(unit, context, errors);
+        }
+    }
+
+    private static void validateCoolingExhaustUnitCode(
+            ExhaustCoolingUnitConfigDefinition unit,
+            String context,
+            Set<String> unitCodes,
+            List<String> errors
+    ) {
+        if (isBlank(unit.code())) {
+            errors.add(context + " must have a non-blank code");
+            return;
+        }
+        if (!unitCodes.add(unit.code())) errors.add("Duplicated cooling exhaust unit code: " + unit.code());
+    }
+
+    private static void validateCoolingExhaustUnitMagnitudes(
+            ExhaustCoolingUnitConfigDefinition unit,
+            String context,
+            List<String> errors
+    ) {
+        if (!Double.isFinite(unit.ratedAirflowCubicMetersPerSecond()) || unit.ratedAirflowCubicMetersPerSecond() <= 0.0)
+            errors.add(context + " must have finite ratedAirflowCubicMetersPerSecond > 0");
+    }
+
+    private static void validateCoolingExhaustUnitInfluences(CoolingConfigDefinition cooling, List<String> errors) {
+        if (cooling == null || cooling.exhaustUnits() == null || cooling.zones() == null) return;
+        Set<String> zoneCodes = validCoolingZoneCodes(cooling.zones());
+        for (int unitIndex = 0; unitIndex < cooling.exhaustUnits().size(); unitIndex++) {
+            ExhaustCoolingUnitConfigDefinition unit = cooling.exhaustUnits().get(unitIndex);
+            if (unit == null) continue;
+            String context = "Cooling exhaust unit at index " + unitIndex;
+            validateCoolingInfluences(unit.influences(), zoneCodes, context, errors);
+        }
+    }
+
+    private static void validateCoolingUnitCodesGloballyUnique(CoolingConfigDefinition cooling, List<String> errors) {
+        if (cooling == null || cooling.supplyUnits() == null || cooling.exhaustUnits() == null) return;
+        Set<String> supplyUnitCodes = new HashSet<>();
+        for (SupplyCoolingUnitConfigDefinition unit : cooling.supplyUnits())
+            if (unit != null && !isBlank(unit.code())) supplyUnitCodes.add(unit.code());
+        Set<String> reportedCodes = new HashSet<>();
+        for (ExhaustCoolingUnitConfigDefinition unit : cooling.exhaustUnits()) {
+            if (unit == null || isBlank(unit.code())) continue;
+            if (supplyUnitCodes.contains(unit.code()) && reportedCodes.add(unit.code()))
+                errors.add("Duplicated cooling unit code across supply and exhaust units: " + unit.code());
+        }
     }
 
     private static void validateCoolingZones(
