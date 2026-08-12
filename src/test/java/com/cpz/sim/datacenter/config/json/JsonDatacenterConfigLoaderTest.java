@@ -13,7 +13,12 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
-
+import com.cpz.sim.datacenter.cooling.CoolingTickInput;
+import com.cpz.sim.datacenter.cooling.ServerHeatLoad;
+import com.cpz.sim.datacenter.cooling.ServerHeatLoadProvider;
+import com.cpz.sim.datacenter.snapshot.CoolingSnapshot;
+import com.cpz.sim.datacenter.snapshot.CoolingZoneSnapshot;
+import com.cpz.sim.datacenter.system.CoolingSystem;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
@@ -793,5 +798,108 @@ class JsonDatacenterConfigLoaderTest {
         );
 
         assertTrue(exceptionMessages(exception).contains("CoolingConfigDefinition"));
+    }
+
+    @Test
+    void shouldExecuteCoolingTickFromLoadedJson()
+            throws IOException {
+        Path path = writeValidCoolingConfig();
+
+        DatacenterDefinition definition =
+                new JsonDatacenterConfigLoader().load(path);
+
+        Datacenter datacenter =
+                new DatacenterFactory().create(definition);
+
+        CoolingConfiguration configuration =
+                new CoolingConfigurationFactory()
+                        .create(definition, datacenter)
+                        .orElseThrow();
+
+        CoolingSystem coolingSystem =
+                new CoolingSystem(configuration);
+
+        List<ServerHeatLoad> heatLoads =
+                new ServerHeatLoadProvider(datacenter)
+                        .createHeatLoads();
+
+        CoolingSnapshot snapshot =
+                coolingSystem.tick(
+                        new CoolingTickInput(
+                                1L,
+                                heatLoads
+                        )
+                );
+
+        assertEquals(1L, snapshot.tickIndex());
+        assertEquals(2, heatLoads.size());
+        assertEquals(2, snapshot.units().size());
+        assertEquals(1, snapshot.zones().size());
+
+        assertTrue(
+                snapshot.units()
+                        .get(0)
+                        .enabled()
+        );
+
+        assertFalse(
+                snapshot.units()
+                        .get(1)
+                        .enabled()
+        );
+
+        CoolingZoneSnapshot zone =
+                snapshot.zones().getFirst();
+
+        double expectedGeneratedHeatWatts =
+                heatLoads.stream()
+                        .mapToDouble(
+                                ServerHeatLoad::generatedHeatWatts
+                        )
+                        .sum();
+
+        assertEquals("ZONE-A01-R01", zone.zoneCode());
+
+        assertEquals(
+                expectedGeneratedHeatWatts,
+                zone.generatedHeatWatts()
+        );
+
+        assertEquals(
+                100_000.0,
+                zone.availableCoolingCapacityWatts()
+        );
+
+        assertEquals(
+                Math.min(
+                        expectedGeneratedHeatWatts,
+                        100_000.0
+                ),
+                zone.usedCoolingCapacityWatts()
+        );
+
+        assertEquals(
+                Math.max(
+                        0.0,
+                        expectedGeneratedHeatWatts - 100_000.0
+                ),
+                zone.coolingDeficitWatts()
+        );
+
+        assertEquals(
+                8.0,
+                zone.supplyAirflowCubicMetersPerSecond()
+        );
+
+        assertEquals(
+                0.0,
+                zone.exhaustAirflowCubicMetersPerSecond()
+        );
+
+        assertEquals(
+                0.95,
+                zone.recirculationFraction(),
+                1.0e-9
+        );
     }
 }
