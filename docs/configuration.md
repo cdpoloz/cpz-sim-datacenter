@@ -33,6 +33,7 @@ Main fields:
 - `servers`: servers installed in specific racks and slots.
 - `temperature`: optional thermal model configuration.
 - `health`: optional server health threshold configuration.
+- `cooling`: optional cooling-system configuration.
 
 ## layout.racks
 
@@ -342,7 +343,8 @@ Rules:
 - `heatDissipationWattsPerCelsius` must be finite and `>= 0`
 
 This configuration feeds the simplified internal server temperature model only.
-It does not enable room temperature, rack inlet, cooling, or airflow modeling.
+By itself it does not add room temperature, rack inlet, or airflow behavior,
+and it does not replace the separate top-level `cooling` block.
 For each server, `TemperatureSystem` resolves the thermal capacity and heat
 dissipation with this precedence:
 
@@ -353,6 +355,205 @@ dissipation with this precedence:
 global. A missing top-level `temperature` block uses
 `TemperatureSystemOptions.defaults()`, including when a server model overrides
 the two model-specific properties.
+
+## Cooling Configuration
+
+An optional top-level `cooling` block configures cooling zones, cooling units,
+and physical options. If it is omitted, JSON loading and datacenter
+construction remain compatible, and
+`CoolingConfigurationFactory.create(definition, datacenter)` returns
+`Optional.empty()`.
+
+Current shape:
+
+```json
+{
+  "cooling": {
+    "zones": [
+      {
+        "code": "ZONE-C01",
+        "columns": ["C01"],
+        "rackCodes": ["R01", "R02"]
+      },
+      {
+        "code": "ZONE-C02",
+        "columns": ["C02"],
+        "rackCodes": ["R01"]
+      }
+    ],
+    "supplyUnits": [
+      {
+        "code": "SUPPLY-01",
+        "ratedAirflowCubicMetersPerSecond": 8.0,
+        "ratedCoolingCapacityWatts": 100000.0,
+        "supplyAirTemperatureCelsius": 18.0,
+        "influences": [
+          { "zoneCode": "ZONE-C01", "weight": 0.75 },
+          { "zoneCode": "ZONE-C02", "weight": 0.25 }
+        ],
+        "initiallyEnabled": true
+      }
+    ],
+    "exhaustUnits": [
+      {
+        "code": "EXHAUST-01",
+        "ratedAirflowCubicMetersPerSecond": 6.0,
+        "influences": [
+          { "zoneCode": "ZONE-C01", "weight": 0.50 },
+          { "zoneCode": "ZONE-C02", "weight": 0.50 }
+        ],
+        "initiallyEnabled": false
+      }
+    ],
+    "options": {
+      "airDensityKilogramsPerCubicMeter": 1.204,
+      "airSpecificHeatJoulesPerKilogramKelvin": 1005.0,
+      "initialInletAirTemperatureCelsius": 24.0,
+      "maximumRecirculationFraction": 0.95
+    }
+  }
+}
+```
+
+### cooling.zones
+
+Each zone is defined as:
+
+```json
+{
+  "code": "ZONE-C01",
+  "columns": ["C01"],
+  "rackCodes": ["R01", "R02"]
+}
+```
+
+Fields:
+
+- `code`: unique cooling-zone code.
+- `columns`: datacenter columns included in the zone.
+- `rackCodes`: rack codes included in the zone.
+
+Rules:
+
+- the whole `zones` list is required when `cooling` is present
+- `zones` cannot be null or empty
+- zone entries cannot be null
+- `code` cannot be null, blank, or duplicated
+- `columns` cannot be null or empty
+- `rackCodes` cannot be null or empty
+- `columns` values must be non-blank, unique, and reference existing layout columns
+- `rackCodes` values must be non-blank and unique
+- every `column + rackCode` combination declared by the zone must reference an existing rack
+- `rackCodes` uses the rack `code`, not the rack `row`
+- runtime membership is built from installed servers whose location matches one
+  configured column and one configured rack code
+- a valid zone must contain at least one installed server
+- one installed server location cannot belong to more than one cooling zone
+
+### cooling.supplyUnits
+
+Each supply unit is defined as:
+
+```json
+{
+  "code": "SUPPLY-01",
+  "ratedAirflowCubicMetersPerSecond": 8.0,
+  "ratedCoolingCapacityWatts": 100000.0,
+  "supplyAirTemperatureCelsius": 18.0,
+  "influences": [
+    { "zoneCode": "ZONE-C01", "weight": 0.75 },
+    { "zoneCode": "ZONE-C02", "weight": 0.25 }
+  ],
+  "initiallyEnabled": true
+}
+```
+
+Rules:
+
+- the `supplyUnits` list is required when `cooling` is present
+- the list may be empty only if `exhaustUnits` is not empty
+- unit entries cannot be null
+- `code` cannot be null, blank, or duplicated
+- `ratedAirflowCubicMetersPerSecond` must be finite and `> 0`
+- `ratedCoolingCapacityWatts` must be finite and `> 0`
+- `supplyAirTemperatureCelsius` must be finite
+- `influences` cannot be null or empty
+- `initiallyEnabled` is required and is a JSON boolean
+
+### cooling.exhaustUnits
+
+Each exhaust unit is defined as:
+
+```json
+{
+  "code": "EXHAUST-01",
+  "ratedAirflowCubicMetersPerSecond": 6.0,
+  "influences": [
+    { "zoneCode": "ZONE-C01", "weight": 0.50 },
+    { "zoneCode": "ZONE-C02", "weight": 0.50 }
+  ],
+  "initiallyEnabled": false
+}
+```
+
+Rules:
+
+- the `exhaustUnits` list is required when `cooling` is present
+- the list may be empty only if `supplyUnits` is not empty
+- unit entries cannot be null
+- `code` cannot be null, blank, or duplicated
+- `ratedAirflowCubicMetersPerSecond` must be finite and `> 0`
+- `influences` cannot be null or empty
+- `initiallyEnabled` is required and is a JSON boolean
+- exhaust units do not declare cooling capacity or supply-air temperature
+
+### cooling unit influences
+
+Each influence is defined as:
+
+```json
+{
+  "zoneCode": "ZONE-C01",
+  "weight": 0.75
+}
+```
+
+Rules:
+
+- influence entries cannot be null
+- `zoneCode` must be non-blank
+- `zoneCode` must reference a known zone inside the same `cooling.zones` list
+- one unit cannot repeat the same `zoneCode`
+- `weight` must be finite and `> 0`
+- for each unit, the sum of all influence weights must be exactly `1.0`
+
+### cooling.options
+
+`options` is required when `cooling` is present:
+
+```json
+{
+  "airDensityKilogramsPerCubicMeter": 1.204,
+  "airSpecificHeatJoulesPerKilogramKelvin": 1005.0,
+  "initialInletAirTemperatureCelsius": 24.0,
+  "maximumRecirculationFraction": 0.95
+}
+```
+
+Rules:
+
+- `options` cannot be null
+- all four fields are currently required when the block is present
+- `airDensityKilogramsPerCubicMeter` must be finite and `> 0`
+- `airSpecificHeatJoulesPerKilogramKelvin` must be finite and `> 0`
+- `initialInletAirTemperatureCelsius` must be finite
+- `maximumRecirculationFraction` must be finite and within `[0.0, 1.0]`
+
+This block becomes `CoolingSystemOptions` at runtime. The backend does not add
+JSON defaults during loading; values are taken from the configuration exactly as
+declared. The separate Java helper `CoolingSystemOptions.defaults()` is useful
+for programmatic construction, but it is not applied automatically to a partial
+or missing JSON `cooling.options` block.
 
 ## Server Health Configuration
 

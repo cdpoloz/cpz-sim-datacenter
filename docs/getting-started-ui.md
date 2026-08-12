@@ -36,11 +36,18 @@ mvn clean install
 
 1. Load a JSON file with `JsonDatacenterConfigLoader`.
 2. Build the domain with `DatacenterFactory`.
-3. Create a `NoiseWorkloadSource` with `FractalNoise`.
-4. Register systems in `SimulationEngine` in the correct order.
-5. Run ticks.
-6. Convert each resulting tick to one or more snapshots such as `EnergyConsumptionSnapshot`, `TemperatureSnapshot`, and `HealthSnapshot`.
-7. Render the UI from rack slot definitions and snapshots, not from direct domain mutations.
+3. Create `CoolingConfiguration` from the same JSON definition with `CoolingConfigurationFactory`.
+4. Create a `NoiseWorkloadSource` with `FractalNoise`.
+5. Register systems in `SimulationEngine` in the correct order.
+6. Run ticks.
+7. If cooling is configured, create server heat loads, execute `CoolingSystem`, and propagate the resulting `CoolingSnapshot`.
+8. Convert each resulting tick to one or more snapshots such as `EnergyConsumptionSnapshot`, `TemperatureSnapshot`, `HealthSnapshot`, and optionally `CoolingSnapshot`.
+9. Render the UI from rack slot definitions and snapshots, not from direct domain mutations.
+
+The JSON document may belong to a specific UI or client configuration. The UI
+may own that file, but the backend is responsible for interpreting it,
+validating it, building the runtime model, and executing the cooling behavior.
+`cpz-sim-datacenter` must remain independent from any particular UI.
 
 Example:
 
@@ -48,6 +55,8 @@ Example:
 Path configPath = Path.of("data/config/demo-datacenter-medium.json");
 DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(configPath);
 Datacenter datacenter = new DatacenterFactory().create(definition);
+Optional<CoolingConfiguration> maybeCoolingConfiguration =
+        new CoolingConfigurationFactory().create(definition, datacenter);
 
 FractalNoise fractalNoise = new FractalNoise(
         new PerlinNoise(1234L),
@@ -64,37 +73,71 @@ WorkloadSource workload = new ScaledWorkloadSource(baseWorkload, factors);
 EnergyConsumptionSystem energySystem = new EnergyConsumptionSystem(datacenter);
 TemperatureSystemOptions temperatureOptions =
         new TemperatureSystemOptionsFactory().create(definition);
-TemperatureSystem temperatureSystem = new TemperatureSystem(
-        datacenter,
-        temperatureOptions,
-        new SimpleServerTemperatureModel()
-);
 ServerHealthOptions healthOptions =
         new ServerHealthOptionsFactory().create(definition);
-ServerHealthSystem healthSystem =
-        new ServerHealthSystem(datacenter, temperatureSystem, healthOptions);
 
 SimulationEngine engine = new SimulationEngine(new SimulationClock(Duration.ofMinutes(30)));
 engine.register(new WorkloadSystem(datacenter, workload));
 engine.register(new PowerConsumptionSystem(datacenter));
-engine.register(temperatureSystem);
-engine.register(healthSystem);
-engine.register(energySystem);
 
-EnergyConsumptionSnapshotProvider energySnapshots =
-        new EnergyConsumptionSnapshotProvider(datacenter, energySystem);
-TemperatureSnapshotProvider temperatureSnapshots =
-        new TemperatureSnapshotProvider(datacenter, temperatureSystem, temperatureOptions);
-HealthSnapshotProvider healthSnapshots =
-        new HealthSnapshotProvider(datacenter, healthSystem, temperatureSystem);
+TemperatureSystem temperatureSystem;
+ServerHealthSystem healthSystem;
 
-SimulationTick tick = engine.step();
-EnergyConsumptionSnapshot energySnapshot = energySnapshots.snapshot(tick);
-TemperatureSnapshot temperatureSnapshot = temperatureSnapshots.snapshot(tick);
-HealthSnapshot healthSnapshot = healthSnapshots.snapshot(tick);
+if (maybeCoolingConfiguration.isEmpty()) {
+    temperatureSystem = new TemperatureSystem(
+            datacenter,
+            temperatureOptions,
+            new SimpleServerTemperatureModel()
+    );
+    healthSystem =
+            new ServerHealthSystem(datacenter, temperatureSystem, healthOptions);
+    engine.register(temperatureSystem);
+    engine.register(healthSystem);
+    engine.register(energySystem);
+
+    SimulationTick tick = engine.step();
+    EnergyConsumptionSnapshot energySnapshot =
+            new EnergyConsumptionSnapshotProvider(datacenter, energySystem).snapshot(tick);
+    TemperatureSnapshot temperatureSnapshot =
+            new TemperatureSnapshotProvider(datacenter, temperatureSystem, temperatureOptions).snapshot(tick);
+    HealthSnapshot healthSnapshot =
+            new HealthSnapshotProvider(datacenter, healthSystem, temperatureSystem).snapshot(tick);
+} else {
+    CoolingConfiguration coolingConfiguration =
+            maybeCoolingConfiguration.orElseThrow();
+    CoolingSystem coolingSystem = new CoolingSystem(coolingConfiguration);
+    ServerHeatLoadProvider heatLoadProvider =
+            new ServerHeatLoadProvider(datacenter);
+    CoolingSnapshotTemperatureReferenceProvider coolingTemperatureReferences =
+            new CoolingSnapshotTemperatureReferenceProvider(coolingConfiguration);
+    temperatureSystem = new TemperatureSystem(
+            datacenter,
+            temperatureOptions,
+            new SimpleServerTemperatureModel(),
+            coolingTemperatureReferences
+    );
+    healthSystem =
+            new ServerHealthSystem(datacenter, temperatureSystem, healthOptions);
+
+    SimulationTick tick = engine.step();
+    CoolingTickInput coolingInput =
+            new CoolingTickInput(tick.index(), heatLoadProvider.createHeatLoads());
+    CoolingSnapshot coolingSnapshot = coolingSystem.tick(coolingInput);
+    coolingTemperatureReferences.updateSnapshot(coolingSnapshot);
+    temperatureSystem.update(tick);
+    healthSystem.update(tick);
+    energySystem.update(tick);
+
+    EnergyConsumptionSnapshot energySnapshot =
+            new EnergyConsumptionSnapshotProvider(datacenter, energySystem).snapshot(tick);
+    TemperatureSnapshot temperatureSnapshot =
+            new TemperatureSnapshotProvider(datacenter, temperatureSystem, temperatureOptions).snapshot(tick);
+    HealthSnapshot healthSnapshot =
+            new HealthSnapshotProvider(datacenter, healthSystem, temperatureSystem).snapshot(tick);
+}
 ```
 
-The required system registration order is:
+Without cooling, the required system registration order is:
 
 ```text
 WorkloadSystem
@@ -103,6 +146,70 @@ WorkloadSystem
 -> ServerHealthSystem
 -> EnergyConsumptionSystem
 ```
+
+With cooling enabled from JSON, the per-tick causal order becomes:
+
+```text
+WorkloadSystem
+-> PowerConsumptionSystem
+-> CoolingSystem.tick(...)
+-> CoolingSnapshotTemperatureReferenceProvider.updateSnapshot(...)
+-> TemperatureSystem
+-> ServerHealthSystem
+-> EnergyConsumptionSystem
+```
+
+If the application already works with `SimulationTick` adapters instead of
+calling `ServerHeatLoadProvider` directly, it can use
+`CoolingSnapshotCoordinator` with `DatacenterCoolingTickInputProvider`. The
+runtime source of truth is the same `CoolingConfiguration` created from
+`CoolingConfigurationFactory`.
+
+## Cooling Runtime Contract
+
+When `cooling` is present in the JSON:
+
+1. `CoolingConfigurationFactory.create(definition, datacenter)` validates the
+   complete datacenter definition and returns `Optional<CoolingConfiguration>`.
+2. `CoolingSystem` owns the mutable enabled state of units such as
+   `SUPPLY-01` or `EXHAUST-01`.
+3. `ServerHeatLoadProvider.createHeatLoads()` converts the current server power
+   into `ServerHeatLoad` values.
+4. `CoolingSystem.tick(new CoolingTickInput(tick.index(), heatLoads))`
+   produces one immutable `CoolingSnapshot`.
+5. The UI consumes `CoolingSnapshot` as read-only output and issues backend
+   commands such as `coolingSystem.enable(...)`, `disable(...)`, or `toggle(...)`
+   when it needs to change operational state.
+
+Useful cooling snapshot data for a client:
+
+- `coolingSnapshot.tickIndex()`
+- `coolingSnapshot.units()`
+- `coolingSnapshot.zones()`
+- `coolingSnapshot.totalGeneratedHeatWatts()`
+- `coolingSnapshot.totalCoolingDeficitWatts()`
+- `coolingSnapshot.hasCoolingDeficit()`
+
+Per-unit data:
+
+- `unit.unitCode()`
+- `unit.type()`
+- `unit.enabled()`
+- `unit.currentAirflowCubicMetersPerSecond()`
+- `unit.currentCoolingPowerWatts()`
+
+Per-zone data:
+
+- `zone.zoneCode()`
+- `zone.generatedHeatWatts()`
+- `zone.availableCoolingCapacityWatts()`
+- `zone.usedCoolingCapacityWatts()`
+- `zone.coolingDeficitWatts()`
+- `zone.supplyAirflowCubicMetersPerSecond()`
+- `zone.exhaustAirflowCubicMetersPerSecond()`
+- `zone.inletAirTemperatureCelsius()`
+- `zone.exhaustAirTemperatureCelsius()`
+- `zone.recirculationFraction()`
 
 ## Useful Contract for a UI
 
@@ -212,5 +319,5 @@ Do not model empty slots by adding `EMPTY` to `HardwareStatus`.
 - No UI-specific events.
 - No internal snapshot history.
 - Temperature is a simplified internal server model only.
-- No cooling, airflow, or room-level thermal modeling.
+- Cooling is available, but it remains a simplified backend model rather than a full room-level HVAC simulation.
 - No dedicated snapshot serialization layer; the current records can be serialized by the consuming application if needed.

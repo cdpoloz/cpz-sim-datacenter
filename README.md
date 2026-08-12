@@ -6,14 +6,14 @@
 [![GitHub](https://img.shields.io/badge/GitHub-cdpoloz-181717?logo=github)](https://github.com/cdpoloz)
 
 `cpz-sim-datacenter` is a pure Java backend for simulating server workload, IT
-power, simplified server temperature, server health, and accumulated energy
-consumption in a datacenter. It is an independent Maven library intended to be
-consumed by other applications, for example a future UI such as
-`sim-datacenter-ui`.
+power, simplified server temperature, server health, accumulated energy
+consumption, and a simplified cooling model for a datacenter. It is an
+independent Maven library intended to be consumed by other applications, for
+example a UI such as `sim-datacenter-ui`.
 
-It does not include Processing, a graphical UI, client-specific logic, cooling
-modeling, airflow modeling, or room-level thermal modeling. The API is
-preliminary and may change before the final `0.1.0` release.
+It does not include Processing, a graphical UI, client-specific logic, or a
+full room-level HVAC model. The API is preliminary and may change before the
+final `0.1.0` release.
 
 ---
 
@@ -30,11 +30,15 @@ Current version:
 Available in `0.1.0-alpha.1`:
 
 - JSON-configurable datacenter definitions with `layout.racks`, `serverModels` and `servers`.
+- Optional top-level JSON blocks for `temperature`, `health`, and `cooling`.
 - Physical layout with existing racks, ordered slot codes, and empty racks.
 - Servers installed by `column`, `rackCode`, and `slot`.
 - Static per-server functional roles exposed through `Server#getRole()`.
 - Hardware states: `OK`, `ALERT`, `OFFLINE`, with automatic health evaluation from utilization and temperature.
 - Simulation systems: `WorkloadSystem`, `PowerConsumptionSystem`, `TemperatureSystem`, `ServerHealthSystem`, and `EnergyConsumptionSystem`.
+- Cooling runtime built from JSON through `CoolingConfigurationFactory`, executed by `CoolingSystem`, and exposed through `CoolingSnapshot`.
+- Cooling zones resolved from installed server locations using `columns` plus `rackCodes`.
+- `SUPPLY` and `EXHAUST` cooling units with weighted influences, initial enabled state, and mutable runtime control.
 - Workload strategy through `WorkloadSource`, with noise-based and scaled workloads.
 - Integration with `FractalNoise` from `cpz-utils` for variable workloads.
 - Per-server `workloadFactor` read from JSON and applied through `ScaledWorkloadSource`.
@@ -48,6 +52,7 @@ Important rules:
 - An empty rack represents physical infrastructure with no installed server.
 - An `OFFLINE` server represents an installed server that is powered off or not operational.
 - Rack identity is `column + rackCode`; server identity is `column + rackCode + slot`.
+- Cooling zone membership is resolved from installed servers whose locations match one configured `column` and one configured `rackCode`.
 - A missing JSON `role` is normalized to `ServerRole.GENERAL_PURPOSE` when the domain is built.
 - Model-specific thermal capacity and heat dissipation must be declared together.
   When absent, the global `TemperatureSystemOptions` values are used. These
@@ -60,6 +65,7 @@ Important rules:
   current utilization and temperature using configured thresholds.
 - `OFFLINE` has priority and is never overwritten by `ServerHealthSystem`.
 - `workloadFactor` can be greater than `1.0`; the final utilization produced by `ScaledWorkloadSource` is clamped to `[0, 1]`.
+- If the top-level JSON omits `cooling`, `CoolingConfigurationFactory.create(...)` returns `Optional.empty()`.
 
 ---
 
@@ -196,17 +202,20 @@ Each rack must define exactly one of:
 
 `slotCount` and `slots` are mutually exclusive.
 
-Optional top-level `temperature` and `health` blocks configure the thermal model
-and health thresholds. If `health` is omitted, the health options factory uses
-documented defaults. Server models may optionally override thermal capacity and
-heat dissipation as a pair; old JSON without that pair keeps using the global
-temperature values. See [JSON Configuration](docs/configuration.md).
+Optional top-level `temperature`, `health`, and `cooling` blocks configure the
+thermal model, health thresholds, and cooling model. If `health` is omitted,
+the health options factory uses documented defaults. If `cooling` is omitted,
+cooling runtime configuration is absent and the rest of the backend remains
+compatible. Server models may optionally override thermal capacity and heat
+dissipation as a pair; old JSON without that pair keeps using the global
+temperature values. See [JSON Configuration](docs/configuration.md) and
+[Cooling System](docs/cooling.md).
 
 ---
 
 ## Simulation Pipeline and Snapshots
 
-The expected causal simulation order is:
+The expected causal simulation order without cooling is:
 
 ```text
 WorkloadSystem
@@ -292,6 +301,32 @@ preserved `OFFLINE` status). Temperature and health are exposed through separate
 snapshot models. See [Temperature Model](docs/temperature.md) and
 [Server Health](docs/server-health.md).
 
+When cooling is configured from JSON, the causal order becomes:
+
+```text
+WorkloadSystem
+-> PowerConsumptionSystem
+-> CoolingSystem.tick(...)
+-> CoolingSnapshotTemperatureReferenceProvider.updateSnapshot(...)
+-> TemperatureSystem
+-> ServerHealthSystem
+-> EnergyConsumptionSystem
+```
+
+The backend supports the flow:
+
+```text
+JSON
+-> JsonDatacenterConfigLoader
+-> DatacenterDefinition
+-> DatacenterFactory
+-> CoolingConfigurationFactory
+-> CoolingConfiguration
+-> ServerHeatLoadProvider
+-> CoolingSystem
+-> CoolingSnapshot
+```
+
 ---
 
 ## Existing Demos
@@ -303,6 +338,7 @@ The demos are located in `src/main/java/com/cpz/sim/datacenter/example`:
 - `JsonDatacenterSimulationDemo`: loads `data/config/demo-datacenter-medium.json`, uses `FractalNoise` and `ScaledWorkloadSource`.
 - `EnergySnapshotSimulationDemo`: loads JSON, simulates `FractalNoise + workloadFactor` with the energy-only pipeline, and emits energy snapshots.
 - `TemperatureSimulationDemo`: in-code simulation with workload, power, temperature, and energy systems plus separate energy and temperature snapshots; it does not register `ServerHealthSystem`.
+- `CoolingSimulationDemo`: in-code simulation with cooling units, cooling snapshots, and temperature integration.
 
 The runnable demos above that omit `ServerHealthSystem` retain the configured
 server status. Use the complete pipeline shown earlier when snapshots must expose
@@ -327,6 +363,7 @@ argument; by default it uses `data/config/demo-datacenter-medium.json`.
 - [JSON Configuration](docs/configuration.md)
 - [Workloads](docs/workloads.md)
 - [Energy Snapshot](docs/energy-snapshot.md)
+- [Cooling System](docs/cooling.md)
 - [Temperature Model](docs/temperature.md)
 - [Server Health](docs/server-health.md)
 - [Using the Library from a Maven UI](docs/getting-started-ui.md)
@@ -336,12 +373,14 @@ argument; by default it uses `data/config/demo-datacenter-medium.json`.
 ## Roadmap
 
 This milestone closes the first functional base for energy simulation, the
-initial server temperature model, and automatic server health evaluation. Future
-work outside the current scope:
+initial server temperature model, automatic server health evaluation, and the
+first cooling integration from JSON to runtime snapshots. Future work outside
+the current scope:
 
 - Stable final `0.1.0` API.
-- Cooling model.
-- Rack inlet, room, and cooling-zone thermal modeling.
+- Integration of cooling results into broader operational snapshots and metrics.
+- Cooling-unit electrical consumption and facility-energy metrics.
+- More detailed rack inlet, room, and cooling-zone thermal modeling.
 - UI or visualization.
 - More complete public contracts for consumer applications.
 

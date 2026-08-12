@@ -43,15 +43,56 @@ The principal classes are:
 - `CoolingUnitSnapshot`
 - `CoolingZoneSnapshot`
 
+## JSON Definitions, Runtime Configuration, and Execution
+
+Cooling support now has three explicit layers:
+
+- JSON definition: `DatacenterDefinition.cooling()` contains an optional
+  `CoolingConfigDefinition` loaded by `JsonDatacenterConfigLoader`
+- runtime configuration: `CoolingConfigurationFactory.create(DatacenterDefinition, Datacenter)`
+  validates the datacenter definition, maps installed servers to zones, and
+  returns `Optional<CoolingConfiguration>`
+- executable system: `CoolingSystem` owns mutable unit state and produces one
+  immutable `CoolingSnapshot` per tick
+
+The end-to-end flow is:
+
+```text
+JSON
+-> JsonDatacenterConfigLoader
+-> DatacenterDefinition
+-> DatacenterFactory
+-> CoolingConfigurationFactory
+-> CoolingConfiguration
+-> ServerHeatLoadProvider
+-> CoolingSystem
+-> CoolingSnapshot
+```
+
+If the top-level JSON omits `cooling`, `CoolingConfigurationFactory.create(...)`
+returns `Optional.empty()`. This preserves compatibility for configurations that
+do not simulate cooling.
+
 ## Cooling Zones
 
 `CoolingZoneDefinition` represents a logical thermal area, such as a section of
 a rack row or hot aisle. A zone has a unique code and an immutable set of exact
 `ServerLocation` values.
 
-A server location can belong to at most one cooling zone. A zone may be empty,
-but every server heat load processed by `CoolingSystem` must reference a
-location assigned to a configured zone.
+A server location can belong to at most one cooling zone. In JSON, a zone is
+declared with:
+
+- `code`
+- `columns`
+- `rackCodes`
+
+The runtime zone membership is built from the intersection of `columns` and
+`rackCodes` over the installed servers present in the constructed
+`Datacenter`. `rackCodes` uses the rack `code`, not the rack `row`.
+
+Each valid JSON zone must contain at least one installed server before runtime
+construction. During execution, every server heat load processed by
+`CoolingSystem` must reference a location assigned to a configured zone.
 
 The complete server location is `column + rackCode + slot`. This prevents
 servers with equivalent rack or slot labels in different columns from being
@@ -98,9 +139,8 @@ zone. Its `weight` is in the range `(0.0, 1.0]`:
 - `0.5` assigns half of the unit's airflow and, for a supply unit, half of its
   cooling capacity
 
-Influence weights are applied independently per zone. The current model
-validates each individual weight but does not require the weights of one unit
-to sum to `1.0`.
+Influence weights are applied independently per zone. For each unit, the
+configured influence weights must sum to `1.0`.
 
 ## Configuration and Validation
 
@@ -114,8 +154,46 @@ one immutable configuration. It validates that:
 - every unit influence references a known zone
 - a unit does not repeat the same zone in its influence list
 
-The current cooling configuration is constructed programmatically. It is not
-loaded from the datacenter JSON definition in this milestone.
+The JSON contract is represented by:
+
+- `CoolingConfigDefinition`
+- `CoolingZoneConfigDefinition`
+- `SupplyCoolingUnitConfigDefinition`
+- `ExhaustCoolingUnitConfigDefinition`
+- `CoolingZoneInfluenceConfigDefinition`
+- `CoolingSystemOptionsDefinition`
+
+`CoolingConfigurationFactory.create(DatacenterDefinition, Datacenter)` bridges
+that JSON definition to the runtime model. It:
+
+- returns `Optional.empty()` when `DatacenterDefinition.cooling()` is absent
+- validates the full datacenter definition before creating cooling runtime data
+- resolves runtime zones from installed server locations
+- creates runtime units with `SUPPLY` units first and `EXHAUST` units after
+- copies each unit's `initiallyEnabled` state into the runtime configuration
+- transforms `CoolingSystemOptionsDefinition` into `CoolingSystemOptions`
+
+At JSON-validation level, the cooling block currently requires:
+
+- at least one zone
+- at least one cooling unit across `supplyUnits` and `exhaustUnits`
+- non-null `options`
+- non-blank unique zone codes
+- non-blank unique supply codes
+- non-blank unique exhaust codes
+- global uniqueness across supply and exhaust unit codes
+- non-empty `columns` and `rackCodes` lists per zone
+- non-empty influences per unit
+- positive finite influence weights summing to `1.0`
+- finite positive airflow values
+- finite positive cooling capacity for `SUPPLY`
+- finite supply temperature for `SUPPLY`
+- finite positive air density and specific heat
+- finite initial inlet-air temperature
+- `maximumRecirculationFraction` within `[0.0, 1.0]`
+- references only to known columns, racks, and zone codes
+- no server location belonging to more than one zone
+- at least one installed server in every valid zone
 
 `CoolingSystemOptions.defaults()` uses:
 
@@ -158,8 +236,8 @@ test, or future remote-control adapter.
 
 ## Per-Tick Thermal Input
 
-`DatacenterCoolingTickInputProvider` creates one `ServerHeatLoad` for every
-installed server. In the current approximation:
+`ServerHeatLoadProvider` creates one `ServerHeatLoad` for every installed
+server. In the current approximation:
 
 ```text
 generatedHeatWatts = server.currentPowerWatts
@@ -168,6 +246,10 @@ generatedHeatWatts = server.currentPowerWatts
 The provider must run after `PowerConsumptionSystem`, so the cooling input uses
 the electrical power calculated for the current tick. `OFFLINE` servers have
 `0 W` power and therefore contribute no generated heat.
+
+When a `SimulationTick` is already available, `DatacenterCoolingTickInputProvider`
+offers the equivalent adapter that reads the current server power and produces a
+`CoolingTickInput` directly from the `Datacenter`.
 
 `CoolingSystem` aggregates the individual heat loads by cooling zone. Duplicate
 server locations in the same tick input and locations not assigned to a zone
@@ -349,18 +431,42 @@ thermal state has been updated.
 `CoolingSnapshotCoordinator` is currently invoked explicitly between simulation
 systems; it is not registered as a `SimulationSystem` in `SimulationEngine`.
 
-## Programmatic Example
+## JSON and Runtime Example
 
 ```java
-CoolingConfiguration coolingConfiguration =
-        CoolingSimulationDemoScenario.createCoolingConfiguration(datacenter);
+Path configPath = Path.of("data/config/demo-datacenter-medium.json");
+DatacenterDefinition definition =
+        new JsonDatacenterConfigLoader().load(configPath);
+Datacenter datacenter = new DatacenterFactory().create(definition);
 
-CoolingSystem coolingSystem =
-        new CoolingSystem(coolingConfiguration);
+Optional<CoolingConfiguration> maybeCoolingConfiguration =
+        new CoolingConfigurationFactory().create(definition, datacenter);
 
-CoolingSnapshotTemperatureReferenceProvider temperatureReferenceProvider =
-        new CoolingSnapshotTemperatureReferenceProvider(coolingConfiguration);
+if (maybeCoolingConfiguration.isPresent()) {
+    CoolingConfiguration coolingConfiguration =
+            maybeCoolingConfiguration.orElseThrow();
 
+    CoolingSystem coolingSystem =
+            new CoolingSystem(coolingConfiguration);
+
+    ServerHeatLoadProvider heatLoadProvider =
+            new ServerHeatLoadProvider(datacenter);
+
+    CoolingSnapshotTemperatureReferenceProvider temperatureReferenceProvider =
+            new CoolingSnapshotTemperatureReferenceProvider(coolingConfiguration);
+
+    SimulationTick tick = engine.step();
+    CoolingTickInput input =
+            new CoolingTickInput(tick.index(), heatLoadProvider.createHeatLoads());
+    CoolingSnapshot coolingSnapshot = coolingSystem.tick(input);
+    temperatureReferenceProvider.updateSnapshot(coolingSnapshot);
+}
+```
+
+The coordinator form remains available when a simulation already uses
+`SimulationTick` directly:
+
+```java
 CoolingSnapshotCoordinator coolingCoordinator =
         new CoolingSnapshotCoordinator(
                 new DatacenterCoolingTickInputProvider(datacenter),
@@ -368,22 +474,11 @@ CoolingSnapshotCoordinator coolingCoordinator =
                 temperatureReferenceProvider
         );
 
-TemperatureSystem temperatureSystem =
-        new TemperatureSystem(
-                datacenter,
-                temperatureOptions,
-                new SimpleServerTemperatureModel(),
-                temperatureReferenceProvider
-        );
-
-SimulationTick tick = engine.step();
 CoolingSnapshot coolingSnapshot = coolingCoordinator.update(tick);
-temperatureSystem.update(tick);
 ```
 
-The demo scenario helper is package-private and intended for the example and
-its tests. Production applications should construct their own
-`CoolingConfiguration`.
+Production applications should build `CoolingConfiguration` from the validated
+JSON definition rather than from ad hoc programmatic test fixtures.
 
 ## Demo
 
@@ -453,7 +548,6 @@ power, PUE, alarms, or historical metrics.
 
 ## Current Limitations
 
-- configuration is programmatic; no cooling JSON block is implemented
 - server electrical power is assumed to become heat at a one-to-one ratio
 - zones are logical and do not model physical geometry or volume
 - no pressure, humidity, leakage, containment, or fan-curve model
@@ -475,7 +569,6 @@ engineering software.
 
 Possible future extensions include:
 
-- JSON configuration for cooling zones, units, influences, and options
 - integration of cooling results into higher-level operational snapshots
 - cooling-unit electrical consumption and facility-energy metrics
 - partial capacity, variable-speed fans, and equipment degradation
