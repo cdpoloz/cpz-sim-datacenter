@@ -20,6 +20,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
+import com.cpz.sim.datacenter.cooling.CoolingConfiguration;
+import com.cpz.sim.datacenter.cooling.ExhaustCoolingUnitDefinition;
+import com.cpz.sim.datacenter.cooling.SupplyCoolingUnitDefinition;
+import com.cpz.sim.datacenter.factory.CoolingConfigurationFactory;
+import com.cpz.sim.datacenter.model.ServerLocation;
+
+import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -461,53 +471,134 @@ class JsonDatacenterConfigLoaderTest {
         );
     }
 
-    @Test
-    void shouldLoadDatacenterDefinitionWithCoolingBlock() throws IOException {
-        Path path = writeConfigWithCooling("""
+    private Path writeValidCoolingConfig() throws IOException {
+        return writeConfigWithCooling("""
+            {
+              "zones": [
                 {
-                  "zones": [
-                    {
-                      "code": "ZONE-C01-R01",
-                      "columns": ["A01"],
-                      "rackCodes": ["R01"]
-                    }
-                  ],
-                  "supplyUnits": [
-                    {
-                      "code": "SUPPLY-01",
-                      "ratedAirflowCubicMetersPerSecond": 8.0,
-                      "ratedCoolingCapacityWatts": 100000.0,
-                      "supplyAirTemperatureCelsius": 18.0,
-                      "influences": [
-                        {
-                          "zoneCode": "ZONE-C01-R01",
-                          "weight": 1.0
-                        }
-                      ],
-                      "initiallyEnabled": false
-                    }
-                  ],
-                  "exhaustUnits": [
-                    {
-                      "code": "EXHAUST-01",
-                      "ratedAirflowCubicMetersPerSecond": 8.0,
-                      "influences": [
-                        {
-                          "zoneCode": "ZONE-C01-R01",
-                          "weight": 1.0
-                        }
-                      ],
-                      "initiallyEnabled": false
-                    }
-                  ],
-                  "options": {
-                    "airDensityKilogramsPerCubicMeter": 1.204,
-                    "airSpecificHeatJoulesPerKilogramKelvin": 1005.0,
-                    "initialInletAirTemperatureCelsius": 24.0,
-                    "maximumRecirculationFraction": 0.95
-                  }
+                  "code": "ZONE-A01-R01",
+                  "columns": ["A01"],
+                  "rackCodes": ["RACK-A01-R01"]
                 }
-                """);
+              ],
+              "supplyUnits": [
+                {
+                  "code": "SUPPLY-01",
+                  "ratedAirflowCubicMetersPerSecond": 8.0,
+                  "ratedCoolingCapacityWatts": 100000.0,
+                  "supplyAirTemperatureCelsius": 18.0,
+                  "influences": [
+                    {
+                      "zoneCode": "ZONE-A01-R01",
+                      "weight": 1.0
+                    }
+                  ],
+                  "initiallyEnabled": true
+                }
+              ],
+              "exhaustUnits": [
+                {
+                  "code": "EXHAUST-01",
+                  "ratedAirflowCubicMetersPerSecond": 8.0,
+                  "influences": [
+                    {
+                      "zoneCode": "ZONE-A01-R01",
+                      "weight": 1.0
+                    }
+                  ],
+                  "initiallyEnabled": false
+                }
+              ],
+              "options": {
+                "airDensityKilogramsPerCubicMeter": 1.204,
+                "airSpecificHeatJoulesPerKilogramKelvin": 1005.0,
+                "initialInletAirTemperatureCelsius": 24.0,
+                "maximumRecirculationFraction": 0.95
+              }
+            }
+            """);
+    }
+
+    @Test
+    void shouldBuildCoolingConfigurationFromLoadedJson()
+            throws IOException {
+        Path path = writeValidCoolingConfig();
+
+        DatacenterDefinition definition =
+                new JsonDatacenterConfigLoader().load(path);
+
+        Datacenter datacenter =
+                new DatacenterFactory().create(definition);
+
+        CoolingConfiguration configuration =
+                new CoolingConfigurationFactory()
+                        .create(definition, datacenter)
+                        .orElseThrow();
+
+        assertEquals(1, configuration.zones().size());
+        assertEquals(2, configuration.units().size());
+
+        assertEquals(
+                "ZONE-A01-R01",
+                configuration.zones().getFirst().code()
+        );
+
+        assertEquals(
+                Set.of(
+                        new ServerLocation(
+                                "A01",
+                                "RACK-A01-R01",
+                                "U01"
+                        ),
+                        new ServerLocation(
+                                "A01",
+                                "RACK-A01-R01",
+                                "U02"
+                        )
+                ),
+                configuration.zones()
+                        .getFirst()
+                        .serverLocations()
+        );
+
+        SupplyCoolingUnitDefinition supply =
+                assertInstanceOf(
+                        SupplyCoolingUnitDefinition.class,
+                        configuration.units().get(0)
+                );
+
+        assertEquals("SUPPLY-01", supply.code());
+        assertEquals(
+                100000.0,
+                supply.ratedCoolingCapacityWatts()
+        );
+        assertTrue(supply.initiallyEnabled());
+
+        ExhaustCoolingUnitDefinition exhaust =
+                assertInstanceOf(
+                        ExhaustCoolingUnitDefinition.class,
+                        configuration.units().get(1)
+                );
+
+        assertEquals("EXHAUST-01", exhaust.code());
+        assertFalse(exhaust.initiallyEnabled());
+
+        assertEquals(
+                24.0,
+                configuration.options()
+                        .initialInletAirTemperatureCelsius()
+        );
+        assertEquals(
+                0.95,
+                configuration.options()
+                        .maximumRecirculationFraction()
+        );
+    }
+
+    @Test
+    void shouldLoadDatacenterDefinitionWithCoolingBlock()
+            throws IOException {
+        Path path = writeValidCoolingConfig();
 
         DatacenterDefinition definition =
                 new JsonDatacenterConfigLoader().load(path);
@@ -515,31 +606,57 @@ class JsonDatacenterConfigLoaderTest {
         assertNotNull(definition.cooling());
 
         assertEquals(1, definition.cooling().zones().size());
+
         assertEquals(
-                "ZONE-C01-R01",
-                definition.cooling().zones().getFirst().code()
+                "ZONE-A01-R01",
+                definition.cooling()
+                        .zones()
+                        .getFirst()
+                        .code()
         );
+
         assertEquals(
                 List.of("A01"),
-                definition.cooling().zones().getFirst().columns()
+                definition.cooling()
+                        .zones()
+                        .getFirst()
+                        .columns()
         );
+
         assertEquals(
-                List.of("R01"),
-                definition.cooling().zones().getFirst().rackCodes()
+                List.of("RACK-A01-R01"),
+                definition.cooling()
+                        .zones()
+                        .getFirst()
+                        .rackCodes()
         );
 
         assertEquals(1, definition.cooling().supplyUnits().size());
+
         assertEquals(
                 "SUPPLY-01",
-                definition.cooling().supplyUnits().getFirst().code()
+                definition.cooling()
+                        .supplyUnits()
+                        .getFirst()
+                        .code()
         );
+
         assertEquals(
-                100000.0,
+                8.0,
+                definition.cooling()
+                        .supplyUnits()
+                        .getFirst()
+                        .ratedAirflowCubicMetersPerSecond()
+        );
+
+        assertEquals(
+                100_000.0,
                 definition.cooling()
                         .supplyUnits()
                         .getFirst()
                         .ratedCoolingCapacityWatts()
         );
+
         assertEquals(
                 18.0,
                 definition.cooling()
@@ -547,6 +664,24 @@ class JsonDatacenterConfigLoaderTest {
                         .getFirst()
                         .supplyAirTemperatureCelsius()
         );
+
+        assertTrue(
+                definition.cooling()
+                        .supplyUnits()
+                        .getFirst()
+                        .initiallyEnabled()
+        );
+
+        assertEquals(
+                "ZONE-A01-R01",
+                definition.cooling()
+                        .supplyUnits()
+                        .getFirst()
+                        .influences()
+                        .getFirst()
+                        .zoneCode()
+        );
+
         assertEquals(
                 1.0,
                 definition.cooling()
@@ -556,19 +691,53 @@ class JsonDatacenterConfigLoaderTest {
                         .getFirst()
                         .weight()
         );
+
+        assertEquals(1, definition.cooling().exhaustUnits().size());
+
         assertEquals(
-                false,
+                "EXHAUST-01",
                 definition.cooling()
-                        .supplyUnits()
+                        .exhaustUnits()
+                        .getFirst()
+                        .code()
+        );
+
+        assertEquals(
+                8.0,
+                definition.cooling()
+                        .exhaustUnits()
+                        .getFirst()
+                        .ratedAirflowCubicMetersPerSecond()
+        );
+
+        assertFalse(
+                definition.cooling()
+                        .exhaustUnits()
                         .getFirst()
                         .initiallyEnabled()
         );
 
-        assertEquals(1, definition.cooling().exhaustUnits().size());
         assertEquals(
-                "EXHAUST-01",
-                definition.cooling().exhaustUnits().getFirst().code()
+                "ZONE-A01-R01",
+                definition.cooling()
+                        .exhaustUnits()
+                        .getFirst()
+                        .influences()
+                        .getFirst()
+                        .zoneCode()
         );
+
+        assertEquals(
+                1.0,
+                definition.cooling()
+                        .exhaustUnits()
+                        .getFirst()
+                        .influences()
+                        .getFirst()
+                        .weight()
+        );
+
+        assertNotNull(definition.cooling().options());
 
         assertEquals(
                 1.204,
@@ -576,18 +745,21 @@ class JsonDatacenterConfigLoaderTest {
                         .options()
                         .airDensityKilogramsPerCubicMeter()
         );
+
         assertEquals(
-                1005.0,
+                1_005.0,
                 definition.cooling()
                         .options()
                         .airSpecificHeatJoulesPerKilogramKelvin()
         );
+
         assertEquals(
                 24.0,
                 definition.cooling()
                         .options()
                         .initialInletAirTemperatureCelsius()
         );
+
         assertEquals(
                 0.95,
                 definition.cooling()
