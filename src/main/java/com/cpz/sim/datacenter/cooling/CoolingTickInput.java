@@ -13,21 +13,21 @@ import java.util.Objects;
  */
 public record CoolingTickInput(
         long tickIndex,
+        double deltaSeconds,
         List<ServerHeatLoad> serverHeatLoads
 ) {
 
-    /**
-     * Creates a validated and immutable cooling tick input.
-     *
-     * @throws IllegalArgumentException if {@code tickIndex} is negative
-     * @throws NullPointerException     if {@code serverHeatLoads} is
-     *                                  {@code null} or contains a null element
-     */
+    public static final double DEFAULT_DELTA_SECONDS = 60.0;
+
+    public CoolingTickInput(long tickIndex, List<ServerHeatLoad> serverHeatLoads) {
+        this(tickIndex, DEFAULT_DELTA_SECONDS, serverHeatLoads);
+    }
+
     public CoolingTickInput {
         if (tickIndex < 0L) throw new IllegalArgumentException("tickIndex must be greater than or equal to zero");
-        Objects.requireNonNull(serverHeatLoads,"serverHeatLoads must not be null");
-        if (serverHeatLoads.stream().anyMatch(Objects::isNull))
-            throw new NullPointerException("serverHeatLoads must not contain null elements");
+        if (!Double.isFinite(deltaSeconds) || deltaSeconds <= 0.0) throw new IllegalArgumentException("deltaSeconds must be finite and greater than zero");
+        Objects.requireNonNull(serverHeatLoads, "serverHeatLoads must not be null");
+        if (serverHeatLoads.stream().anyMatch(Objects::isNull)) throw new NullPointerException("serverHeatLoads must not contain null elements");
         serverHeatLoads = List.copyOf(serverHeatLoads);
     }
 }

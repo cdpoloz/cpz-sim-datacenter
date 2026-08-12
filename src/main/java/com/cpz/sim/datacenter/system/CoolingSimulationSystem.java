@@ -50,7 +50,7 @@ public final class CoolingSimulationSystem implements Simulatable {
     @Override
     public void update(SimulationTick tick) {
         Objects.requireNonNull(tick, "tick must not be null");
-        CoolingTickInput input = new CoolingTickInput(tick.index(), heatLoadProvider.createHeatLoads());
+        CoolingTickInput input = new CoolingTickInput(tick.index(), tick.deltaSeconds(), heatLoadProvider.createHeatLoads());
         lastSnapshot = coolingSystem.tick(input);
     }
 

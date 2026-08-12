@@ -20,6 +20,7 @@ The current milestone includes:
 - `EXHAUST` units that provide extraction airflow
 - weighted unit influence over one or more zones
 - mutable enabled state owned by `CoolingSystem`
+- persistent per-zone air temperature owned by `CoolingSystem`
 - per-tick unit and zone snapshots
 - cooling-capacity and deficit calculations
 - simplified inlet-air, exhaust-air, and recirculation calculations
@@ -227,7 +228,8 @@ These commands affect subsequent cooling ticks. Snapshots already produced are
 immutable and are not changed retroactively.
 
 `CoolingSystem.reset()` restores every unit to the initial state declared by
-its definition.
+its definition and resets every zone-air temperature to
+`CoolingSystemOptions.initialInletAirTemperatureCelsius()`.
 
 A UI should invoke this backend API through its application or view-model
 layer. It should not maintain a second authoritative copy of cooling-unit
@@ -249,7 +251,9 @@ the electrical power calculated for the current tick. `OFFLINE` servers have
 
 When a `SimulationTick` is already available, `DatacenterCoolingTickInputProvider`
 offers the equivalent adapter that reads the current server power and produces a
-`CoolingTickInput` directly from the `Datacenter`.
+`CoolingTickInput` directly from the `Datacenter`. The input also carries the
+tick duration in seconds. `CoolingSystem` uses that duration when uncovered heat
+must be accumulated into the zone-air state.
 
 `CoolingSystem` aggregates the individual heat loads by cooling zone. Duplicate
 server locations in the same tick input and locations not assigned to a zone
@@ -294,8 +298,10 @@ weightedSupplyTemperature =
     / totalSupplyAirflow
 ```
 
-When no supply airflow exists, the model falls back to
-`initialInletAirTemperatureCelsius`.
+When no supply airflow exists, the model uses
+the current zone-air temperature. Each zone starts at
+`initialInletAirTemperatureCelsius`, but that value is kept between ticks and
+changes when uncovered heat remains in the zone.
 
 ### Recirculation
 
@@ -319,30 +325,50 @@ maximum.
 
 ### Air Temperatures
 
-When supply airflow is available, the temperature increase across the zone is:
-
-```text
-airTemperatureRise =
-    generatedHeatWatts
-    / (airVolumetricHeatCapacity * supplyAirflow)
-```
-
-The effective inlet and exhaust temperatures are then:
+The effective inlet temperature mixes the supplied-air temperature with the
+previous zone-air temperature according to the recirculation fraction:
 
 ```text
 inletAirTemperature =
-    weightedSupplyTemperature
-    + (recirculationFraction / (1 - recirculationFraction))
-      * airTemperatureRise
+    weightedSupplyTemperature * (1 - recirculationFraction)
+    + previousZoneAirTemperature * recirculationFraction
+```
+
+When no supply airflow is available, `inletAirTemperature` is the current
+zone-air temperature.
+
+Heat that is covered by available cooling capacity does not increase the zone
+air temperature. The temperature rise is based on `coolingDeficitWatts`, not on
+the full generated heat.
+
+When either supply or exhaust airflow is available, the temperature increase
+across the active airflow path is:
+
+```text
+airTemperatureRise =
+    coolingDeficitWatts
+    / (airVolumetricHeatCapacity * max(supplyAirflow, exhaustAirflow))
 
 exhaustAirTemperature =
     inletAirTemperature + airTemperatureRise
 ```
 
-When supply airflow is zero, both temperatures fall back to the configured
-initial inlet-air temperature. This is a deliberate fallback of the current
-model: even if an exhaust unit remains enabled, the zone reports no calculated
-air-temperature rise without supply airflow.
+When both supply and exhaust airflow are zero, the zone has no active airflow
+path. In that case, uncovered heat is accumulated into the persistent zone-air
+state:
+
+```text
+temperatureRise =
+    coolingDeficitWatts * deltaSeconds
+    / effectiveZoneAirThermalCapacity
+
+nextZoneAirTemperature =
+    previousZoneAirTemperature + temperatureRise
+```
+
+The snapshot reports the previous zone-air temperature as inlet air and the next
+zone-air temperature as exhaust air. The next temperature is then kept as the
+zone state for the following tick.
 
 ## Snapshots
 
@@ -457,7 +483,11 @@ if (maybeCoolingConfiguration.isPresent()) {
 
     SimulationTick tick = engine.step();
     CoolingTickInput input =
-            new CoolingTickInput(tick.index(), heatLoadProvider.createHeatLoads());
+            new CoolingTickInput(
+                    tick.index(),
+                    tick.deltaSeconds(),
+                    heatLoadProvider.createHeatLoads()
+            );
     CoolingSnapshot coolingSnapshot = coolingSystem.tick(input);
     temperatureReferenceProvider.updateSnapshot(coolingSnapshot);
 }
@@ -518,9 +548,9 @@ unit:
 | SUPPLY | EXHAUST | Expected result |
 | --- | --- | --- |
 | enabled | enabled | cold supplied air without recirculation |
-| disabled | enabled | no supply airflow or cooling capacity |
+| disabled | enabled | no supply airflow or cooling capacity; zone temperature continues from its current state |
 | enabled | disabled | cooling capacity remains available, but recirculation degrades inlet temperature |
-| disabled | disabled | no supply airflow, extraction, or cooling capacity |
+| disabled | disabled | no supply airflow, extraction, or cooling capacity; uncovered heat accumulates gradually |
 
 Separate integration tests verify that, from the same initial thermal state:
 
@@ -549,16 +579,15 @@ power, PUE, alarms, or historical metrics.
 ## Current Limitations
 
 - server electrical power is assumed to become heat at a one-to-one ratio
-- zones are logical and do not model physical geometry or volume
+- zones are logical and use a simplified effective air volume, not measured
+  physical geometry
 - no pressure, humidity, leakage, containment, or fan-curve model
 - no airflow propagation between zones
-- no thermal mass or persistent air-temperature state for a zone
+- no calibrated thermal mass for racks, walls, floor, ceiling, or equipment
 - no cooling-unit ramp-up, partial-load behavior, failure mode, or energy use
 - nominal cooling capacity is not reduced by recirculation
 - extraction greater than supply does not create a separate negative-pressure
   effect
-- without supply airflow, inlet and exhaust temperatures use the configured
-  fallback even when heat or extraction exists
 - no calibration against real datacenter cooling equipment
 
 The model is suitable for simulation behavior, UI integration, and causal
@@ -572,7 +601,7 @@ Possible future extensions include:
 - integration of cooling results into higher-level operational snapshots
 - cooling-unit electrical consumption and facility-energy metrics
 - partial capacity, variable-speed fans, and equipment degradation
-- persistent zone air state and cross-zone thermal coupling
+- configurable zone effective air volume and cross-zone thermal coupling
 - rack inlet and hot-aisle aggregation
 - cooling alarms and health reasons
 - telemetry adapters for physical supply and exhaust equipment

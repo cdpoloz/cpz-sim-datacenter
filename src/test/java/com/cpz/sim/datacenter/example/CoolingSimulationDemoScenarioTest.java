@@ -67,9 +67,10 @@ class CoolingSimulationDemoScenarioTest {
                 EPSILON
         );
         assertEquals(0.0, zone.recirculationFraction(), EPSILON);
-        assertTrue(
-                zone.exhaustAirTemperatureCelsius()
-                        > zone.inletAirTemperatureCelsius()
+        assertEquals(
+                zone.inletAirTemperatureCelsius(),
+                zone.exhaustAirTemperatureCelsius(),
+                EPSILON
         );
     }
 
@@ -157,9 +158,10 @@ class CoolingSimulationDemoScenarioTest {
         assertTrue(
                 zone.inletAirTemperatureCelsius() < 24.0
         );
-        assertTrue(
-                zone.exhaustAirTemperatureCelsius()
-                        > zone.inletAirTemperatureCelsius()
+        assertEquals(
+                zone.inletAirTemperatureCelsius(),
+                zone.exhaustAirTemperatureCelsius(),
+                EPSILON
         );
     }
 

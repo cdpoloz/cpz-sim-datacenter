@@ -120,8 +120,11 @@ if (maybeCoolingConfiguration.isEmpty()) {
             new ServerHealthSystem(datacenter, temperatureSystem, healthOptions);
 
     SimulationTick tick = engine.step();
-    CoolingTickInput coolingInput =
-            new CoolingTickInput(tick.index(), heatLoadProvider.createHeatLoads());
+    CoolingTickInput coolingInput = new CoolingTickInput(
+            tick.index(),
+            tick.deltaSeconds(),
+            heatLoadProvider.createHeatLoads()
+    );
     CoolingSnapshot coolingSnapshot = coolingSystem.tick(coolingInput);
     coolingTemperatureReferences.updateSnapshot(coolingSnapshot);
     temperatureSystem.update(tick);
@@ -175,7 +178,7 @@ When `cooling` is present in the JSON:
    `SUPPLY-01` or `EXHAUST-01`.
 3. `ServerHeatLoadProvider.createHeatLoads()` converts the current server power
    into `ServerHeatLoad` values.
-4. `CoolingSystem.tick(new CoolingTickInput(tick.index(), heatLoads))`
+4. `CoolingSystem.tick(new CoolingTickInput(tick.index(), tick.deltaSeconds(), heatLoads))`
    produces one immutable `CoolingSnapshot`.
 5. The UI consumes `CoolingSnapshot` as read-only output and issues backend
    commands such as `coolingSystem.enable(...)`, `disable(...)`, or `toggle(...)`

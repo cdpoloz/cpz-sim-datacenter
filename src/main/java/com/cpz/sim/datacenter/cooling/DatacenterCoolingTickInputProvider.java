@@ -47,6 +47,6 @@ public final class DatacenterCoolingTickInputProvider {
         List<ServerHeatLoad> heatLoads = new ArrayList<>();
         for (Server server : datacenter.getServers())
             heatLoads.add(new ServerHeatLoad(server.getLocation(), server.getCurrentPowerWatts()));
-        return new CoolingTickInput(tick.index(), heatLoads);
+        return new CoolingTickInput(tick.index(), tick.deltaSeconds(), heatLoads);
     }
 }

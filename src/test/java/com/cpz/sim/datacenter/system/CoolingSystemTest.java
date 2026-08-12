@@ -12,7 +12,6 @@ import com.cpz.sim.datacenter.model.ServerLocation;
 import com.cpz.sim.datacenter.snapshot.CoolingSnapshot;
 import org.junit.jupiter.api.Test;
 import com.cpz.sim.datacenter.cooling.ServerHeatLoad;
-import com.cpz.sim.datacenter.model.ServerLocation;
 import com.cpz.sim.datacenter.snapshot.CoolingUnitSnapshot;
 import com.cpz.sim.datacenter.snapshot.CoolingZoneSnapshot;
 
@@ -114,12 +113,10 @@ class CoolingSystemTest {
         CoolingSystem system = new CoolingSystem(configuration());
         CoolingSnapshot snapshot = system.tick(new CoolingTickInput(12L, List.of(new ServerHeatLoad(SERVER_LOCATION, 450.0))));
         CoolingZoneSnapshot zoneSnapshot = snapshot.zones().getFirst();
-        double expectedTemperatureRise = 450.0 / (1_210.02 * 4.0);
-        double expectedInletTemperature = 18.0 + (0.95 / (1.0 - 0.95)) * expectedTemperatureRise;
-        double expectedExhaustTemperature = expectedInletTemperature + expectedTemperatureRise;
+        double expectedInletTemperature = (18.0 * 0.05) + (24.0 * 0.95);
         assertEquals(0.95, zoneSnapshot.recirculationFraction(), 1.0e-9);
         assertEquals(expectedInletTemperature, zoneSnapshot.inletAirTemperatureCelsius(), 1.0e-9);
-        assertEquals(expectedExhaustTemperature, zoneSnapshot.exhaustAirTemperatureCelsius(), 1.0e-9);
+        assertEquals(expectedInletTemperature, zoneSnapshot.exhaustAirTemperatureCelsius(), 1.0e-9);
     }
 
     private static CoolingConfiguration configuration() {
@@ -215,22 +212,48 @@ class CoolingSystemTest {
         assertEquals(4.0, zoneSnapshot.exhaustAirflowCubicMetersPerSecond());
         assertEquals(0.0, zoneSnapshot.recirculationFraction(), 1.0e-9);
         assertEquals(18.0, zoneSnapshot.inletAirTemperatureCelsius(), 1.0e-9);
-        assertEquals(18.0 + expectedTemperatureRise, zoneSnapshot.exhaustAirTemperatureCelsius(), 1.0e-9);
+        assertEquals(18.0, zoneSnapshot.exhaustAirTemperatureCelsius(), 1.0e-9);
     }
 
     @Test
-    void shouldUseFallbackTemperaturesWhenZoneHasNoSupplyAirflow() {
+    void shouldAccumulateZoneAirTemperatureWhenZoneHasNoAirflow() {
         CoolingSystem system = new CoolingSystem(configuration());
         system.disable("SUPPLY-01");
-        CoolingSnapshot snapshot = system.tick(new CoolingTickInput(12L, List.of(new ServerHeatLoad(SERVER_LOCATION, 450.0))));
-        CoolingZoneSnapshot zoneSnapshot = snapshot.zones().getFirst();
+
+        CoolingSnapshot firstSnapshot =
+                system.tick(
+                        new CoolingTickInput(
+                                12L,
+                                List.of(new ServerHeatLoad(SERVER_LOCATION, 450.0))
+                        )
+                );
+
+        CoolingZoneSnapshot zoneSnapshot = firstSnapshot.zones().getFirst();
+
+        double expectedRise =
+                (450.0 * 60.0)
+                        / (1_210.02 * 1_000.0);
+
         assertEquals(0.0, zoneSnapshot.availableCoolingCapacityWatts());
         assertEquals(0.0, zoneSnapshot.usedCoolingCapacityWatts());
         assertEquals(450.0, zoneSnapshot.coolingDeficitWatts());
         assertEquals(0.0, zoneSnapshot.supplyAirflowCubicMetersPerSecond());
         assertEquals(0.95, zoneSnapshot.recirculationFraction(), 1.0e-9);
         assertEquals(24.0, zoneSnapshot.inletAirTemperatureCelsius(), 1.0e-9);
-        assertEquals(24.0, zoneSnapshot.exhaustAirTemperatureCelsius(), 1.0e-9);
+        assertEquals(24.0 + expectedRise, zoneSnapshot.exhaustAirTemperatureCelsius(), 1.0e-9);
+
+        CoolingSnapshot secondSnapshot =
+                system.tick(
+                        new CoolingTickInput(
+                                13L,
+                                List.of(new ServerHeatLoad(SERVER_LOCATION, 450.0))
+                        )
+                );
+
+        CoolingZoneSnapshot secondZoneSnapshot = secondSnapshot.zones().getFirst();
+
+        assertEquals(24.0 + expectedRise, secondZoneSnapshot.inletAirTemperatureCelsius(), 1.0e-9);
+        assertEquals(24.0 + (expectedRise * 2.0), secondZoneSnapshot.exhaustAirTemperatureCelsius(), 1.0e-9);
     }
 
     @Test
@@ -271,15 +294,13 @@ class CoolingSystemTest {
          * airflow = 2.0 × 0.50 = 1.0 m³/s
          * capacity = 6,000 × 0.50 = 3,000 W
          */
-        assertEquals(4.0, firstZone.supplyAirflowCubicMetersPerSecond(), 1.0e-9);
-        assertEquals(12_000.0, firstZone.availableCoolingCapacityWatts(), 1.0e-9);
+        assertEquals((19.0 * 0.05) + (24.0 * 0.95), firstZone.inletAirTemperatureCelsius(), 1.0e-9);
+        assertEquals((19.0 * 0.05) + (24.0 * 0.95), firstZone.exhaustAirTemperatureCelsius(), 1.0e-9);
         /*
          * Temperatura ponderada:
          * (18 °C × 3 m³/s + 22 °C × 1 m³/s) / 4 m³/s
          * = 19 °C
          */
-        assertEquals(19.0, firstZone.inletAirTemperatureCelsius(), 1.0e-9);
-        assertEquals(19.0, firstZone.exhaustAirTemperatureCelsius(), 1.0e-9);
         CoolingZoneSnapshot secondZone = snapshot.zones().get(1);
         assertEquals("ZONE-02", secondZone.zoneCode());
         /*
@@ -291,15 +312,13 @@ class CoolingSystemTest {
          * airflow = 2.0 × 0.50 = 1.0 m³/s
          * capacity = 6,000 × 0.50 = 3,000 W
          */
-        assertEquals(2.0, secondZone.supplyAirflowCubicMetersPerSecond(), 1.0e-9);
-        assertEquals(6_000.0, secondZone.availableCoolingCapacityWatts(), 1.0e-9);
+        assertEquals((20.0 * 0.05) + (24.0 * 0.95), secondZone.inletAirTemperatureCelsius(), 1.0e-9);
+        assertEquals((20.0 * 0.05) + (24.0 * 0.95), secondZone.exhaustAirTemperatureCelsius(), 1.0e-9);
         /*
          * Temperatura ponderada:
          * (18 °C × 1 m³/s + 22 °C × 1 m³/s) / 2 m³/s
          * = 20 °C
          */
-        assertEquals(20.0, secondZone.inletAirTemperatureCelsius(), 1.0e-9);
-        assertEquals(20.0, secondZone.exhaustAirTemperatureCelsius(), 1.0e-9);
     }
 
     private static CoolingConfiguration multiZoneConfiguration() {

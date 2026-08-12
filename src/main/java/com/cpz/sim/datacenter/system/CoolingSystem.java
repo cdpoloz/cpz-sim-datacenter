@@ -38,10 +38,12 @@ import java.util.Set;
  */
 public final class CoolingSystem {
 
+    private static final double DEFAULT_EFFECTIVE_ZONE_AIR_VOLUME_CUBIC_METERS = 1_000.0;
     private final CoolingConfiguration configuration;
     private final Map<String, CoolingUnitDefinition> definitionsByUnitCode;
     private final Map<String, CoolingUnitState> statesByUnitCode;
     private final Map<ServerLocation, String> zoneCodeByServerLocation;
+    private final Map<String, Double> zoneAirTemperatureByZoneCode;
 
     /**
      * Creates a cooling system from the given configuration.
@@ -58,11 +60,13 @@ public final class CoolingSystem {
         this.definitionsByUnitCode = new LinkedHashMap<>();
         this.statesByUnitCode = new LinkedHashMap<>();
         this.zoneCodeByServerLocation = new HashMap<>();
+        this.zoneAirTemperatureByZoneCode = new LinkedHashMap<>();
         for (CoolingUnitDefinition definition : configuration.units()) {
             definitionsByUnitCode.put(definition.code(), definition);
             statesByUnitCode.put(definition.code(), new CoolingUnitState(definition.code(), definition.initiallyEnabled()));
         }
         for (CoolingZoneDefinition zone : configuration.zones()) {
+            zoneAirTemperatureByZoneCode.put(zone.code(), configuration.options().initialInletAirTemperatureCelsius());
             for (ServerLocation location : zone.serverLocations()) zoneCodeByServerLocation.put(location, zone.code());
         }
     }
@@ -86,7 +90,8 @@ public final class CoolingSystem {
         Objects.requireNonNull(input, "input must not be null");
         Map<String, Double> generatedHeatByZone = aggregateGeneratedHeatByZone(input.serverHeatLoads());
         List<CoolingUnitSnapshot> unitSnapshots = createUnitSnapshots();
-        List<CoolingZoneSnapshot> zoneSnapshots = createZoneSnapshots(generatedHeatByZone);
+        //List<CoolingZoneSnapshot> zoneSnapshots = createZoneSnapshots(generatedHeatByZone);
+        List<CoolingZoneSnapshot> zoneSnapshots = createZoneSnapshots(generatedHeatByZone, input.deltaSeconds());
         return new CoolingSnapshot(input.tickIndex(), unitSnapshots, zoneSnapshots);
     }
 
@@ -169,6 +174,8 @@ public final class CoolingSystem {
     public void reset() {
         for (CoolingUnitDefinition definition : configuration.units())
             statesByUnitCode.put(definition.code(), new CoolingUnitState(definition.code(), definition.initiallyEnabled()));
+        for (CoolingZoneDefinition zone : configuration.zones())
+            zoneAirTemperatureByZoneCode.put(zone.code(), configuration.options().initialInletAirTemperatureCelsius());
     }
 
     /**
@@ -226,14 +233,14 @@ public final class CoolingSystem {
         return snapshots;
     }
 
-    private List<CoolingZoneSnapshot> createZoneSnapshots(Map<String, Double> generatedHeatByZone) {
+    private List<CoolingZoneSnapshot> createZoneSnapshots(Map<String, Double> generatedHeatByZone, double deltaSeconds) {
         List<CoolingZoneSnapshot> snapshots = new ArrayList<>();
         for (CoolingZoneDefinition zone : configuration.zones())
-            snapshots.add(createZoneSnapshot(zone, generatedHeatByZone.get(zone.code())));
+            snapshots.add(createZoneSnapshot(zone, generatedHeatByZone.get(zone.code()), deltaSeconds));
         return snapshots;
     }
 
-    private CoolingZoneSnapshot createZoneSnapshot(CoolingZoneDefinition zone, double generatedHeatWatts) {
+    private CoolingZoneSnapshot createZoneSnapshot(CoolingZoneDefinition zone, double generatedHeatWatts, double deltaSeconds) {
         ZoneCoolingResources resources = calculateZoneCoolingResources(zone.code());
         double usedCoolingCapacityWatts = Math.min(generatedHeatWatts, resources.availableCoolingCapacityWatts());
         double coolingDeficitWatts = Math.max(0.0, generatedHeatWatts - resources.availableCoolingCapacityWatts());
@@ -241,11 +248,20 @@ public final class CoolingSystem {
                 resources.supplyAirflowCubicMetersPerSecond(),
                 resources.exhaustAirflowCubicMetersPerSecond()
         );
-        ZoneTemperatures temperatures = calculateZoneTemperatures(
-                generatedHeatWatts,
-                resources.supplyAirflowCubicMetersPerSecond(),
-                resources.weightedSupplyTemperatureCelsius(),
-                recirculationFraction
+        double previousZoneAirTemperatureCelsius =
+                zoneAirTemperatureByZoneCode.getOrDefault(zone.code(), configuration.options().initialInletAirTemperatureCelsius());
+        ZoneTemperatures temperatures =
+                calculateZoneTemperatures(
+                        coolingDeficitWatts,
+                        resources,
+                        previousZoneAirTemperatureCelsius,
+                        resources.weightedSupplyTemperatureCelsius(),
+                        recirculationFraction,
+                        deltaSeconds
+                );
+        zoneAirTemperatureByZoneCode.put(
+                zone.code(),
+                temperatures.exhaustAirTemperatureCelsius()
         );
         return new CoolingZoneSnapshot(
                 zone.code(),
@@ -301,25 +317,51 @@ public final class CoolingSystem {
     }
 
     private ZoneTemperatures calculateZoneTemperatures(
-            double generatedHeatWatts,
+            double coolingDeficitWatts,
+            ZoneCoolingResources resources,
+            double previousZoneAirTemperatureCelsius,
+            double supplyAirTemperatureCelsius,
+            double recirculationFraction,
+            double deltaSeconds
+    ) {
+        double supplyAirflow = resources.supplyAirflowCubicMetersPerSecond();
+        double exhaustAirflow = resources.exhaustAirflowCubicMetersPerSecond();
+        double inletAirTemperature =
+                calculateInletAirTemperature(
+                        supplyAirflow,
+                        previousZoneAirTemperatureCelsius,
+                        supplyAirTemperatureCelsius,
+                        recirculationFraction
+                );
+        double heatRemovalAirflow = Math.max(supplyAirflow, exhaustAirflow);
+        if (heatRemovalAirflow == 0.0) return calculateStagnantZoneTemperatures(coolingDeficitWatts, previousZoneAirTemperatureCelsius, deltaSeconds);
+        double airTemperatureRise = coolingDeficitWatts / (configuration.options().airVolumetricHeatCapacityJoulesPerCubicMeterKelvin() * heatRemovalAirflow);
+        double exhaustAirTemperature = inletAirTemperature + airTemperatureRise;
+        return new ZoneTemperatures(inletAirTemperature,exhaustAirTemperature);
+    }
+
+    private double calculateInletAirTemperature(
             double supplyAirflow,
+            double previousZoneAirTemperatureCelsius,
             double supplyAirTemperatureCelsius,
             double recirculationFraction
     ) {
-        if (supplyAirflow == 0.0) {
-            double fallbackTemperature = configuration.options().initialInletAirTemperatureCelsius();
-            return new ZoneTemperatures(fallbackTemperature, fallbackTemperature);
-        }
-        double airTemperatureRise =
-                generatedHeatWatts
-                        / (
-                        configuration.options()
-                                .airVolumetricHeatCapacityJoulesPerCubicMeterKelvin()
-                                * supplyAirflow
-                );
-        double inletAirTemperature = supplyAirTemperatureCelsius + (recirculationFraction/ (1.0 - recirculationFraction)) * airTemperatureRise;
-        double exhaustAirTemperature = inletAirTemperature + airTemperatureRise;
-        return new ZoneTemperatures(inletAirTemperature, exhaustAirTemperature);
+        if (supplyAirflow == 0.0) return previousZoneAirTemperatureCelsius;
+        return (supplyAirTemperatureCelsius * (1.0 - recirculationFraction)) + (previousZoneAirTemperatureCelsius * recirculationFraction);
+    }
+
+    private ZoneTemperatures calculateStagnantZoneTemperatures(
+            double coolingDeficitWatts,
+            double previousZoneAirTemperatureCelsius,
+            double deltaSeconds
+    ) {
+        double temperatureRise = coolingDeficitWatts * deltaSeconds / effectiveZoneAirThermalCapacityJoulesPerCelsius();
+        double nextZoneAirTemperature = previousZoneAirTemperatureCelsius + temperatureRise;
+        return new ZoneTemperatures(previousZoneAirTemperatureCelsius, nextZoneAirTemperature);
+    }
+
+    private double effectiveZoneAirThermalCapacityJoulesPerCelsius() {
+        return configuration.options().airVolumetricHeatCapacityJoulesPerCubicMeterKelvin() * DEFAULT_EFFECTIVE_ZONE_AIR_VOLUME_CUBIC_METERS;
     }
 
     private record ZoneCoolingResources(

@@ -225,7 +225,7 @@ class CoolingTemperatureIntegrationTest {
         );
 
         assertEquals(
-                24.0,
+                18.0,
                 secondZoneSnapshot.inletAirTemperatureCelsius(),
                 EPSILON
         );
@@ -242,7 +242,7 @@ class CoolingTemperatureIntegrationTest {
          * Result = 33.435712 °C
          */
         assertEquals(
-                33.435712,
+                32.859712,
                 temperatureSystem
                         .getThermalState(server.getCode())
                         .getTemperatureCelsius(),
