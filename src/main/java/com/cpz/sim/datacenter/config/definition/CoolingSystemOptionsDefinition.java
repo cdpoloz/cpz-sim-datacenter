@@ -14,6 +14,7 @@ public record CoolingSystemOptionsDefinition(
         double airDensityKilogramsPerCubicMeter,
         double airSpecificHeatJoulesPerKilogramKelvin,
         double initialInletAirTemperatureCelsius,
-        double maximumRecirculationFraction
+        double maximumRecirculationFraction,
+        double effectiveZoneAirVolumeCubicMeters
 ) {
 }

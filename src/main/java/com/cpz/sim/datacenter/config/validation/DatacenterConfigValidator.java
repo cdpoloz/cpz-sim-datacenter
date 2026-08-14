@@ -365,6 +365,8 @@ public final class DatacenterConfigValidator {
         double maximumRecirculationFraction = options.maximumRecirculationFraction();
         if (!Double.isFinite(maximumRecirculationFraction) || maximumRecirculationFraction < 0.0 || maximumRecirculationFraction > 1.0)
             errors.add("Cooling maximum recirculation fraction must be finite and between 0.0 and 1.0");
+        if (!Double.isFinite(options.effectiveZoneAirVolumeCubicMeters()) || options.effectiveZoneAirVolumeCubicMeters() <= 0.0)
+            errors.add("Cooling effective zone air volume must be finite and greater than zero");
     }
 
     private static void validateCoolingSupplyUnits(CoolingConfigDefinition cooling, List<String> errors) {

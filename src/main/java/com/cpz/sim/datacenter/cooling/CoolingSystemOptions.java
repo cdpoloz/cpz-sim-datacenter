@@ -22,7 +22,8 @@ public record CoolingSystemOptions(
         double airDensityKilogramsPerCubicMeter,
         double airSpecificHeatJoulesPerKilogramKelvin,
         double initialInletAirTemperatureCelsius,
-        double maximumRecirculationFraction
+        double maximumRecirculationFraction,
+        double effectiveZoneAirVolumeCubicMeters
 ) {
 
     /**
@@ -47,6 +48,11 @@ public record CoolingSystemOptions(
     public static final double DEFAULT_MAXIMUM_RECIRCULATION_FRACTION = 0.95;
 
     /**
+     * Default effective zone air volume cubic meters.
+     */
+    public static final double DEFAULT_EFFECTIVE_ZONE_AIR_VOLUME_CUBIC_METERS = 1_000.0;
+
+    /**
      * Creates cooling-system options.
      *
      * @throws IllegalArgumentException if a value is not finite, if either
@@ -62,6 +68,8 @@ public record CoolingSystemOptions(
             throw new IllegalArgumentException("initialInletAirTemperatureCelsius must be finite");
         if (!Double.isFinite(maximumRecirculationFraction) || maximumRecirculationFraction < 0.0 || maximumRecirculationFraction > 1.0)
             throw new IllegalArgumentException("maximumRecirculationFraction must be finite and between 0.0 and 1.0");
+        if (!Double.isFinite(effectiveZoneAirVolumeCubicMeters) || effectiveZoneAirVolumeCubicMeters <= 0.0)
+            throw new IllegalArgumentException("effectiveZoneAirVolumeCubicMeters must be finite and greater than 0.0");
     }
 
     /**
@@ -74,7 +82,8 @@ public record CoolingSystemOptions(
                 DEFAULT_AIR_DENSITY_KG_PER_M3,
                 DEFAULT_AIR_SPECIFIC_HEAT_JOULES_PER_KG_KELVIN,
                 DEFAULT_INITIAL_INLET_AIR_TEMPERATURE_CELSIUS,
-                DEFAULT_MAXIMUM_RECIRCULATION_FRACTION
+                DEFAULT_MAXIMUM_RECIRCULATION_FRACTION,
+                DEFAULT_EFFECTIVE_ZONE_AIR_VOLUME_CUBIC_METERS
         );
     }
 

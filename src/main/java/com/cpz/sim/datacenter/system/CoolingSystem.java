@@ -38,7 +38,6 @@ import java.util.Set;
  */
 public final class CoolingSystem {
 
-    private static final double DEFAULT_EFFECTIVE_ZONE_AIR_VOLUME_CUBIC_METERS = 1_000.0;
     private final CoolingConfiguration configuration;
     private final Map<String, CoolingUnitDefinition> definitionsByUnitCode;
     private final Map<String, CoolingUnitState> statesByUnitCode;
@@ -361,7 +360,7 @@ public final class CoolingSystem {
     }
 
     private double effectiveZoneAirThermalCapacityJoulesPerCelsius() {
-        return configuration.options().airVolumetricHeatCapacityJoulesPerCubicMeterKelvin() * DEFAULT_EFFECTIVE_ZONE_AIR_VOLUME_CUBIC_METERS;
+        return configuration.options().airVolumetricHeatCapacityJoulesPerCubicMeterKelvin() * configuration.options().effectiveZoneAirVolumeCubicMeters();
     }
 
     private record ZoneCoolingResources(

@@ -628,7 +628,8 @@ class DatacenterConfigValidatorTest {
                 1.204,
                 1005.0,
                 24.0,
-                0.95
+                0.95,
+                1_000.0
         );
     }
 
@@ -1100,7 +1101,8 @@ class DatacenterConfigValidatorTest {
                             invalidValue,
                             1005.0,
                             24.0,
-                            0.95
+                            0.95,
+                            1_000.0
                     );
 
             assertThrows(
@@ -1131,7 +1133,8 @@ class DatacenterConfigValidatorTest {
                             1.204,
                             invalidValue,
                             24.0,
-                            0.95
+                            0.95,
+                            1_000.0
                     );
 
             assertThrows(
@@ -1160,7 +1163,8 @@ class DatacenterConfigValidatorTest {
                             1.204,
                             1005.0,
                             invalidValue,
-                            0.95
+                            0.95,
+                            1_000.0
                     );
 
             assertThrows(
@@ -1191,7 +1195,8 @@ class DatacenterConfigValidatorTest {
                             1.204,
                             1005.0,
                             24.0,
-                            invalidValue
+                            invalidValue,
+                            1_000.0
                     );
 
             assertThrows(
@@ -1220,7 +1225,8 @@ class DatacenterConfigValidatorTest {
                             1.204,
                             1005.0,
                             24.0,
-                            validValue
+                            validValue,
+                            1_000.0
                     );
 
             assertDoesNotThrow(
@@ -1983,5 +1989,38 @@ class DatacenterConfigValidatorTest {
                         definitionWithCooling(cooling)
                 )
         );
+    }
+
+    @Test
+    void shouldRejectInvalidEffectiveZoneAirVolume() {
+        double[] invalidValues = {
+                0.0,
+                -1.0,
+                Double.NaN,
+                Double.POSITIVE_INFINITY,
+                Double.NEGATIVE_INFINITY
+        };
+
+        for (double invalidValue : invalidValues) {
+            CoolingSystemOptionsDefinition options =
+                    new CoolingSystemOptionsDefinition(
+                            1.204,
+                            1005.0,
+                            24.0,
+                            0.95,
+                            invalidValue
+                    );
+
+            assertThrows(
+                    DatacenterConfigValidationException.class,
+                    () -> validator.validate(
+                            definitionWithCooling(
+                                    coolingWithOptions(options)
+                            )
+                    ),
+                    "Expected rejection for effective zone air volume: "
+                            + invalidValue
+            );
+        }
     }
 }

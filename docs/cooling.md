@@ -192,6 +192,7 @@ At JSON-validation level, the cooling block currently requires:
 - finite positive air density and specific heat
 - finite initial inlet-air temperature
 - `maximumRecirculationFraction` within `[0.0, 1.0]`
+- finite positive effective zone air volume
 - references only to known columns, racks, and zone codes
 - no server location belonging to more than one zone
 - at least one installed server in every valid zone
@@ -202,12 +203,26 @@ At JSON-validation level, the cooling block currently requires:
 - air specific heat: `1,005 J/(kg·K)`
 - initial inlet-air temperature: `24.0 °C`
 - maximum recirculation fraction: `0.95`
+- effective zone air volume: `1,000.0 m³`
 
 The volumetric heat capacity used by the model is:
 
 ```text
 airVolumetricHeatCapacity = airDensity * airSpecificHeat
 ```
+
+For stagnant-zone heating, the model combines that volumetric heat capacity
+with the configured effective zone air volume:
+
+```text
+effectiveZoneAirThermalCapacity =
+    airVolumetricHeatCapacity * effectiveZoneAirVolumeCubicMeters
+```
+
+`effectiveZoneAirVolumeCubicMeters` is a calibration parameter for the
+simplified thermal inertia of a logical cooling zone. Larger values make
+zone-air temperature rise and fall more slowly; smaller values make the model
+respond faster. The default preserves the original demo-scale behavior.
 
 ## Operational State
 
@@ -362,6 +377,9 @@ temperatureRise =
     coolingDeficitWatts * deltaSeconds
     / effectiveZoneAirThermalCapacity
 
+effectiveZoneAirThermalCapacity =
+    airVolumetricHeatCapacity * effectiveZoneAirVolumeCubicMeters
+
 nextZoneAirTemperature =
     previousZoneAirTemperature + temperatureRise
 ```
@@ -510,6 +528,23 @@ CoolingSnapshot coolingSnapshot = coolingCoordinator.update(tick);
 Production applications should build `CoolingConfiguration` from the validated
 JSON definition rather than from ad hoc programmatic test fixtures.
 
+The cooling options block can tune the physical constants and the effective
+thermal inertia of each logical zone:
+
+```json
+"options": {
+  "airDensityKilogramsPerCubicMeter": 1.204,
+  "airSpecificHeatJoulesPerKilogramKelvin": 1005.0,
+  "initialInletAirTemperatureCelsius": 24.0,
+  "maximumRecirculationFraction": 0.95,
+  "effectiveZoneAirVolumeCubicMeters": 1000.0
+}
+```
+
+Increasing `effectiveZoneAirVolumeCubicMeters` is the recommended first
+calibration step when a UI scenario heats or cools too quickly for the intended
+datacenter scale.
+
 ## Demo
 
 The interactive demo is:
@@ -579,7 +614,7 @@ power, PUE, alarms, or historical metrics.
 ## Current Limitations
 
 - server electrical power is assumed to become heat at a one-to-one ratio
-- zones are logical and use a simplified effective air volume, not measured
+- zones are logical and use a configured effective air volume, not measured
   physical geometry
 - no pressure, humidity, leakage, containment, or fan-curve model
 - no airflow propagation between zones
@@ -601,7 +636,7 @@ Possible future extensions include:
 - integration of cooling results into higher-level operational snapshots
 - cooling-unit electrical consumption and facility-energy metrics
 - partial capacity, variable-speed fans, and equipment degradation
-- configurable zone effective air volume and cross-zone thermal coupling
+- persistent rack/equipment thermal mass and cross-zone thermal coupling
 - rack inlet and hot-aisle aggregation
 - cooling alarms and health reasons
 - telemetry adapters for physical supply and exhaust equipment

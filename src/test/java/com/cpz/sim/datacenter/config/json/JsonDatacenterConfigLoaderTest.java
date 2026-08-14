@@ -518,7 +518,8 @@ class JsonDatacenterConfigLoaderTest {
                 "airDensityKilogramsPerCubicMeter": 1.204,
                 "airSpecificHeatJoulesPerKilogramKelvin": 1005.0,
                 "initialInletAirTemperatureCelsius": 24.0,
-                "maximumRecirculationFraction": 0.95
+                "maximumRecirculationFraction": 0.95,
+                "effectiveZoneAirVolumeCubicMeters": 1000.0
               }
             }
             """);
@@ -597,6 +598,12 @@ class JsonDatacenterConfigLoaderTest {
                 0.95,
                 configuration.options()
                         .maximumRecirculationFraction()
+        );
+        assertEquals(
+                1_000.0,
+                definition.cooling()
+                        .options()
+                        .effectiveZoneAirVolumeCubicMeters()
         );
     }
 
