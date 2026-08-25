@@ -139,6 +139,7 @@ public final class CoolingConfigurationFactory {
                 definition.airSpecificHeatJoulesPerKilogramKelvin(),
                 definition.initialInletAirTemperatureCelsius(),
                 definition.maximumRecirculationFraction(),
+                definition.residualRecirculationFraction(),
                 definition.effectiveZoneAirVolumeCubicMeters()
         );
     }

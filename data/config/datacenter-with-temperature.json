@@ -47,5 +47,12 @@
     "defaultInitialTemperatureCelsius": 30.0,
     "thermalCapacityJoulesPerCelsius": 5000.0,
     "heatDissipationWattsPerCelsius": 8.0
+  },
+  "cooling": {
+    "options": {
+      "maximumRecirculationFraction": 0.95,
+      "residualRecirculationFraction": 0.10,
+      "effectiveZoneAirVolumeCubicMeters": 5000.0
+    }
   }
 }

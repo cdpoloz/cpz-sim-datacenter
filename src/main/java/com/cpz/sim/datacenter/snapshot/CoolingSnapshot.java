@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 
 /**
  * Represents the complete cooling-system state captured at a simulation tick.
@@ -15,11 +17,7 @@ import java.util.Set;
  *
  * @author CPZ
  */
-public record CoolingSnapshot(
-        long tickIndex,
-        List<CoolingUnitSnapshot> units,
-        List<CoolingZoneSnapshot> zones
-) {
+public record CoolingSnapshot(long tickIndex, List<CoolingUnitSnapshot> units, List<CoolingZoneSnapshot> zones) {
 
     /**
      * Creates a cooling snapshot.
@@ -108,6 +106,53 @@ public record CoolingSnapshot(
         for (CoolingZoneSnapshot zone : zones) {
             if (!zoneCodes.add(zone.zoneCode())) throw new IllegalArgumentException("duplicate cooling-zone snapshot code: " + zone.zoneCode());
         }
+    }
+
+    /**
+     * Aggregates a subset of cooling zones into a higher-level cooling snapshot.
+     *
+     * @param groupCode external group code
+     * @param zoneCodes cooling-zone codes to aggregate
+     * @return aggregated cooling-zone group snapshot
+     *
+     * @throws NullPointerException if {@code groupCode}, {@code zoneCodes}, or one
+     *         of its elements is {@code null}
+     * @throws IllegalArgumentException if {@code groupCode} is blank,
+     *         {@code zoneCodes} is empty, or a requested zone does not exist
+     */
+    public CoolingZoneGroupSnapshot aggregateZones(String groupCode, Collection<String> zoneCodes) {
+        Objects.requireNonNull(groupCode, "groupCode must not be null");
+        Objects.requireNonNull(zoneCodes, "zoneCodes must not be null");
+        if (groupCode.isBlank()) throw new IllegalArgumentException("groupCode must not be blank");
+        if (zoneCodes.isEmpty()) throw new IllegalArgumentException("zoneCodes must not be empty");
+        LinkedHashSet<String> uniqueZoneCodes = new LinkedHashSet<>();
+        for (String zoneCode : zoneCodes) {
+            Objects.requireNonNull(zoneCode, "zoneCodes must not contain null");
+            if (zoneCode.isBlank()) throw new IllegalArgumentException("zoneCodes must not contain blank values");
+            uniqueZoneCodes.add(zoneCode);
+        }
+        List<CoolingZoneSnapshot> selectedZones = uniqueZoneCodes
+                .stream()
+                .map(zoneCode -> findZone(zoneCode).orElseThrow(() -> new IllegalArgumentException("unknown cooling-zone code: " + zoneCode)))
+                .toList();
+        double generatedHeatWatts = selectedZones.stream().mapToDouble(CoolingZoneSnapshot::generatedHeatWatts).sum();
+        double availableCoolingCapacityWatts = selectedZones.stream().mapToDouble(CoolingZoneSnapshot::availableCoolingCapacityWatts).sum();
+        double usedCoolingCapacityWatts = selectedZones.stream().mapToDouble(CoolingZoneSnapshot::usedCoolingCapacityWatts).sum();
+        double coolingDeficitWatts = selectedZones.stream().mapToDouble(CoolingZoneSnapshot::coolingDeficitWatts).sum();
+        double averageInletAirTemperatureCelsius = selectedZones.stream().mapToDouble(CoolingZoneSnapshot::inletAirTemperatureCelsius).average().orElseThrow();
+        double averageExhaustAirTemperatureCelsius = selectedZones.stream().mapToDouble(CoolingZoneSnapshot::exhaustAirTemperatureCelsius).average().orElseThrow();
+        double averageRecirculationFraction = selectedZones.stream().mapToDouble(CoolingZoneSnapshot::recirculationFraction).average().orElseThrow();
+        return new CoolingZoneGroupSnapshot(
+                groupCode,
+                List.copyOf(uniqueZoneCodes),
+                generatedHeatWatts,
+                availableCoolingCapacityWatts,
+                usedCoolingCapacityWatts,
+                coolingDeficitWatts,
+                averageInletAirTemperatureCelsius,
+                averageExhaustAirTemperatureCelsius,
+                averageRecirculationFraction
+        );
     }
 
 }

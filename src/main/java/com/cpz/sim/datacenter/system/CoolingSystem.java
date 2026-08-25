@@ -310,9 +310,14 @@ public final class CoolingSystem {
     }
 
     private double calculateRecirculationFraction(double supplyAirflow, double exhaustAirflow) {
-        if (supplyAirflow == 0.0) return configuration.options().maximumRecirculationFraction();
-        double airflowImbalanceFraction = Math.max(0.0, (supplyAirflow - exhaustAirflow) / supplyAirflow);
-        return Math.min(airflowImbalanceFraction, configuration.options().maximumRecirculationFraction());
+        double maximumRecirculationFraction = configuration.options().maximumRecirculationFraction();
+        if (supplyAirflow == 0.0 && exhaustAirflow == 0.0) return maximumRecirculationFraction;
+        if (supplyAirflow == 0.0 || exhaustAirflow == 0.0) return maximumRecirculationFraction;
+        double totalAirflow = supplyAirflow + exhaustAirflow;
+        double balancePenalty = Math.abs(supplyAirflow - exhaustAirflow) / totalAirflow;
+        double residualRecirculationFraction = 0.10;
+        double recirculationFraction = residualRecirculationFraction + balancePenalty * (maximumRecirculationFraction - residualRecirculationFraction);
+        return Math.clamp(recirculationFraction, residualRecirculationFraction, maximumRecirculationFraction);
     }
 
     private ZoneTemperatures calculateZoneTemperatures(
