@@ -9,6 +9,8 @@ package com.cpz.sim.datacenter.config.definition;
  * @param maximumRecirculationFraction maximum permitted recirculation
  * @param residualRecirculationFraction minimum residual recirculation
  * @param effectiveZoneAirVolumeCubicMeters effective air volume per cooling zone
+ * @param recirculationResponseTimeSeconds time constant used to smooth
+ *        recirculation changes over time
  *
  * @author CPZ
  */
@@ -18,6 +20,7 @@ public record CoolingSystemOptionsDefinition(
         double initialInletAirTemperatureCelsius,
         double maximumRecirculationFraction,
         double residualRecirculationFraction,
-        double effectiveZoneAirVolumeCubicMeters
+        double effectiveZoneAirVolumeCubicMeters,
+        double recirculationResponseTimeSeconds
 ) {
 }

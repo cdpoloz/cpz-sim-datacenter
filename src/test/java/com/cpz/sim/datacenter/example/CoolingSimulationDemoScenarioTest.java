@@ -118,7 +118,18 @@ class CoolingSimulationDemoScenarioTest {
                 zone.inletAirTemperatureCelsius(),
                 EPSILON
         );
-        assertEquals(0.95, zone.recirculationFraction(), EPSILON);
+
+        double expectedRecirculation =
+                expectedRecirculationAfterOneMinute(
+                        CoolingSystemOptions.DEFAULT_RESIDUAL_RECIRCULATION_FRACTION,
+                        CoolingSystemOptions.DEFAULT_MAXIMUM_RECIRCULATION_FRACTION
+                );
+
+        assertEquals(
+                expectedRecirculation,
+                zone.recirculationFraction(),
+                EPSILON
+        );
     }
 
     @Test
@@ -155,7 +166,18 @@ class CoolingSimulationDemoScenarioTest {
                 EPSILON
         );
         assertEquals(0.0, zone.coolingDeficitWatts(), EPSILON);
-        assertEquals(0.95, zone.recirculationFraction(), EPSILON);
+
+        double expectedRecirculation =
+                expectedRecirculationAfterOneMinute(
+                        CoolingSystemOptions.DEFAULT_RESIDUAL_RECIRCULATION_FRACTION,
+                        CoolingSystemOptions.DEFAULT_MAXIMUM_RECIRCULATION_FRACTION
+                );
+
+        assertEquals(
+                expectedRecirculation,
+                zone.recirculationFraction(),
+                EPSILON
+        );
 
         assertTrue(
                 zone.inletAirTemperatureCelsius() > 18.0
@@ -213,7 +235,18 @@ class CoolingSimulationDemoScenarioTest {
                 zone.inletAirTemperatureCelsius(),
                 EPSILON
         );
-        assertEquals(0.95, zone.recirculationFraction(), EPSILON);
+
+        double expectedRecirculation =
+                expectedRecirculationAfterOneMinute(
+                        CoolingSystemOptions.DEFAULT_RESIDUAL_RECIRCULATION_FRACTION,
+                        CoolingSystemOptions.DEFAULT_MAXIMUM_RECIRCULATION_FRACTION
+                );
+
+        assertEquals(
+                expectedRecirculation,
+                zone.recirculationFraction(),
+                EPSILON
+        );
     }
 
     private static TestScenario createScenario() {
@@ -332,5 +365,20 @@ class CoolingSimulationDemoScenarioTest {
             SimulationTick tick = engine.step();
             return coordinator.update(tick);
         }
+    }
+
+    private static double expectedRecirculationAfterOneMinute(
+            double previousRecirculation,
+            double targetRecirculation
+    ) {
+        double smoothingFactor =
+                1.0 - Math.exp(
+                        -60.0
+                                / CoolingSystemOptions.DEFAULT_RECIRCULATION_RESPONSE_TIME_SECONDS
+                );
+
+        return previousRecirculation
+                + (targetRecirculation - previousRecirculation)
+                * smoothingFactor;
     }
 }

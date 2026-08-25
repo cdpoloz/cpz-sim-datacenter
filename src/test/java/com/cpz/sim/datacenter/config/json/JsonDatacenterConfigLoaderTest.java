@@ -520,7 +520,8 @@ class JsonDatacenterConfigLoaderTest {
             "initialInletAirTemperatureCelsius": 24.0,
             "maximumRecirculationFraction": 0.95,
             "residualRecirculationFraction": 0.10,
-            "effectiveZoneAirVolumeCubicMeters": 1000.0
+            "effectiveZoneAirVolumeCubicMeters": 1000.0,
+            "recirculationResponseTimeSeconds": 300.0
           }
         }
         """);

@@ -202,16 +202,33 @@ class CoolingSystemTest {
     }
 
     @Test
-    void shouldUseResidualRecirculationWhenExhaustMatchesSupplyAirflow() {
+    void shouldSmoothTowardResidualRecirculationWhenExhaustMatchesSupplyAirflow() {
         CoolingSystem system = new CoolingSystem(configuration());
         system.enable("EXHAUST-01");
-        CoolingSnapshot snapshot = system.tick(new CoolingTickInput(12L, List.of(new ServerHeatLoad(SERVER_LOCATION, 450.0))));
+
+        CoolingSnapshot snapshot =
+                system.tick(
+                        new CoolingTickInput(
+                                12L,
+                                List.of(new ServerHeatLoad(SERVER_LOCATION, 450.0))
+                        )
+                );
+
         CoolingZoneSnapshot zoneSnapshot = snapshot.zones().getFirst();
-        double residualRecirculationFraction = CoolingSystemOptions.DEFAULT_RESIDUAL_RECIRCULATION_FRACTION;
-        double expectedInletTemperature = (18.0 * (1.0 - residualRecirculationFraction)) + (24.0 * residualRecirculationFraction);
+
+        double expectedRecirculationFraction =
+                expectedRecirculationAfterOneMinute(
+                        CoolingSystemOptions.DEFAULT_MAXIMUM_RECIRCULATION_FRACTION,
+                        CoolingSystemOptions.DEFAULT_RESIDUAL_RECIRCULATION_FRACTION
+                );
+
+        double expectedInletTemperature =
+                (18.0 * (1.0 - expectedRecirculationFraction))
+                        + (24.0 * expectedRecirculationFraction);
+
         assertEquals(4.0, zoneSnapshot.supplyAirflowCubicMetersPerSecond());
         assertEquals(4.0, zoneSnapshot.exhaustAirflowCubicMetersPerSecond());
-        assertEquals(residualRecirculationFraction, zoneSnapshot.recirculationFraction(), 1.0e-9);
+        assertEquals(expectedRecirculationFraction, zoneSnapshot.recirculationFraction(), 1.0e-9);
         assertEquals(expectedInletTemperature, zoneSnapshot.inletAirTemperatureCelsius(), 1.0e-9);
         assertEquals(expectedInletTemperature, zoneSnapshot.exhaustAirTemperatureCelsius(), 1.0e-9);
     }
@@ -426,5 +443,20 @@ class CoolingSystemTest {
         system.reset();
         assertTrue(system.isEnabled("SUPPLY-01"));
         assertFalse(system.isEnabled("EXHAUST-01"));
+    }
+
+    private static double expectedRecirculationAfterOneMinute(
+            double previousRecirculation,
+            double targetRecirculation
+    ) {
+        double smoothingFactor =
+                1.0 - Math.exp(
+                        -60.0
+                                / CoolingSystemOptions.DEFAULT_RECIRCULATION_RESPONSE_TIME_SECONDS
+                );
+
+        return previousRecirculation
+                + (targetRecirculation - previousRecirculation)
+                * smoothingFactor;
     }
 }

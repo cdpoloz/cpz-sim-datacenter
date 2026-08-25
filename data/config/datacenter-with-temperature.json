@@ -47,5 +47,14 @@
     "defaultInitialTemperatureCelsius": 30.0,
     "thermalCapacityJoulesPerCelsius": 5000.0,
     "heatDissipationWattsPerCelsius": 8.0
+  },
+  "options": {
+    "airDensityKilogramsPerCubicMeter": 1.204,
+    "airSpecificHeatJoulesPerKilogramKelvin": 1005.0,
+    "initialInletAirTemperatureCelsius": 24.0,
+    "maximumRecirculationFraction": 0.95,
+    "residualRecirculationFraction": 0.10,
+    "effectiveZoneAirVolumeCubicMeters": 5000.0,
+    "recirculationResponseTimeSeconds": 300.0
   }
 }

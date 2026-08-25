@@ -17,6 +17,8 @@ package com.cpz.sim.datacenter.cooling;
  *        hot-air recirculation fraction
  * @param residualRecirculationFraction minimum residual hot-air
  *        recirculation fraction when supply and exhaust airflow are balanced
+ * @param recirculationResponseTimeSeconds time constant used to move the
+ *        effective recirculation fraction toward its target value
  *
  * @author CPZ
  */
@@ -26,7 +28,8 @@ public record CoolingSystemOptions(
         double initialInletAirTemperatureCelsius,
         double maximumRecirculationFraction,
         double residualRecirculationFraction,
-        double effectiveZoneAirVolumeCubicMeters
+        double effectiveZoneAirVolumeCubicMeters,
+        double recirculationResponseTimeSeconds
 ) {
 
     /**
@@ -61,6 +64,11 @@ public record CoolingSystemOptions(
     public static final double DEFAULT_RESIDUAL_RECIRCULATION_FRACTION = 0.1;
 
     /**
+     * Default recirculation response time.
+     */
+    public static final double DEFAULT_RECIRCULATION_RESPONSE_TIME_SECONDS = 300.0;
+
+    /**
      * Creates cooling-system options.
      *
      * @throws IllegalArgumentException if a value is not finite, if either
@@ -80,6 +88,8 @@ public record CoolingSystemOptions(
             throw new IllegalArgumentException("effectiveZoneAirVolumeCubicMeters must be finite and greater than 0.0");
         if (!Double.isFinite(residualRecirculationFraction) || residualRecirculationFraction < 0.0 || residualRecirculationFraction > maximumRecirculationFraction)
             throw new IllegalArgumentException("residualRecirculationFraction must be finite and between 0.0 and maximumRecirculationFraction");
+        if (!Double.isFinite(recirculationResponseTimeSeconds) || recirculationResponseTimeSeconds <= 0.0)
+            throw new IllegalArgumentException("recirculationResponseTimeSeconds must be finite and greater than 0.0");
     }
 
     /**
@@ -94,7 +104,8 @@ public record CoolingSystemOptions(
                 DEFAULT_INITIAL_INLET_AIR_TEMPERATURE_CELSIUS,
                 DEFAULT_MAXIMUM_RECIRCULATION_FRACTION,
                 DEFAULT_RESIDUAL_RECIRCULATION_FRACTION,
-                DEFAULT_EFFECTIVE_ZONE_AIR_VOLUME_CUBIC_METERS
+                DEFAULT_EFFECTIVE_ZONE_AIR_VOLUME_CUBIC_METERS,
+                DEFAULT_RECIRCULATION_RESPONSE_TIME_SECONDS
         );
     }
 

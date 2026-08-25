@@ -630,7 +630,8 @@ class DatacenterConfigValidatorTest {
                 24.0,
                 0.95,
                 0.1,
-                1_000.0
+                1_000.0,
+                300
 
         );
     }
@@ -1105,7 +1106,8 @@ class DatacenterConfigValidatorTest {
                             24.0,
                             0.95,
                             0.1,
-                            1_000.0
+                            1_000.0,
+                            300
                     );
 
             assertThrows(
@@ -1138,7 +1140,8 @@ class DatacenterConfigValidatorTest {
                             24.0,
                             0.95,
                             0.1,
-                            1_000.0
+                            1_000.0,
+                            300
                     );
 
             assertThrows(
@@ -1169,7 +1172,8 @@ class DatacenterConfigValidatorTest {
                             invalidValue,
                             0.95,
                             0.1,
-                            1_000.0
+                            1_000.0,
+                            300
                     );
 
             assertThrows(
@@ -1202,7 +1206,8 @@ class DatacenterConfigValidatorTest {
                             24.0,
                             invalidValue,
                             0.1,
-                            1_000.0
+                            1_000.0,
+                            300
                     );
 
             assertThrows(
@@ -1233,7 +1238,8 @@ class DatacenterConfigValidatorTest {
                             24.0,
                             validValue,
                             0.1,
-                            1_000.0
+                            1_000.0,
+                            300
                     );
 
             assertDoesNotThrow(
@@ -2016,7 +2022,8 @@ class DatacenterConfigValidatorTest {
                             24.0,
                             0.95,
                             0.1,
-                            invalidValue
+                            invalidValue,
+                            300
                     );
 
             assertThrows(

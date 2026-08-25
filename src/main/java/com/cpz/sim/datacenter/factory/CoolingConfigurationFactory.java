@@ -140,7 +140,8 @@ public final class CoolingConfigurationFactory {
                 definition.initialInletAirTemperatureCelsius(),
                 definition.maximumRecirculationFraction(),
                 definition.residualRecirculationFraction(),
-                definition.effectiveZoneAirVolumeCubicMeters()
+                definition.effectiveZoneAirVolumeCubicMeters(),
+                definition.recirculationResponseTimeSeconds()
         );
     }
 }

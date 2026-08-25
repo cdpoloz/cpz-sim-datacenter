@@ -43,6 +43,7 @@ public final class CoolingSystem {
     private final Map<String, CoolingUnitState> statesByUnitCode;
     private final Map<ServerLocation, String> zoneCodeByServerLocation;
     private final Map<String, Double> zoneAirTemperatureByZoneCode;
+    private final Map<String, Double> recirculationFractionByZoneCode;
 
     /**
      * Creates a cooling system from the given configuration.
@@ -67,6 +68,17 @@ public final class CoolingSystem {
         for (CoolingZoneDefinition zone : configuration.zones()) {
             zoneAirTemperatureByZoneCode.put(zone.code(), configuration.options().initialInletAirTemperatureCelsius());
             for (ServerLocation location : zone.serverLocations()) zoneCodeByServerLocation.put(location, zone.code());
+        }
+        this.recirculationFractionByZoneCode = new LinkedHashMap<>();
+        for (CoolingZoneDefinition zone : configuration.zones()) {
+            zoneAirTemperatureByZoneCode.put(zone.code(), configuration.options().initialInletAirTemperatureCelsius());
+            for (ServerLocation location : zone.serverLocations()) zoneCodeByServerLocation.put(location, zone.code());
+        }
+        for (CoolingZoneDefinition zone : configuration.zones()) {
+            ZoneCoolingResources resources = calculateZoneCoolingResources(zone.code());
+            double initialRecirculationFraction =
+                    calculateTargetRecirculationFraction(resources.supplyAirflowCubicMetersPerSecond(), resources.exhaustAirflowCubicMetersPerSecond());
+            recirculationFractionByZoneCode.put(zone.code(), initialRecirculationFraction);
         }
     }
 
@@ -175,6 +187,11 @@ public final class CoolingSystem {
             statesByUnitCode.put(definition.code(), new CoolingUnitState(definition.code(), definition.initiallyEnabled()));
         for (CoolingZoneDefinition zone : configuration.zones())
             zoneAirTemperatureByZoneCode.put(zone.code(), configuration.options().initialInletAirTemperatureCelsius());
+        recirculationFractionByZoneCode.clear();
+        for (CoolingZoneDefinition zone : configuration.zones()) {
+            ZoneCoolingResources resources = calculateZoneCoolingResources(zone.code());
+            recirculationFractionByZoneCode.put(zone.code(), calculateTargetRecirculationFraction(resources.supplyAirflowCubicMetersPerSecond(), resources.exhaustAirflowCubicMetersPerSecond()));
+        }
     }
 
     /**
@@ -243,10 +260,17 @@ public final class CoolingSystem {
         ZoneCoolingResources resources = calculateZoneCoolingResources(zone.code());
         double usedCoolingCapacityWatts = Math.min(generatedHeatWatts, resources.availableCoolingCapacityWatts());
         double coolingDeficitWatts = Math.max(0.0, generatedHeatWatts - resources.availableCoolingCapacityWatts());
-        double recirculationFraction = calculateRecirculationFraction(
-                resources.supplyAirflowCubicMetersPerSecond(),
-                resources.exhaustAirflowCubicMetersPerSecond()
-        );
+        double targetRecirculationFraction =
+                calculateTargetRecirculationFraction(
+                        resources.supplyAirflowCubicMetersPerSecond(),
+                        resources.exhaustAirflowCubicMetersPerSecond()
+                );
+        double recirculationFraction =
+                smoothRecirculationFraction(
+                        zone.code(),
+                        targetRecirculationFraction,
+                        deltaSeconds
+                );
         double previousZoneAirTemperatureCelsius =
                 zoneAirTemperatureByZoneCode.getOrDefault(zone.code(), configuration.options().initialInletAirTemperatureCelsius());
         ZoneTemperatures temperatures =
@@ -309,7 +333,7 @@ public final class CoolingSystem {
                 .orElse(0.0);
     }
 
-    private double calculateRecirculationFraction(double supplyAirflow, double exhaustAirflow) {
+    private double calculateTargetRecirculationFraction(double supplyAirflow, double exhaustAirflow) {
         double maximumRecirculationFraction = configuration.options().maximumRecirculationFraction();
         if (supplyAirflow == 0.0 && exhaustAirflow == 0.0) return maximumRecirculationFraction;
         if (supplyAirflow == 0.0 || exhaustAirflow == 0.0) return maximumRecirculationFraction;
@@ -318,6 +342,15 @@ public final class CoolingSystem {
         double residualRecirculationFraction = configuration.options().residualRecirculationFraction();
         double recirculationFraction = residualRecirculationFraction + balancePenalty * (maximumRecirculationFraction - residualRecirculationFraction);
         return Math.clamp(recirculationFraction, residualRecirculationFraction, maximumRecirculationFraction);
+    }
+
+    private double smoothRecirculationFraction(String zoneCode, double targetRecirculationFraction, double deltaSeconds) {
+        double previousRecirculationFraction = recirculationFractionByZoneCode.getOrDefault(zoneCode, targetRecirculationFraction);
+        double responseTimeSeconds = configuration.options().recirculationResponseTimeSeconds();
+        double smoothingFactor = 1.0 - Math.exp(-deltaSeconds / responseTimeSeconds);
+        double smoothedRecirculationFraction = previousRecirculationFraction + (targetRecirculationFraction - previousRecirculationFraction) * smoothingFactor;
+        recirculationFractionByZoneCode.put(zoneCode, smoothedRecirculationFraction);
+        return smoothedRecirculationFraction;
     }
 
     private ZoneTemperatures calculateZoneTemperatures(
