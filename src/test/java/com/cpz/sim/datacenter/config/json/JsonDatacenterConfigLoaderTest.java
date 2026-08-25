@@ -478,51 +478,52 @@ class JsonDatacenterConfigLoaderTest {
 
     private Path writeValidCoolingConfig() throws IOException {
         return writeConfigWithCooling("""
+        {
+          "zones": [
             {
-              "zones": [
-                {
-                  "code": "ZONE-A01-R01",
-                  "columns": ["A01"],
-                  "rackCodes": ["RACK-A01-R01"]
-                }
-              ],
-              "supplyUnits": [
-                {
-                  "code": "SUPPLY-01",
-                  "ratedAirflowCubicMetersPerSecond": 8.0,
-                  "ratedCoolingCapacityWatts": 100000.0,
-                  "supplyAirTemperatureCelsius": 18.0,
-                  "influences": [
-                    {
-                      "zoneCode": "ZONE-A01-R01",
-                      "weight": 1.0
-                    }
-                  ],
-                  "initiallyEnabled": true
-                }
-              ],
-              "exhaustUnits": [
-                {
-                  "code": "EXHAUST-01",
-                  "ratedAirflowCubicMetersPerSecond": 8.0,
-                  "influences": [
-                    {
-                      "zoneCode": "ZONE-A01-R01",
-                      "weight": 1.0
-                    }
-                  ],
-                  "initiallyEnabled": false
-                }
-              ],
-              "options": {
-                "airDensityKilogramsPerCubicMeter": 1.204,
-                "airSpecificHeatJoulesPerKilogramKelvin": 1005.0,
-                "initialInletAirTemperatureCelsius": 24.0,
-                "maximumRecirculationFraction": 0.95,
-                "effectiveZoneAirVolumeCubicMeters": 1000.0
-              }
+              "code": "ZONE-A01-R01",
+              "columns": ["A01"],
+              "rackCodes": ["RACK-A01-R01"]
             }
-            """);
+          ],
+          "supplyUnits": [
+            {
+              "code": "SUPPLY-01",
+              "ratedAirflowCubicMetersPerSecond": 8.0,
+              "ratedCoolingCapacityWatts": 100000.0,
+              "supplyAirTemperatureCelsius": 18.0,
+              "influences": [
+                {
+                  "zoneCode": "ZONE-A01-R01",
+                  "weight": 1.0
+                }
+              ],
+              "initiallyEnabled": true
+            }
+          ],
+          "exhaustUnits": [
+            {
+              "code": "EXHAUST-01",
+              "ratedAirflowCubicMetersPerSecond": 8.0,
+              "influences": [
+                {
+                  "zoneCode": "ZONE-A01-R01",
+                  "weight": 1.0
+                }
+              ],
+              "initiallyEnabled": false
+            }
+          ],
+          "options": {
+            "airDensityKilogramsPerCubicMeter": 1.204,
+            "airSpecificHeatJoulesPerKilogramKelvin": 1005.0,
+            "initialInletAirTemperatureCelsius": 24.0,
+            "maximumRecirculationFraction": 0.95,
+            "residualRecirculationFraction": 0.10,
+            "effectiveZoneAirVolumeCubicMeters": 1000.0
+          }
+        }
+        """);
     }
 
     @Test

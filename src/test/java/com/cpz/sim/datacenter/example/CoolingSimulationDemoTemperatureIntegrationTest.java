@@ -31,21 +31,21 @@ class CoolingSimulationDemoTemperatureIntegrationTest {
     private static final double SERVER_UTILIZATION = 0.75;
 
     @Test
-    void shouldUseColdInletReferenceWhenBothUnitsAreEnabled() {
+    void shouldUseResidualInletReferenceWhenBothUnitsAreEnabled() {
         ScenarioResult result = executeScenario(true, true);
 
         assertEquals(
-                18.0,
+                18.6,
                 result.inletAirTemperatureCelsius(),
                 EPSILON
         );
 
         /*
-         * This is the value already observed in the demo after one
-         * 60-second tick from an initial server temperature of 25 °C.
+         * This is the value observed after one 60-second tick from an initial
+         * server temperature of 25 °C, using the residual inlet reference.
          */
         assertEquals(
-                29.13,
+                29.19,
                 result.serverTemperatureCelsius(),
                 EPSILON
         );

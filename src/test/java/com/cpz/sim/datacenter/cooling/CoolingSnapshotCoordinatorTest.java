@@ -233,7 +233,7 @@ class CoolingSnapshotCoordinatorTest {
                         "SUPPLY-01",
                         4.0,
                         12_000.0,
-                        18.6,
+                        18.0,
                         List.of(
                                 new CoolingZoneInfluence(
                                         zone.code(),

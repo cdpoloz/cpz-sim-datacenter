@@ -2,6 +2,7 @@ package com.cpz.sim.datacenter.example;
 
 import com.cpz.sim.datacenter.cooling.CoolingConfiguration;
 import com.cpz.sim.datacenter.cooling.CoolingSnapshotCoordinator;
+import com.cpz.sim.datacenter.cooling.CoolingSystemOptions;
 import com.cpz.sim.datacenter.cooling.DatacenterCoolingTickInputProvider;
 import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.snapshot.CoolingSnapshot;
@@ -32,7 +33,7 @@ class CoolingSimulationDemoScenarioTest {
     private static final double SERVER_UTILIZATION = 0.75;
 
     @Test
-    void shouldProvideColdAirWithoutRecirculationWhenBothUnitsAreEnabled() {
+    void shouldProvideColdAirWithResidualRecirculationWhenBothUnitsAreEnabled() {
         TestScenario scenario = createScenario();
 
         CoolingSnapshot snapshot = scenario.executeNextTick();
@@ -62,11 +63,15 @@ class CoolingSimulationDemoScenarioTest {
         );
         assertEquals(0.0, zone.coolingDeficitWatts(), EPSILON);
         assertEquals(
-                18.0,
+                18.6,
                 zone.inletAirTemperatureCelsius(),
                 EPSILON
         );
-        assertEquals(0.0, zone.recirculationFraction(), EPSILON);
+        assertEquals(
+                CoolingSystemOptions.DEFAULT_RESIDUAL_RECIRCULATION_FRACTION,
+                zone.recirculationFraction(),
+                EPSILON
+        );
         assertEquals(
                 zone.inletAirTemperatureCelsius(),
                 zone.exhaustAirTemperatureCelsius(),

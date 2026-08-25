@@ -88,8 +88,9 @@ class CoolingTemperatureIntegrationTest {
          * utilization = 0.75
          * power = 100 + 0.75 × (500 - 100) = 400 W
          *
-         * SUPPLY and EXHAUST are enabled with equal airflow, so there is no
-         * recirculation and the inlet-air temperature remains at 18 °C.
+         * SUPPLY and EXHAUST are enabled with equal airflow. The inlet-air
+         * temperature uses the configured residual recirculation fraction:
+         * 18 × 0.90 + 24 × 0.10 = 18.6 °C.
          */
         SimulationTick firstTick = tickAtSeconds(
                 1L,
@@ -142,13 +143,13 @@ class CoolingTemperatureIntegrationTest {
         );
 
         assertEquals(
-                0.0,
+                CoolingSystemOptions.DEFAULT_RESIDUAL_RECIRCULATION_FRACTION,
                 firstZoneSnapshot.recirculationFraction(),
                 EPSILON
         );
 
         assertEquals(
-                18.0,
+                18.6,
                 firstZoneSnapshot.inletAirTemperatureCelsius(),
                 EPSILON
         );
@@ -158,14 +159,14 @@ class CoolingTemperatureIntegrationTest {
 
         /*
          * Initial server temperature = 25 °C
-         * Reference temperature = 18 °C
-         * Heat loss = 8 × (25 - 18) = 56 W
-         * Net thermal power = 400 - 56 = 344 W
-         * Delta = 344 / 5,000 × 60 = 4.128 °C
-         * Result = 29.128 °C
+         * Reference temperature = 18.6 °C
+         * Heat loss = 8 × (25 - 18.6) = 51.2 W
+         * Net thermal power = 400 - 51.2 = 348.8 W
+         * Delta = 348.8 / 5,000 × 60 = 4.1856 °C
+         * Result = 29.1856 °C
          */
         assertEquals(
-                29.128,
+                29.1856,
                 temperatureSystem
                         .getThermalState(server.getCode())
                         .getTemperatureCelsius(),
@@ -175,8 +176,8 @@ class CoolingTemperatureIntegrationTest {
         /*
          * Second tick:
          *
-         * SUPPLY is disabled at runtime. CoolingSystem therefore uses its
-         * configured fallback inlet-air temperature of 24 °C.
+         * SUPPLY is disabled at runtime. The previous zone exhaust temperature
+         * becomes the next inlet reference because there is no supply airflow.
          */
         coolingSystem.disable("SUPPLY-01");
 
@@ -225,7 +226,7 @@ class CoolingTemperatureIntegrationTest {
         );
 
         assertEquals(
-                18.0,
+                18.6,
                 secondZoneSnapshot.inletAirTemperatureCelsius(),
                 EPSILON
         );
@@ -234,15 +235,15 @@ class CoolingTemperatureIntegrationTest {
         temperatureSystem.update(secondTick);
 
         /*
-         * Previous server temperature = 29.128 °C
-         * New reference temperature = 24 °C
-         * Heat loss = 8 × (29.128 - 24) = 41.024 W
-         * Net thermal power = 400 - 41.024 = 358.976 W
-         * Delta = 358.976 / 5,000 × 60 = 4.307712 °C
-         * Result = 33.435712 °C
+         * Previous server temperature = 29.1856 °C
+         * New reference temperature = 18.6 °C
+         * Heat loss = 8 × (29.1856 - 18.6) = 84.6848 W
+         * Net thermal power = 400 - 84.6848 = 315.3152 W
+         * Delta = 315.3152 / 5,000 × 60 = 3.7837824 °C
+         * Result = 32.9693824 °C
          */
         assertEquals(
-                32.859712,
+                32.9693824,
                 temperatureSystem
                         .getThermalState(server.getCode())
                         .getTemperatureCelsius(),

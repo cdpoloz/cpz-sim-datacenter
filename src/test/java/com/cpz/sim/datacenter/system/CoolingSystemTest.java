@@ -2,27 +2,27 @@ package com.cpz.sim.datacenter.system;
 
 import com.cpz.sim.datacenter.cooling.CoolingConfiguration;
 import com.cpz.sim.datacenter.cooling.CoolingSystemOptions;
+import com.cpz.sim.datacenter.cooling.CoolingTickInput;
 import com.cpz.sim.datacenter.cooling.CoolingUnitDefinition;
 import com.cpz.sim.datacenter.cooling.CoolingZoneDefinition;
 import com.cpz.sim.datacenter.cooling.CoolingZoneInfluence;
 import com.cpz.sim.datacenter.cooling.ExhaustCoolingUnitDefinition;
+import com.cpz.sim.datacenter.cooling.ServerHeatLoad;
 import com.cpz.sim.datacenter.cooling.SupplyCoolingUnitDefinition;
-import com.cpz.sim.datacenter.cooling.CoolingTickInput;
 import com.cpz.sim.datacenter.model.ServerLocation;
 import com.cpz.sim.datacenter.snapshot.CoolingSnapshot;
-import org.junit.jupiter.api.Test;
-import com.cpz.sim.datacenter.cooling.ServerHeatLoad;
 import com.cpz.sim.datacenter.snapshot.CoolingUnitSnapshot;
 import com.cpz.sim.datacenter.snapshot.CoolingZoneSnapshot;
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * @author CPZ
@@ -202,17 +202,59 @@ class CoolingSystemTest {
     }
 
     @Test
-    void shouldEliminateRecirculationWhenExhaustMatchesSupplyAirflow() {
+    void shouldUseResidualRecirculationWhenExhaustMatchesSupplyAirflow() {
         CoolingSystem system = new CoolingSystem(configuration());
         system.enable("EXHAUST-01");
         CoolingSnapshot snapshot = system.tick(new CoolingTickInput(12L, List.of(new ServerHeatLoad(SERVER_LOCATION, 450.0))));
         CoolingZoneSnapshot zoneSnapshot = snapshot.zones().getFirst();
-        double expectedTemperatureRise = 450.0 / (1_210.02 * 4.0);
+        double residualRecirculationFraction = CoolingSystemOptions.DEFAULT_RESIDUAL_RECIRCULATION_FRACTION;
+        double expectedInletTemperature = (18.0 * (1.0 - residualRecirculationFraction)) + (24.0 * residualRecirculationFraction);
         assertEquals(4.0, zoneSnapshot.supplyAirflowCubicMetersPerSecond());
         assertEquals(4.0, zoneSnapshot.exhaustAirflowCubicMetersPerSecond());
-        assertEquals(0.0, zoneSnapshot.recirculationFraction(), 1.0e-9);
-        assertEquals(18.0, zoneSnapshot.inletAirTemperatureCelsius(), 1.0e-9);
-        assertEquals(18.0, zoneSnapshot.exhaustAirTemperatureCelsius(), 1.0e-9);
+        assertEquals(residualRecirculationFraction, zoneSnapshot.recirculationFraction(), 1.0e-9);
+        assertEquals(expectedInletTemperature, zoneSnapshot.inletAirTemperatureCelsius(), 1.0e-9);
+        assertEquals(expectedInletTemperature, zoneSnapshot.exhaustAirTemperatureCelsius(), 1.0e-9);
+    }
+
+    @Test
+    void shouldCalculateIntermediateRecirculationWhenAirflowIsPartiallyUnbalanced() {
+        CoolingZoneDefinition zone = new CoolingZoneDefinition("ZONE-01", Set.of(SERVER_LOCATION));
+        SupplyCoolingUnitDefinition supply =
+                new SupplyCoolingUnitDefinition(
+                        "SUPPLY-01",
+                        10.0,
+                        12_000.0,
+                        18.0,
+                        List.of(new CoolingZoneInfluence("ZONE-01", 1.0)),
+                        true
+                );
+        ExhaustCoolingUnitDefinition exhaust =
+                new ExhaustCoolingUnitDefinition(
+                        "EXHAUST-01",
+                        5.0,
+                        List.of(new CoolingZoneInfluence("ZONE-01", 1.0)),
+                        true
+                );
+        CoolingConfiguration configuration =
+                new CoolingConfiguration(
+                        List.of(zone),
+                        List.of(supply, exhaust),
+                        CoolingSystemOptions.defaults()
+                );
+        CoolingSystem system = new CoolingSystem(configuration);
+
+        CoolingSnapshot snapshot = system.tick(new CoolingTickInput(12L, List.of(new ServerHeatLoad(SERVER_LOCATION, 450.0))));
+        CoolingZoneSnapshot zoneSnapshot = snapshot.zones().getFirst();
+
+        double expected =
+                CoolingSystemOptions.DEFAULT_RESIDUAL_RECIRCULATION_FRACTION
+                        + (5.0 / 15.0)
+                        * (CoolingSystemOptions.DEFAULT_MAXIMUM_RECIRCULATION_FRACTION
+                        - CoolingSystemOptions.DEFAULT_RESIDUAL_RECIRCULATION_FRACTION);
+
+        assertEquals(10.0, zoneSnapshot.supplyAirflowCubicMetersPerSecond(), 1.0e-9);
+        assertEquals(5.0, zoneSnapshot.exhaustAirflowCubicMetersPerSecond(), 1.0e-9);
+        assertEquals(expected, zoneSnapshot.recirculationFraction(), 1.0e-9);
     }
 
     @Test
@@ -373,7 +415,6 @@ class CoolingSystemTest {
         assertEquals(6_000.0, secondZone.usedCoolingCapacityWatts());
         assertEquals(2_000.0, secondZone.coolingDeficitWatts());
     }
-
 
     @Test
     void shouldResetUnitsToTheirInitiallyEnabledStates() {
