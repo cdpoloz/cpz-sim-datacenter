@@ -163,13 +163,13 @@ class CoolingSnapshotCoordinatorTest {
         );
 
         assertEquals(
-                18.0,
+                18.6,
                 zoneSnapshot.inletAirTemperatureCelsius(),
                 EPSILON
         );
 
         assertEquals(
-                18.0,
+                18.6,
                 referenceProvider.temperatureCelsiusFor(server),
                 EPSILON
         );
@@ -233,7 +233,7 @@ class CoolingSnapshotCoordinatorTest {
                         "SUPPLY-01",
                         4.0,
                         12_000.0,
-                        18.0,
+                        18.6,
                         List.of(
                                 new CoolingZoneInfluence(
                                         zone.code(),

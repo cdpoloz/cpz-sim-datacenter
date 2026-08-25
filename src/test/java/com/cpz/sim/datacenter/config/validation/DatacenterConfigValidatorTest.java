@@ -629,7 +629,9 @@ class DatacenterConfigValidatorTest {
                 1005.0,
                 24.0,
                 0.95,
+                0.1,
                 1_000.0
+
         );
     }
 
@@ -1102,6 +1104,7 @@ class DatacenterConfigValidatorTest {
                             1005.0,
                             24.0,
                             0.95,
+                            0.1,
                             1_000.0
                     );
 
@@ -1134,6 +1137,7 @@ class DatacenterConfigValidatorTest {
                             invalidValue,
                             24.0,
                             0.95,
+                            0.1,
                             1_000.0
                     );
 
@@ -1164,6 +1168,7 @@ class DatacenterConfigValidatorTest {
                             1005.0,
                             invalidValue,
                             0.95,
+                            0.1,
                             1_000.0
                     );
 
@@ -1196,6 +1201,7 @@ class DatacenterConfigValidatorTest {
                             1005.0,
                             24.0,
                             invalidValue,
+                            0.1,
                             1_000.0
                     );
 
@@ -1226,6 +1232,7 @@ class DatacenterConfigValidatorTest {
                             1005.0,
                             24.0,
                             validValue,
+                            0.1,
                             1_000.0
                     );
 
@@ -2008,6 +2015,7 @@ class DatacenterConfigValidatorTest {
                             1005.0,
                             24.0,
                             0.95,
+                            0.1,
                             invalidValue
                     );
 

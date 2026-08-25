@@ -174,6 +174,7 @@ class CoolingConfigurationFactoryTest {
                         1_000.0,
                         22.0,
                         0.8,
+                        0.1,
                         1_000.0
                 )
         );
@@ -350,6 +351,7 @@ class CoolingConfigurationFactoryTest {
                                 1_000.0,
                                 22.0,
                                 0.8,
+                                0.1,
                                 1_000.0
                         )
                 );

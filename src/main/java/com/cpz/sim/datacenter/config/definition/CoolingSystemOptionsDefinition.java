@@ -7,6 +7,8 @@ package com.cpz.sim.datacenter.config.definition;
  * @param airSpecificHeatJoulesPerKilogramKelvin specific heat of air
  * @param initialInletAirTemperatureCelsius initial zone inlet temperature
  * @param maximumRecirculationFraction maximum permitted recirculation
+ * @param residualRecirculationFraction minimum residual recirculation
+ * @param effectiveZoneAirVolumeCubicMeters effective air volume per cooling zone
  *
  * @author CPZ
  */

@@ -315,7 +315,7 @@ public final class CoolingSystem {
         if (supplyAirflow == 0.0 || exhaustAirflow == 0.0) return maximumRecirculationFraction;
         double totalAirflow = supplyAirflow + exhaustAirflow;
         double balancePenalty = Math.abs(supplyAirflow - exhaustAirflow) / totalAirflow;
-        double residualRecirculationFraction = 0.10;
+        double residualRecirculationFraction = configuration.options().residualRecirculationFraction();
         double recirculationFraction = residualRecirculationFraction + balancePenalty * (maximumRecirculationFraction - residualRecirculationFraction);
         return Math.clamp(recirculationFraction, residualRecirculationFraction, maximumRecirculationFraction);
     }
