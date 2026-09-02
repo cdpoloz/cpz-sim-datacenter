@@ -19,6 +19,9 @@ import java.util.Objects;
  * @param maxPowerWatts                   accumulated maximum power of all installed servers
  * @param currentPowerWatts               accumulated current power of all installed servers
  * @param averageOnlineTemperatureCelsius average temperature of online servers
+ * @param representativeTemperatureCelsius finite representative rack
+ *                                         temperature for spatial or
+ *                                         aggregate visualization
  * @param averageOnlineUtilization        average utilization of online servers
  * @author CPZ
  */
@@ -30,6 +33,7 @@ public record RackOperationalSnapshot(
         double maxPowerWatts,
         double currentPowerWatts,
         double averageOnlineTemperatureCelsius,
+        double representativeTemperatureCelsius,
         double averageOnlineUtilization
 ) {
 
@@ -46,6 +50,8 @@ public record RackOperationalSnapshot(
             throw new IllegalArgumentException("idlePowerWatts must not exceed maxPowerWatts");
         if (currentPowerWatts > maxPowerWatts)
             throw new IllegalArgumentException("currentPowerWatts must not exceed maxPowerWatts");
+        if (!Double.isFinite(representativeTemperatureCelsius))
+            throw new IllegalArgumentException("representativeTemperatureCelsius must be finite");
         if (onlineServerCount == 0) {
             if (!Double.isNaN(averageOnlineTemperatureCelsius))
                 throw new IllegalArgumentException("averageOnlineTemperatureCelsius must be NaN when there are no online servers");

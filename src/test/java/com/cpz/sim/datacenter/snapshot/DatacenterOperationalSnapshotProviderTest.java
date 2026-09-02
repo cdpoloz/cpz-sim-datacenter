@@ -348,6 +348,11 @@ class DatacenterOperationalSnapshotProviderTest {
                 () -> assertEquals(1500.0, populatedRack.maxPowerWatts(), EPSILON),
                 () -> assertEquals(760.0, populatedRack.currentPowerWatts(), EPSILON),
                 () -> assertEquals(60.0, populatedRack.averageOnlineTemperatureCelsius(), EPSILON),
+                () -> assertEquals(
+                        populatedRack.averageOnlineTemperatureCelsius(),
+                        populatedRack.representativeTemperatureCelsius(),
+                        EPSILON
+                ),
                 () -> assertEquals(0.70, populatedRack.averageOnlineUtilization(), EPSILON),
                 () -> assertTrue(populatedRack.hasInstalledServers()),
                 () -> assertTrue(populatedRack.hasOnlineServers())
@@ -359,9 +364,75 @@ class DatacenterOperationalSnapshotProviderTest {
                 () -> assertEquals(0.0, emptyRack.maxPowerWatts(), EPSILON),
                 () -> assertEquals(0.0, emptyRack.currentPowerWatts(), EPSILON),
                 () -> assertTrue(Double.isNaN(emptyRack.averageOnlineTemperatureCelsius())),
+                () -> assertEquals(24.0, emptyRack.representativeTemperatureCelsius(), EPSILON),
                 () -> assertTrue(Double.isNaN(emptyRack.averageOnlineUtilization())),
                 () -> assertFalse(emptyRack.hasInstalledServers()),
                 () -> assertFalse(emptyRack.hasOnlineServers())
+        );
+    }
+
+    @Test
+    void shouldUseAmbientRepresentativeTemperatureWhenInstalledServersAreOffline() {
+        RackCode rackCode = new RackCode("R03");
+        RackLocation rackLocation = new RackLocation("C03", rackCode);
+
+        OperationalServerData offlineServer =
+                new OperationalServerData(
+                        "C03-R03-S01",
+                        "C03",
+                        rackCode,
+                        "S01",
+                        HardwareStatus.OFFLINE,
+                        0.0,
+                        0.0f,
+                        42.0
+                );
+
+        Datacenter datacenter =
+                new Datacenter(
+                        List.of(
+                                new Rack(
+                                        rackCode,
+                                        "C03",
+                                        "R03",
+                                        List.of("S01")
+                                )
+                        ),
+                        List.of(createServer(offlineServer))
+                );
+
+        DatacenterOperationalSnapshot snapshot =
+                new DatacenterOperationalSnapshotProvider(datacenter)
+                        .snapshot(
+                                new EnergyConsumptionSnapshot(
+                                        TICK_INDEX,
+                                        ELAPSED_SECONDS,
+                                        0.0,
+                                        500.0,
+                                        List.of(createEnergyServer(offlineServer))
+                                ),
+                                new TemperatureSnapshot(
+                                        TICK_INDEX,
+                                        ELAPSED_SECONDS,
+                                        19.5,
+                                        List.of(createTemperatureServer(offlineServer))
+                                ),
+                                new HealthSnapshot(
+                                        TICK_INDEX,
+                                        ELAPSED_SECONDS,
+                                        List.of(createHealthServer(offlineServer))
+                                )
+                        );
+
+        RackOperationalSnapshot rack = snapshot.getRack(rackLocation);
+
+        assertAll(
+                () -> assertEquals(1, rack.installedServerCount()),
+                () -> assertEquals(0, rack.onlineServerCount()),
+                () -> assertTrue(Double.isNaN(rack.averageOnlineTemperatureCelsius())),
+                () -> assertEquals(19.5, rack.representativeTemperatureCelsius(), EPSILON),
+                () -> assertTrue(rack.hasInstalledServers()),
+                () -> assertFalse(rack.hasOnlineServers())
         );
     }
 

@@ -51,5 +51,16 @@ location. When a group has no online servers, its online averages are `NaN`.
 When it has no installed servers, its maximum is `NaN` and its maximum location
 is empty.
 
+Rack snapshots expose two temperature metrics with different contracts:
+`averageOnlineTemperatureCelsius` is the real average temperature of online
+servers only and remains `NaN` when a rack has no online servers.
+`representativeTemperatureCelsius` is a finite rack temperature intended for
+spatial or aggregate visualization. It matches the online average when the
+rack has online servers, and falls back to the snapshot
+`ambientTemperatureCelsius` when the rack is empty or all installed servers are
+offline. Rack thermal gradients in the UI should use
+`representativeTemperatureCelsius` to avoid gaps for racks without online
+servers.
+
 The one-argument provider constructor remains available and produces no group
 aggregates.

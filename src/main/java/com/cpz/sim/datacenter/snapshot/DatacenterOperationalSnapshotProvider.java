@@ -100,7 +100,13 @@ public final class DatacenterOperationalSnapshotProvider {
         Map<ServerLocation, ServerHealthSnapshot> healthByLocation = indexByLocation(healthSnapshot.servers(), ServerHealthSnapshot::location, "health");
         validateLocations(energyByLocation.keySet(), temperatureByLocation.keySet(), healthByLocation.keySet());
         validateServerConsistency(energyByLocation, temperatureByLocation, healthByLocation);
-        Map<RackLocation, RackOperationalSnapshot> rackSnapshots = snapshotRacks(energyByLocation, temperatureByLocation, healthByLocation);
+        Map<RackLocation, RackOperationalSnapshot> rackSnapshots =
+                snapshotRacks(
+                        energyByLocation,
+                        temperatureByLocation,
+                        healthByLocation,
+                        temperatureSnapshot.ambientTemperatureCelsius()
+                );
         Map<String, ColumnOperationalSnapshot> columnSnapshots = snapshotColumns(rackSnapshots);
         Map<String, ServerGroupOperationalSnapshot> serverGroupSnapshots = snapshotServerGroups(energyByLocation, temperatureByLocation, healthByLocation);
         Optional<RackLocation> hottestRackLocation = findHottestRackLocation(rackSnapshots);
@@ -243,12 +249,20 @@ public final class DatacenterOperationalSnapshotProvider {
     private Map<RackLocation, RackOperationalSnapshot> snapshotRacks(
             Map<ServerLocation, ServerEnergySnapshot> energyByLocation,
             Map<ServerLocation, ServerTemperatureSnapshot> temperatureByLocation,
-            Map<ServerLocation, ServerHealthSnapshot> healthByLocation
+            Map<ServerLocation, ServerHealthSnapshot> healthByLocation,
+            double ambientTemperatureCelsius
     ) {
         Map<RackLocation, RackOperationalSnapshot> rackSnapshots = new LinkedHashMap<>();
         for (Rack rack : datacenter.getRacks()) {
             RackLocation rackLocation = rack.getLocation();
-            RackOperationalSnapshot rackSnapshot = snapshotRack(rackLocation, energyByLocation, temperatureByLocation, healthByLocation);
+            RackOperationalSnapshot rackSnapshot =
+                    snapshotRack(
+                            rackLocation,
+                            energyByLocation,
+                            temperatureByLocation,
+                            healthByLocation,
+                            ambientTemperatureCelsius
+                    );
             rackSnapshots.put(rackLocation, rackSnapshot);
         }
         return rackSnapshots;
@@ -258,7 +272,8 @@ public final class DatacenterOperationalSnapshotProvider {
             RackLocation rackLocation,
             Map<ServerLocation, ServerEnergySnapshot> energyByLocation,
             Map<ServerLocation, ServerTemperatureSnapshot> temperatureByLocation,
-            Map<ServerLocation, ServerHealthSnapshot> healthByLocation
+            Map<ServerLocation, ServerHealthSnapshot> healthByLocation,
+            double ambientTemperatureCelsius
     ) {
         int installedServerCount = 0;
         int onlineServerCount = 0;
@@ -283,6 +298,10 @@ public final class DatacenterOperationalSnapshotProvider {
             }
         }
         double averageOnlineTemperatureCelsius = onlineServerCount == 0 ? Double.NaN : onlineTemperatureSumCelsius / onlineServerCount;
+        double representativeTemperatureCelsius =
+                onlineServerCount == 0
+                        ? ambientTemperatureCelsius
+                        : averageOnlineTemperatureCelsius;
         double averageOnlineUtilization = onlineServerCount == 0 ? Double.NaN : onlineUtilizationSum / onlineServerCount;
         return new RackOperationalSnapshot(
                 rackLocation,
@@ -292,6 +311,7 @@ public final class DatacenterOperationalSnapshotProvider {
                 maxPowerWatts,
                 currentPowerWatts,
                 averageOnlineTemperatureCelsius,
+                representativeTemperatureCelsius,
                 averageOnlineUtilization
         );
     }

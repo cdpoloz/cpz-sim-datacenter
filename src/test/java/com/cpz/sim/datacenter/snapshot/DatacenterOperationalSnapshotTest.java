@@ -34,6 +34,7 @@ class DatacenterOperationalSnapshotTest {
                 1000.0,
                 640.0,
                 60.0,
+                60.0,
                 0.60
         );
     }
@@ -263,6 +264,7 @@ class DatacenterOperationalSnapshotTest {
                         1000.0,
                         0.0,
                         Double.NaN,
+                        24.0,
                         Double.NaN
                 );
 
@@ -699,6 +701,7 @@ class DatacenterOperationalSnapshotTest {
                         1000.0,
                         0.0,
                         Double.NaN,
+                        24.0,
                         Double.NaN
                 );
 
@@ -911,6 +914,7 @@ class DatacenterOperationalSnapshotTest {
                         1000.0,
                         0.0,
                         Double.NaN,
+                        24.0,
                         Double.NaN
                 );
 
