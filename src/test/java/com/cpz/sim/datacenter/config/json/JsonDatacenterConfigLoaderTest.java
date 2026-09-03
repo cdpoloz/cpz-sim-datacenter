@@ -138,6 +138,7 @@ class JsonDatacenterConfigLoaderTest {
         assertEquals("U01", definition.servers().getFirst().slot());
         assertEquals(1.5f, definition.servers().getFirst().workloadFactor());
         assertNull(definition.servers().getFirst().role());
+        assertNull(definition.layout().room());
         assertNull(definition.temperature());
         assertNull(definition.health());
         assertNull(definition.cooling());
@@ -384,6 +385,24 @@ class JsonDatacenterConfigLoaderTest {
     }
 
     @Test
+    void shouldLoadDatacenterDefinitionWithLayoutRoomBlock()
+            throws IOException {
+        Path path = writeConfigWithRoom("""
+        {
+          "code": "ROOM-01",
+          "name": "Sala Principal"
+        }
+        """);
+
+        DatacenterDefinition definition =
+                new JsonDatacenterConfigLoader().load(path);
+
+        assertNotNull(definition.layout().room());
+        assertEquals("ROOM-01", definition.layout().room().code());
+        assertEquals("Sala Principal", definition.layout().room().name());
+    }
+
+    @Test
     void shouldLoadDatacenterDefinitionWithExplicitSlots() {
         JsonDatacenterConfigLoader loader = new JsonDatacenterConfigLoader();
         DatacenterDefinition definition = loader.load(resourcePath("datacenter/explicit-slots-datacenter.json"));
@@ -420,6 +439,45 @@ class JsonDatacenterConfigLoaderTest {
         assertThrows(
                 DatacenterConfigException.class,
                 () -> loader.load(resourcePath("datacenter/datacenter-with-partial-temperature.json"))
+        );
+    }
+
+    @Test
+    void shouldRejectNullLayoutRoomBlock()
+            throws IOException {
+        Path path = writeConfigWithRoom("null");
+
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(path)
+        );
+
+        assertTrue(
+                exception.getMessage().contains(
+                        "Room block cannot be null"
+                )
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\n  \"code\": \"ROOM-01\"\n}",
+            "{\n  \"name\": \"Sala Principal\"\n}"
+    })
+    void shouldRejectIncompleteLayoutRoomBlock(String roomValue)
+            throws IOException {
+        Path path = writeConfigWithRoom(roomValue);
+
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(path)
+        );
+
+        String messages = exceptionMessages(exception);
+        assertTrue(messages.contains("Missing creator property"));
+        assertTrue(
+                messages.contains("code")
+                        || messages.contains("name")
         );
     }
 
@@ -473,6 +531,44 @@ class JsonDatacenterConfigLoaderTest {
         return Files.writeString(
                 tempDirectory.resolve("datacenter-with-cooling.json"),
                 jsonWithCooling
+        );
+    }
+
+    private Path writeConfigWithRoom(String roomValue)
+            throws IOException {
+        String originalJson = Files.readString(
+                resourcePath("datacenter/valid-datacenter.json")
+        );
+
+        int closingBraceIndex = originalJson.lastIndexOf('}');
+
+        if (closingBraceIndex < 0) {
+            throw new AssertionError(
+                    "Valid datacenter test resource must contain a root object"
+            );
+        }
+
+        String layoutMarker = "\"layout\": {\n";
+        int layoutIndex = originalJson.indexOf(layoutMarker);
+
+        if (layoutIndex < 0) {
+            throw new AssertionError(
+                    "Valid datacenter test resource must contain a layout object"
+            );
+        }
+
+        int insertionIndex = layoutIndex + layoutMarker.length();
+
+        String jsonWithRoom =
+                originalJson.substring(0, insertionIndex)
+                        + "    \"room\": "
+                        + roomValue
+                        + ",\n"
+                        + originalJson.substring(insertionIndex);
+
+        return Files.writeString(
+                tempDirectory.resolve("datacenter-with-room.json"),
+                jsonWithRoom
         );
     }
 

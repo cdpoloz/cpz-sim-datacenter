@@ -20,6 +20,8 @@ import java.util.Objects;
  */
 public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader {
 
+    private static final TypeReference<List<RackDefinition>> RACKS_TYPE = new TypeReference<>() {
+    };
     private static final TypeReference<List<ServerModelDefinition>> SERVER_MODELS_TYPE = new TypeReference<>() {
     };
     private static final TypeReference<List<ServerDefinition>> SERVERS_TYPE = new TypeReference<>() {
@@ -36,7 +38,7 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
             JsonNode root = JSON_MAPPER.readTree(inputStream);
             return new DatacenterDefinition(
                     readRequired(root, "name", path, String.class),
-                    readRequired(root, "layout", path, DatacenterLayoutDefinition.class),
+                    readLayout(root, path),
                     readRequired(root, "serverModels", path, SERVER_MODELS_TYPE),
                     readRequired(root, "servers", path, SERVERS_TYPE),
                     readOptionalTemperature(root, path),
@@ -48,12 +50,35 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
         }
     }
 
+    private static DatacenterLayoutDefinition readLayout(JsonNode root, Path path) throws IOException {
+        JsonNode layoutNode = requireProperty(root, "layout", path);
+        if (layoutNode.isNull())
+            throw new DatacenterConfigException("Layout block cannot be null in datacenter config: " + path);
+        if (!layoutNode.isObject())
+            throw new DatacenterConfigException("Layout block must be an object in datacenter config: " + path);
+
+        rejectUnknownProperties(layoutNode, List.of("room", "racks"), "layout", path);
+
+        return new DatacenterLayoutDefinition(
+                readOptionalRoom(layoutNode, path),
+                readRequired(layoutNode, "racks", path, RACKS_TYPE)
+        );
+    }
+
     private static TemperatureSystemOptionsDefinition readOptionalTemperature(JsonNode root, Path path) throws IOException {
         JsonNode temperatureNode = root.get("temperature");
         if (temperatureNode == null) return null;
         if (temperatureNode.isNull())
             throw new DatacenterConfigException("Temperature block cannot be null in datacenter config: " + path);
         return JSON_MAPPER.readValue(temperatureNode.traverse(JSON_MAPPER), TemperatureSystemOptionsDefinition.class);
+    }
+
+    private static RoomDefinition readOptionalRoom(JsonNode root, Path path) throws IOException {
+        JsonNode roomNode = root.get("room");
+        if (roomNode == null) return null;
+        if (roomNode.isNull())
+            throw new DatacenterConfigException("Room block cannot be null in datacenter config: " + path);
+        return JSON_MAPPER.readValue(roomNode.traverse(JSON_MAPPER), RoomDefinition.class);
     }
 
     private static HealthSystemOptionsDefinition readOptionalHealth(JsonNode root, Path path) throws IOException {
@@ -86,6 +111,21 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
         if (node == null)
             throw new DatacenterConfigException("Missing required property '" + propertyName + "' in datacenter config: " + path);
         return node;
+    }
+
+    private static void rejectUnknownProperties(
+            JsonNode node,
+            List<String> allowedProperties,
+            String blockName,
+            Path path
+    ) {
+        node.fieldNames().forEachRemaining(propertyName -> {
+            if (!allowedProperties.contains(propertyName))
+                throw new DatacenterConfigException(
+                        "Unrecognized property '" + propertyName + "' in " + blockName
+                                + " block of datacenter config: " + path
+                );
+        });
     }
 
 }

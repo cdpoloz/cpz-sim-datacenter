@@ -66,4 +66,5 @@ public record DatacenterDefinition(
     ) {
         this(name, layout, serverModels, servers, temperature, health, null);
     }
+
 }

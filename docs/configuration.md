@@ -18,6 +18,10 @@ Datacenter datacenter = new DatacenterFactory().create(definition);
 {
   "name": "Demo Datacenter",
   "layout": {
+    "room": {
+      "code": "ROOM-01",
+      "name": "Sala Principal"
+    },
     "racks": []
   },
   "serverModels": [],
@@ -28,12 +32,42 @@ Datacenter datacenter = new DatacenterFactory().create(definition);
 Main fields:
 
 - `name`: non-blank datacenter name.
+- `layout.room`: optional metadata for the room associated with the active layout.
 - `layout.racks`: available physical infrastructure.
 - `serverModels`: server model catalog.
 - `servers`: servers installed in specific racks and slots.
 - `temperature`: optional thermal model configuration.
 - `health`: optional server health threshold configuration.
 - `cooling`: optional cooling-system configuration.
+
+## layout.room
+
+`layout.room` is optional metadata that identifies the room associated with the
+single active `layout` loaded by `DatacenterDefinition`. It does not change
+layout selection, server placement, or simulation behavior.
+
+Minimal example:
+
+```json
+{
+  "name": "Complete 8x12 UI Test Datacenter",
+  "layout": {
+    "room": {
+      "code": "ROOM-01",
+      "name": "Sala Principal"
+    },
+    "racks": []
+  },
+  "serverModels": [],
+  "servers": []
+}
+```
+
+Rules:
+
+- If `layout.room` is absent, `DatacenterDefinition.layout().room()` is `null`.
+- If `layout.room` is present, it cannot be `null`.
+- `layout.room.code` and `layout.room.name` are required when the block is present.
 
 ## layout.racks
 
