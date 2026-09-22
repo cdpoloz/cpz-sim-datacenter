@@ -89,10 +89,51 @@ public final class DatacenterOperationalSnapshotProvider {
             TemperatureSnapshot temperatureSnapshot,
             HealthSnapshot healthSnapshot
     ) {
+        return snapshot(
+                energySnapshot,
+                temperatureSnapshot,
+                healthSnapshot,
+                Optional.empty()
+        );
+    }
+
+    /**
+     * Combines specialized snapshots captured for the same simulation tick,
+     * including cooling electrical power when cooling data is available.
+     *
+     * @param energySnapshot energy snapshot
+     * @param temperatureSnapshot temperature snapshot
+     * @param healthSnapshot health snapshot
+     * @param coolingSnapshot cooling snapshot
+     * @return complete operational snapshot
+     */
+    public DatacenterOperationalSnapshot snapshot(
+            EnergyConsumptionSnapshot energySnapshot,
+            TemperatureSnapshot temperatureSnapshot,
+            HealthSnapshot healthSnapshot,
+            CoolingSnapshot coolingSnapshot
+    ) {
+        Objects.requireNonNull(coolingSnapshot, "coolingSnapshot must not be null");
+        return snapshot(
+                energySnapshot,
+                temperatureSnapshot,
+                healthSnapshot,
+                Optional.of(coolingSnapshot)
+        );
+    }
+
+    private DatacenterOperationalSnapshot snapshot(
+            EnergyConsumptionSnapshot energySnapshot,
+            TemperatureSnapshot temperatureSnapshot,
+            HealthSnapshot healthSnapshot,
+            Optional<CoolingSnapshot> coolingSnapshot
+    ) {
         Objects.requireNonNull(energySnapshot, "energySnapshot must not be null");
         Objects.requireNonNull(temperatureSnapshot, "temperatureSnapshot must not be null");
         Objects.requireNonNull(healthSnapshot, "healthSnapshot must not be null");
+        Objects.requireNonNull(coolingSnapshot, "coolingSnapshot must not be null");
         validateSameCapture(energySnapshot, temperatureSnapshot, healthSnapshot);
+        validateCoolingCapture(energySnapshot, coolingSnapshot);
         Map<ServerLocation, ServerEnergySnapshot> energyByLocation =
                 indexByLocation(energySnapshot.servers(), ServerEnergySnapshot::location, "energy");
         Map<ServerLocation, ServerTemperatureSnapshot>
@@ -123,6 +164,18 @@ public final class DatacenterOperationalSnapshotProvider {
         double idleItPowerWatts = rackSnapshots.values().stream().mapToDouble(RackOperationalSnapshot::idlePowerWatts).sum();
         double maxItPowerWatts = rackSnapshots.values().stream().mapToDouble(RackOperationalSnapshot::maxPowerWatts).sum();
         double currentItPowerWatts = rackSnapshots.values().stream().mapToDouble(RackOperationalSnapshot::currentPowerWatts).sum();
+        double coolingPowerWatts =
+                coolingSnapshot
+                        .map(CoolingSnapshot::totalElectricalPowerWatts)
+                        .orElse(Double.NaN);
+        double totalFacilityPowerWatts =
+                coolingSnapshot.isEmpty()
+                        ? Double.NaN
+                        : currentItPowerWatts + coolingPowerWatts;
+        double pue =
+                coolingSnapshot.isEmpty() || currentItPowerWatts == 0.0
+                        ? Double.NaN
+                        : totalFacilityPowerWatts / currentItPowerWatts;
         return new DatacenterOperationalSnapshot(
                 energySnapshot.tickIndex(),
                 energySnapshot.elapsedSeconds(),
@@ -136,9 +189,9 @@ public final class DatacenterOperationalSnapshotProvider {
                 idleItPowerWatts,
                 maxItPowerWatts,
                 currentItPowerWatts,
-                Double.NaN,
-                Double.NaN,
-                Double.NaN
+                coolingPowerWatts,
+                totalFacilityPowerWatts,
+                pue
         );
     }
 
@@ -385,6 +438,15 @@ public final class DatacenterOperationalSnapshotProvider {
         double elapsedSeconds = energySnapshot.elapsedSeconds();
         if (Double.compare(temperatureSnapshot.elapsedSeconds(), elapsedSeconds) != 0 || Double.compare(healthSnapshot.elapsedSeconds(), elapsedSeconds) != 0)
             throw new IllegalArgumentException("All snapshots must have the same elapsedSeconds");
+    }
+
+    private void validateCoolingCapture(
+            EnergyConsumptionSnapshot energySnapshot,
+            Optional<CoolingSnapshot> coolingSnapshot
+    ) {
+        if (coolingSnapshot.isEmpty()) return;
+        if (coolingSnapshot.orElseThrow().tickIndex() != energySnapshot.tickIndex())
+            throw new IllegalArgumentException("Cooling snapshot must have the same tickIndex");
     }
 
     private void validateLocations(
