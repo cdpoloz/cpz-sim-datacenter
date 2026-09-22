@@ -7,14 +7,16 @@ import java.util.Objects;
 /**
  * Represents the operational result of a cooling unit at a simulation tick.
  *
- * <p>Disabled units report zero current airflow and zero current cooling
- * power. Exhaust units also report zero current cooling power because they
- * remove air but do not provide refrigeration capacity.</p>
+ * <p>Disabled units report zero current airflow, zero current electrical
+ * power and zero current cooling power. Exhaust units also report zero
+ * current cooling power because they remove air but do not provide
+ * refrigeration capacity.</p>
  *
  * @param unitCode cooling-unit code
  * @param type functional type of the cooling unit
  * @param enabled whether the unit was enabled at this tick
  * @param currentAirflowCubicMetersPerSecond current airflow
+ * @param currentElectricalPowerWatts current electrical power
  * @param currentCoolingPowerWatts current cooling power
  *
  * @author CPZ
@@ -24,6 +26,7 @@ public record CoolingUnitSnapshot(
         CoolingUnitType type,
         boolean enabled,
         double currentAirflowCubicMetersPerSecond,
+        double currentElectricalPowerWatts,
         double currentCoolingPowerWatts
 ) {
 
@@ -41,11 +44,29 @@ public record CoolingUnitSnapshot(
         Objects.requireNonNull(type, "type must not be null");
         if (unitCode.isBlank()) throw new IllegalArgumentException("unitCode must not be blank");
         validateNonNegativeFinite(currentAirflowCubicMetersPerSecond, "currentAirflowCubicMetersPerSecond");
+        validateNonNegativeFinite(currentElectricalPowerWatts, "currentElectricalPowerWatts");
         validateNonNegativeFinite(currentCoolingPowerWatts, "currentCoolingPowerWatts");
-        if (!enabled && (currentAirflowCubicMetersPerSecond != 0.0 || currentCoolingPowerWatts != 0.0))
-            throw new IllegalArgumentException("disabled cooling unit must report zero airflow and zero cooling power");
+        if (!enabled && (currentAirflowCubicMetersPerSecond != 0.0 || currentElectricalPowerWatts != 0.0 || currentCoolingPowerWatts != 0.0))
+            throw new IllegalArgumentException("disabled cooling unit must report zero airflow, zero electrical power and zero cooling power");
         if (type == CoolingUnitType.EXHAUST && currentCoolingPowerWatts != 0.0)
             throw new IllegalArgumentException("exhaust cooling unit must report zero cooling power");
+    }
+
+    public CoolingUnitSnapshot(
+            String unitCode,
+            CoolingUnitType type,
+            boolean enabled,
+            double currentAirflowCubicMetersPerSecond,
+            double currentCoolingPowerWatts
+    ) {
+        this(
+                unitCode,
+                type,
+                enabled,
+                currentAirflowCubicMetersPerSecond,
+                0.0,
+                currentCoolingPowerWatts
+        );
     }
 
     /**
