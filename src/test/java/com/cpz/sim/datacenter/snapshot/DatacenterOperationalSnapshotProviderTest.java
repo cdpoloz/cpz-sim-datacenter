@@ -1,5 +1,6 @@
 package com.cpz.sim.datacenter.snapshot;
 
+import com.cpz.sim.datacenter.cooling.CoolingUnitType;
 import com.cpz.sim.datacenter.health.ServerAlertReason;
 import com.cpz.sim.datacenter.model.*;
 import org.junit.jupiter.api.Test;
@@ -491,6 +492,62 @@ class DatacenterOperationalSnapshotProviderTest {
 
         assertEquals(0, snapshot.serverGroupCount());
         assertTrue(snapshot.findServerGroup("HA01").isEmpty());
+    }
+
+    @Test
+    void shouldIncludeCoolingElectricalPowerInFacilityPower() {
+        CoolingSnapshot coolingSnapshot =
+                new CoolingSnapshot(
+                        TICK_INDEX,
+                        List.of(
+                                new CoolingUnitSnapshot(
+                                        "SUPPLY-01",
+                                        CoolingUnitType.SUPPLY,
+                                        true,
+                                        8.0,
+                                        120.0,
+                                        10_000.0
+                                ),
+                                new CoolingUnitSnapshot(
+                                        "EXHAUST-01",
+                                        CoolingUnitType.EXHAUST,
+                                        true,
+                                        6.0,
+                                        80.0,
+                                        0.0
+                                )
+                        ),
+                        List.of(
+                                new CoolingZoneSnapshot(
+                                        "ZONE-01",
+                                        760.0,
+                                        10_000.0,
+                                        760.0,
+                                        0.0,
+                                        18.0,
+                                        25.0,
+                                        0.1
+                                )
+                        )
+                );
+
+        DatacenterOperationalSnapshot snapshot =
+                new DatacenterOperationalSnapshotProvider(createDatacenter())
+                        .snapshot(
+                                createEnergySnapshot(),
+                                createTemperatureSnapshot(),
+                                createHealthSnapshot(),
+                                coolingSnapshot
+                        );
+
+        assertAll(
+                () -> assertTrue(snapshot.hasCoolingData()),
+                () -> assertTrue(snapshot.hasFacilityPowerData()),
+                () -> assertTrue(snapshot.hasPue()),
+                () -> assertEquals(200.0, snapshot.coolingPowerWatts(), EPSILON),
+                () -> assertEquals(960.0, snapshot.totalFacilityPowerWatts(), EPSILON),
+                () -> assertEquals(960.0 / 760.0, snapshot.pue(), EPSILON)
+        );
     }
 
     @Test
