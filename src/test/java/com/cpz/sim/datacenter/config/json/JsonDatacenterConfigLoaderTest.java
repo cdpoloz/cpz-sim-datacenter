@@ -586,6 +586,7 @@ class JsonDatacenterConfigLoaderTest {
             {
               "code": "SUPPLY-01",
               "ratedAirflowCubicMetersPerSecond": 8.0,
+              "ratedElectricalPowerWatts": 12000.0,
               "ratedCoolingCapacityWatts": 100000.0,
               "supplyAirTemperatureCelsius": 18.0,
               "influences": [
@@ -601,6 +602,7 @@ class JsonDatacenterConfigLoaderTest {
             {
               "code": "EXHAUST-01",
               "ratedAirflowCubicMetersPerSecond": 8.0,
+              "ratedElectricalPowerWatts": 3000.0,
               "influences": [
                 {
                   "zoneCode": "ZONE-A01-R01",
@@ -768,6 +770,14 @@ class JsonDatacenterConfigLoaderTest {
         );
 
         assertEquals(
+                12_000.0,
+                definition.cooling()
+                        .supplyUnits()
+                        .getFirst()
+                        .ratedElectricalPowerWatts()
+        );
+
+        assertEquals(
                 18.0,
                 definition.cooling()
                         .supplyUnits()
@@ -818,6 +828,14 @@ class JsonDatacenterConfigLoaderTest {
                         .exhaustUnits()
                         .getFirst()
                         .ratedAirflowCubicMetersPerSecond()
+        );
+
+        assertEquals(
+                3_000.0,
+                definition.cooling()
+                        .exhaustUnits()
+                        .getFirst()
+                        .ratedElectricalPowerWatts()
         );
 
         assertFalse(
