@@ -116,6 +116,34 @@ class DatacenterOperationalSnapshotTest {
     }
 
     @Test
+    void shouldCreateOperationalSnapshotWithFacilityPowerData() {
+        DatacenterOperationalSnapshot snapshot =
+                new DatacenterOperationalSnapshot(
+                        10L,
+                        600.0,
+                        Map.of(RACK_LOCATION, createRackSnapshot()),
+                        Map.of("C01", createColumnSnapshot()),
+                        24.0,
+                        Optional.of(RACK_LOCATION),
+                        60.0,
+                        0.60,
+                        200.0,
+                        1000.0,
+                        640.0,
+                        160.0,
+                        800.0,
+                        1.25
+                );
+
+        assertTrue(snapshot.hasCoolingData());
+        assertTrue(snapshot.hasFacilityPowerData());
+        assertTrue(snapshot.hasPue());
+        assertEquals(160.0, snapshot.coolingPowerWatts());
+        assertEquals(800.0, snapshot.totalFacilityPowerWatts());
+        assertEquals(1.25, snapshot.pue());
+    }
+
+    @Test
     void shouldDefensivelyCopyMapsAndSupportLookup() {
         RackOperationalSnapshot rackSnapshot =
                 createRackSnapshot();
@@ -1155,129 +1183,90 @@ class DatacenterOperationalSnapshotTest {
     }
 
     @Test
-    void shouldRejectCoolingPowerUntilCoolingDataIsAvailable() {
-        for (double invalidValue : new double[]{
-                0.0,
-                500.0,
-                Double.POSITIVE_INFINITY,
-                Double.NEGATIVE_INFINITY
-        }) {
-            IllegalArgumentException exception = assertThrows(
-                    IllegalArgumentException.class,
-                    () -> new DatacenterOperationalSnapshot(
-                            10L,
-                            600.0,
-                            Map.of(
-                                    RACK_LOCATION,
-                                    createRackSnapshot()
-                            ),
-                            Map.of(
-                                    "C01",
-                                    createColumnSnapshot()
-                            ),
-                            24.0,
-                            Optional.of(RACK_LOCATION),
-                            60.0,
-                            0.60,
-                            200.0,
-                            1000.0,
-                            640.0,
-                            invalidValue,
-                            Double.NaN,
-                            Double.NaN
-                    )
-            );
+    void shouldRejectPartialFacilityPowerData() {
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> new DatacenterOperationalSnapshot(
+                        10L,
+                        600.0,
+                        Map.of(RACK_LOCATION, createRackSnapshot()),
+                        Map.of("C01", createColumnSnapshot()),
+                        24.0,
+                        Optional.of(RACK_LOCATION),
+                        60.0,
+                        0.60,
+                        200.0,
+                        1000.0,
+                        640.0,
+                        160.0,
+                        Double.NaN,
+                        Double.NaN
+                )
+        );
 
-            assertEquals(
-                    "coolingPowerWatts must be NaN "
-                            + "until cooling data is available",
-                    exception.getMessage()
-            );
-        }
+        assertEquals(
+                "coolingPowerWatts and totalFacilityPowerWatts "
+                        + "must both be available when cooling data exists",
+                exception.getMessage()
+        );
     }
 
     @Test
-    void shouldRejectTotalFacilityPowerUntilCoolingDataIsAvailable() {
-        for (double invalidValue : new double[]{
-                0.0,
-                1140.0,
-                Double.POSITIVE_INFINITY,
-                Double.NEGATIVE_INFINITY
-        }) {
-            IllegalArgumentException exception = assertThrows(
-                    IllegalArgumentException.class,
-                    () -> new DatacenterOperationalSnapshot(
-                            10L,
-                            600.0,
-                            Map.of(
-                                    RACK_LOCATION,
-                                    createRackSnapshot()
-                            ),
-                            Map.of(
-                                    "C01",
-                                    createColumnSnapshot()
-                            ),
-                            24.0,
-                            Optional.of(RACK_LOCATION),
-                            60.0,
-                            0.60,
-                            200.0,
-                            1000.0,
-                            640.0,
-                            Double.NaN,
-                            invalidValue,
-                            Double.NaN
-                    )
-            );
+    void shouldRejectInconsistentTotalFacilityPower() {
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> new DatacenterOperationalSnapshot(
+                        10L,
+                        600.0,
+                        Map.of(RACK_LOCATION, createRackSnapshot()),
+                        Map.of("C01", createColumnSnapshot()),
+                        24.0,
+                        Optional.of(RACK_LOCATION),
+                        60.0,
+                        0.60,
+                        200.0,
+                        1000.0,
+                        640.0,
+                        160.0,
+                        799.0,
+                        1.25
+                )
+        );
 
-            assertEquals(
-                    "totalFacilityPowerWatts must be NaN "
-                            + "until cooling data is available",
-                    exception.getMessage()
-            );
-        }
+        assertEquals(
+                "totalFacilityPowerWatts must equal "
+                        + "currentItPowerWatts plus coolingPowerWatts",
+                exception.getMessage()
+        );
     }
 
     @Test
-    void shouldRejectPueUntilCoolingDataIsAvailable() {
-        for (double invalidValue : new double[]{
-                0.0,
-                1.5,
-                Double.POSITIVE_INFINITY,
-                Double.NEGATIVE_INFINITY
-        }) {
-            IllegalArgumentException exception = assertThrows(
-                    IllegalArgumentException.class,
-                    () -> new DatacenterOperationalSnapshot(
-                            10L,
-                            600.0,
-                            Map.of(
-                                    RACK_LOCATION,
-                                    createRackSnapshot()
-                            ),
-                            Map.of(
-                                    "C01",
-                                    createColumnSnapshot()
-                            ),
-                            24.0,
-                            Optional.of(RACK_LOCATION),
-                            60.0,
-                            0.60,
-                            200.0,
-                            1000.0,
-                            640.0,
-                            Double.NaN,
-                            Double.NaN,
-                            invalidValue
-                    )
-            );
+    void shouldRejectInconsistentPue() {
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> new DatacenterOperationalSnapshot(
+                        10L,
+                        600.0,
+                        Map.of(RACK_LOCATION, createRackSnapshot()),
+                        Map.of("C01", createColumnSnapshot()),
+                        24.0,
+                        Optional.of(RACK_LOCATION),
+                        60.0,
+                        0.60,
+                        200.0,
+                        1000.0,
+                        640.0,
+                        160.0,
+                        800.0,
+                        1.20
+                )
+        );
 
-            assertEquals(
-                    "pue must be NaN "
-                            + "until cooling data is available",
-                    exception.getMessage()
-            );
-        }
+        assertEquals(
+                "pue must equal totalFacilityPowerWatts "
+                        + "divided by currentItPowerWatts",
+                exception.getMessage()
+        );
     }
 
     @Test
