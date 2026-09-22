@@ -119,10 +119,21 @@ public final class DatacenterSimulationHistoryRecorder {
         EnergyConsumptionSnapshot energySnapshot = energySnapshotProvider.snapshot(tick);
         TemperatureSnapshot temperatureSnapshot = temperatureSnapshotProvider.snapshot(tick);
         HealthSnapshot healthSnapshot = healthSnapshotProvider.snapshot(tick);
-        DatacenterOperationalSnapshot operationalSnapshot =
-                operationalSnapshotProvider.snapshot(energySnapshot, temperatureSnapshot, healthSnapshot);
         Optional<CoolingSnapshot> coolingSnapshot =
                 Objects.requireNonNull(coolingSnapshotSupplier.get(), "coolingSnapshotSupplier must not return null");
+        DatacenterOperationalSnapshot operationalSnapshot =
+                coolingSnapshot
+                        .map(snapshot -> operationalSnapshotProvider.snapshot(
+                                energySnapshot,
+                                temperatureSnapshot,
+                                healthSnapshot,
+                                snapshot
+                        ))
+                        .orElseGet(() -> operationalSnapshotProvider.snapshot(
+                                energySnapshot,
+                                temperatureSnapshot,
+                                healthSnapshot
+                        ));
         DatacenterSimulationStepSnapshot stepSnapshot =
                 new DatacenterSimulationStepSnapshot(
                         energySnapshot,
