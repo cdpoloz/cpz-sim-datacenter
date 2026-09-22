@@ -124,15 +124,55 @@ simulation systems and do not advance the simulation.
 ## Data Input Modes
 
 `DatacenterDataInputMode` names the authoritative input variable for the
-simulation pipeline:
+simulation pipeline.
 
-- `UTILIZATION_DRIVEN`: current complete pipeline. `WorkloadSystem` updates
-  utilization; `PowerConsumptionSystem` derives power; `TemperatureSystem`
-  derives server temperature.
-- `POWER_DRIVEN`: future telemetry-backed pipeline. `PowerInputSystem` supplies
-  server power directly instead of deriving it from utilization.
-- `TEMPERATURE_DRIVEN`: future telemetry-backed pipeline. `TemperatureInputSystem`
-  supplies thermal state directly instead of deriving it from power.
+### UTILIZATION_DRIVEN
+
+`UTILIZATION_DRIVEN` is the original and default pipeline.
+
+```text
+WorkloadSystem
+-> PowerConsumptionSystem
+-> CoolingSnapshotCoordinator
+-> TemperatureSystem
+-> ServerHealthSystem
+-> EnergyConsumptionSystem
+```
+
+In this mode, server utilization is supplied by `WorkloadSource`. Server power is
+derived from utilization through `PowerConsumptionSystem`.
+
+### POWER_DRIVEN
+
+`POWER_DRIVEN` uses server power as the authoritative input.
+
+```text
+PowerInputSystem
+-> CoolingSnapshotCoordinator
+-> TemperatureSystem
+-> ServerHealthSystem
+-> EnergyConsumptionSystem
+```
+
+In this mode, `PowerInputSystem` writes `Server.currentPowerWatts` from a
+`ServerPowerInputSource`. The backend keeps `Server.utilization` populated as an
+estimated value derived from current power:
+
+```text
+(currentPowerWatts - idlePowerWatts) / (maxPowerWatts - idlePowerWatts)
+```
+
+The estimated utilization is clamped to `[0, 1]`. It exists for health checks,
+snapshots, and UI compatibility. It should not be interpreted as a measured
+utilization signal.
+
+A simulated implementation can use `NoiseServerPowerInputSource`, optionally
+with role-based factors through `ServerRolePowerFactorProvider`.
+
+### TEMPERATURE_DRIVEN
+
+`TEMPERATURE_DRIVEN` is reserved for future telemetry-backed simulations where
+temperature readings are the authoritative input.
 
 `DatacenterDataInputModePlanner` returns a `DatacenterDataInputModePlan` so a UI
 or telemetry adapter can decide which systems to register without inspecting
@@ -176,8 +216,8 @@ preserved.
 
 ## Current Energy Rules
 
-The power of an operational server is calculated linearly between `idlePowerWatts`
-and `maxPowerWatts`:
+In `UTILIZATION_DRIVEN`, the power of an operational server is calculated
+linearly between `idlePowerWatts` and `maxPowerWatts`:
 
 ```text
 idlePowerWatts + utilization * (maxPowerWatts - idlePowerWatts)
@@ -185,6 +225,11 @@ idlePowerWatts + utilization * (maxPowerWatts - idlePowerWatts)
 
 If the server is `OFFLINE`, `Server.updatePowerConsumption()` leaves
 `currentPowerWatts` at `0.0f`.
+
+In `POWER_DRIVEN`, `PowerInputSystem` sets `currentPowerWatts` directly from a
+`ServerPowerInputSource`. The backend then estimates utilization from the
+current power value so existing snapshots and health checks continue to receive
+a utilization value.
 
 `EnergyConsumptionSystem` accumulates energy in Wh:
 
