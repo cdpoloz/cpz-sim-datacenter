@@ -145,6 +145,7 @@ class CoolingConfigurationFactoryTest {
                 new SupplyCoolingUnitConfigDefinition(
                         "SUPPLY-01",
                         8.0,
+                        12_000.0,
                         100_000.0,
                         18.0,
                         List.of(influence),
@@ -155,6 +156,7 @@ class CoolingConfigurationFactoryTest {
                 new ExhaustCoolingUnitConfigDefinition(
                         "EXHAUST-01",
                         6.0,
+                        3_000.0,
                         List.of(influence),
                         false
                 );
@@ -238,6 +240,10 @@ class CoolingConfigurationFactoryTest {
                 supply.ratedAirflowCubicMetersPerSecond()
         );
         assertEquals(
+                12_000.0,
+                supply.ratedElectricalPowerWatts()
+        );
+        assertEquals(
                 100_000.0,
                 supply.ratedCoolingCapacityWatts()
         );
@@ -267,6 +273,10 @@ class CoolingConfigurationFactoryTest {
         assertEquals(
                 6.0,
                 exhaust.ratedAirflowCubicMetersPerSecond()
+        );
+        assertEquals(
+                3_000.0,
+                exhaust.ratedElectricalPowerWatts()
         );
         assertFalse(exhaust.initiallyEnabled());
 
