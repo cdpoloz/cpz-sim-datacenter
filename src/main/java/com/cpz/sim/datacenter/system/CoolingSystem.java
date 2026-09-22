@@ -241,10 +241,11 @@ public final class CoolingSystem {
         for (CoolingUnitDefinition definition : configuration.units()) {
             boolean enabled = stateOf(definition.code()).enabled();
             double currentAirflow = enabled ? definition.ratedAirflowCubicMetersPerSecond() : 0.0;
+            double currentElectricalPower = enabled ? definition.ratedElectricalPowerWatts() : 0.0;
             double currentCoolingPower = 0.0;
             if (enabled && definition instanceof SupplyCoolingUnitDefinition supply)
                 currentCoolingPower = supply.ratedCoolingCapacityWatts();
-            snapshots.add(new CoolingUnitSnapshot(definition.code(), definition.type(), enabled, currentAirflow, currentCoolingPower));
+            snapshots.add(new CoolingUnitSnapshot(definition.code(), definition.type(), enabled, currentAirflow, currentElectricalPower, currentCoolingPower));
         }
         return snapshots;
     }
