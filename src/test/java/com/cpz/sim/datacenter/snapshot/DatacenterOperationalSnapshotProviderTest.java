@@ -524,6 +524,8 @@ class DatacenterOperationalSnapshotProviderTest {
                                         10_000.0,
                                         760.0,
                                         0.0,
+                                        8.0,
+                                        6.0,
                                         18.0,
                                         25.0,
                                         0.1
