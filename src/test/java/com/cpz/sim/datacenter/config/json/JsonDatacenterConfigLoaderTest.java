@@ -5,6 +5,7 @@ import com.cpz.sim.datacenter.config.definition.DatacenterDefinition;
 import com.cpz.sim.datacenter.config.definition.RackDefinition;
 import com.cpz.sim.datacenter.config.validation.DatacenterConfigValidationException;
 import com.cpz.sim.datacenter.factory.DatacenterFactory;
+import com.cpz.sim.datacenter.input.DatacenterDataInputMode;
 import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.model.ServerRole;
 import com.cpz.sim.datacenter.model.ServerThermalProperties;
@@ -69,8 +70,17 @@ class JsonDatacenterConfigLoaderTest {
     }
 
     private Path writeSingleServerConfig(String thermalProperties, String roleProperty) throws IOException {
+        return writeSingleServerConfig("", thermalProperties, roleProperty);
+    }
+
+    private Path writeSingleServerConfig(
+            String rootProperties,
+            String thermalProperties,
+            String roleProperty
+    ) throws IOException {
         String json = """
                 {
+                  %s
                   "name": "Role Test Datacenter",
                   "layout": {
                     "racks": [
@@ -102,7 +112,7 @@ class JsonDatacenterConfigLoaderTest {
                     }
                   ]
                 }
-                """.formatted(thermalProperties, roleProperty);
+                """.formatted(rootProperties, thermalProperties, roleProperty);
         return Files.writeString(tempDirectory.resolve("server-role.json"), json);
     }
 
@@ -142,6 +152,62 @@ class JsonDatacenterConfigLoaderTest {
         assertNull(definition.temperature());
         assertNull(definition.health());
         assertNull(definition.cooling());
+        assertEquals(DatacenterDataInputMode.UTILIZATION_DRIVEN, definition.dataInputMode());
+    }
+
+    @Test
+    void shouldDefaultDataInputModeToUtilizationDriven() throws IOException {
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(
+                writeSingleServerConfig("", "")
+        );
+
+        assertEquals(DatacenterDataInputMode.UTILIZATION_DRIVEN, definition.dataInputMode());
+    }
+
+    @ParameterizedTest
+    @EnumSource(DatacenterDataInputMode.class)
+    void shouldLoadExplicitDataInputMode(DatacenterDataInputMode mode) throws IOException {
+        Path configPath = writeSingleServerConfig(
+                "\"dataInputMode\": \"" + mode.name() + "\",",
+                "",
+                ""
+        );
+
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(configPath);
+
+        assertEquals(mode, definition.dataInputMode());
+    }
+
+    @Test
+    void shouldRejectNullDataInputMode() throws IOException {
+        Path configPath = writeSingleServerConfig(
+                "\"dataInputMode\": null,",
+                "",
+                ""
+        );
+
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(configPath)
+        );
+
+        assertTrue(exception.getMessage().contains("dataInputMode cannot be null"));
+    }
+
+    @Test
+    void shouldRejectUnknownDataInputMode() throws IOException {
+        Path configPath = writeSingleServerConfig(
+                "\"dataInputMode\": \"UNKNOWN_MODE\",",
+                "",
+                ""
+        );
+
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(configPath)
+        );
+
+        assertTrue(exception.getMessage().contains("Unknown dataInputMode 'UNKNOWN_MODE'"));
     }
 
     @Test

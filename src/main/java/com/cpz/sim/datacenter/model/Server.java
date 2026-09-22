@@ -72,6 +72,25 @@ public class Server {
     }
 
     /**
+     * Sets the current server power directly.
+     *
+     * <p>This method is intended for power-driven simulations where server
+     * power is supplied by telemetry or another external source instead of
+     * being calculated from utilization.</p>
+     *
+     * @param currentPowerWatts current electrical power in watts
+     */
+    public void setCurrentPowerWatts(double currentPowerWatts) {
+        if (!Double.isFinite(currentPowerWatts) || currentPowerWatts < 0.0)
+            throw new IllegalArgumentException("currentPowerWatts must be finite and >= 0");
+        if (status == HardwareStatus.OFFLINE && currentPowerWatts != 0.0)
+            throw new IllegalArgumentException("currentPowerWatts must be 0.0 for OFFLINE servers");
+        if (currentPowerWatts > config.maxPowerWatts())
+            throw new IllegalArgumentException("currentPowerWatts must not exceed maxPowerWatts");
+        this.currentPowerWatts = (float) currentPowerWatts;
+    }
+
+    /**
      * Returns the server's primary functional role.
      *
      * @return the non-null role assigned when the server was constructed

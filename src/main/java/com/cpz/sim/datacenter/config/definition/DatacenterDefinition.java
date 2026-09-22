@@ -1,6 +1,9 @@
 package com.cpz.sim.datacenter.config.definition;
 
+import com.cpz.sim.datacenter.input.DatacenterDataInputMode;
+
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Complete JSON definition of a datacenter.
@@ -12,6 +15,7 @@ import java.util.List;
  * @param temperature optional temperature-system configuration
  * @param health optional server-health configuration
  * @param cooling optional cooling-system configuration
+ * @param dataInputMode authoritative input variable for the simulation pipeline
  *
  * @author CPZ
  */
@@ -22,8 +26,29 @@ public record DatacenterDefinition(
         List<ServerDefinition> servers,
         TemperatureSystemOptionsDefinition temperature,
         HealthSystemOptionsDefinition health,
-        CoolingConfigDefinition cooling
+        CoolingConfigDefinition cooling,
+        DatacenterDataInputMode dataInputMode
 ) {
+
+    public DatacenterDefinition {
+        dataInputMode = Objects.requireNonNullElse(dataInputMode, DatacenterDataInputMode.UTILIZATION_DRIVEN);
+    }
+
+    /**
+     * Preserves the constructor introduced with optional temperature, health,
+     * and cooling configuration.
+     */
+    public DatacenterDefinition(
+            String name,
+            DatacenterLayoutDefinition layout,
+            List<ServerModelDefinition> serverModels,
+            List<ServerDefinition> servers,
+            TemperatureSystemOptionsDefinition temperature,
+            HealthSystemOptionsDefinition health,
+            CoolingConfigDefinition cooling
+    ) {
+        this(name, layout, serverModels, servers, temperature, health, cooling, DatacenterDataInputMode.UTILIZATION_DRIVEN);
+    }
 
     /**
      * Preserves the original constructor used before optional system
@@ -35,7 +60,7 @@ public record DatacenterDefinition(
             List<ServerModelDefinition> serverModels,
             List<ServerDefinition> servers
     ) {
-        this(name, layout, serverModels, servers, null, null, null);
+        this(name, layout, serverModels, servers, null, null, null, DatacenterDataInputMode.UTILIZATION_DRIVEN);
     }
 
     /**
@@ -49,7 +74,7 @@ public record DatacenterDefinition(
             List<ServerDefinition> servers,
             TemperatureSystemOptionsDefinition temperature
     ) {
-        this(name, layout, serverModels, servers, temperature, null, null);
+        this(name, layout, serverModels, servers, temperature, null, null, DatacenterDataInputMode.UTILIZATION_DRIVEN);
     }
 
     /**
@@ -64,7 +89,7 @@ public record DatacenterDefinition(
             TemperatureSystemOptionsDefinition temperature,
             HealthSystemOptionsDefinition health
     ) {
-        this(name, layout, serverModels, servers, temperature, health, null);
+        this(name, layout, serverModels, servers, temperature, health, null, DatacenterDataInputMode.UTILIZATION_DRIVEN);
     }
 
 }

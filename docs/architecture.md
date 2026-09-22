@@ -16,6 +16,7 @@ backend.
 - `com.cpz.sim.datacenter.config.json`: JSON loading with Jackson (`JsonDatacenterConfigLoader`).
 - `com.cpz.sim.datacenter.config.validation`: validation of definitions before building the domain.
 - `com.cpz.sim.datacenter.factory`: domain construction and option/provider factories (`DatacenterFactory`, `WorkloadFactorProviderFactory`, `TemperatureSystemOptionsFactory`, `ServerHealthOptionsFactory`).
+- `com.cpz.sim.datacenter.input`: data input modes and telemetry-source contracts.
 - `com.cpz.sim.datacenter.workload`: workload strategies (`WorkloadSource` and its implementations).
 - `com.cpz.sim.datacenter.temperature`: server thermal state and temperature model contracts.
 - `com.cpz.sim.datacenter.health`: health thresholds, alert reasons, and per-server health state.
@@ -120,6 +121,24 @@ WorkloadSystem
 Snapshot providers are readers of state after the systems update. They are not
 simulation systems and do not advance the simulation.
 
+## Data Input Modes
+
+`DatacenterDataInputMode` names the authoritative input variable for the
+simulation pipeline:
+
+- `UTILIZATION_DRIVEN`: current complete pipeline. `WorkloadSystem` updates
+  utilization; `PowerConsumptionSystem` derives power; `TemperatureSystem`
+  derives server temperature.
+- `POWER_DRIVEN`: future telemetry-backed pipeline. `PowerInputSystem` supplies
+  server power directly instead of deriving it from utilization.
+- `TEMPERATURE_DRIVEN`: future telemetry-backed pipeline. `TemperatureInputSystem`
+  supplies thermal state directly instead of deriving it from power.
+
+`DatacenterDataInputModePlanner` returns a `DatacenterDataInputModePlan` so a UI
+or telemetry adapter can decide which systems to register without inspecting
+implementation details. JSON definitions default to `UTILIZATION_DRIVEN` when
+`dataInputMode` is omitted.
+
 ## Causal Order
 
 1. `WorkloadSystem` computes `Server.utilization` for each operational server.
@@ -177,8 +196,8 @@ consumedEnergyWh += datacenter.getTotalItPowerWatts() * (tick.deltaSeconds() / 3
 
 - Preliminary API.
 - Temperature is currently a simplified server-level internal model.
-- No cooling model yet.
-- No rack inlet, room temperature, airflow, or rack-to-rack thermal coupling.
+- Cooling is a simplified zone-level model.
+- No detailed rack-to-rack thermal coupling.
 - No advanced electrical model.
 - No UI.
 - No result persistence.

@@ -39,6 +39,45 @@ Main fields:
 - `temperature`: optional thermal model configuration.
 - `health`: optional server health threshold configuration.
 - `cooling`: optional cooling-system configuration.
+- `dataInputMode`: optional authoritative input mode. Defaults to
+  `UTILIZATION_DRIVEN`.
+
+## dataInputMode
+
+`dataInputMode` declares which external or simulated variable drives the
+datacenter simulation. If omitted, the backend uses `UTILIZATION_DRIVEN`, which
+is the current complete pipeline.
+
+```json
+{
+  "name": "Demo Datacenter",
+  "dataInputMode": "UTILIZATION_DRIVEN",
+  "layout": {
+    "racks": []
+  },
+  "serverModels": [],
+  "servers": []
+}
+```
+
+Allowed values:
+
+- `UTILIZATION_DRIVEN`: utilization is supplied through `WorkloadSource`; the
+  backend derives IT power and server temperature.
+- `POWER_DRIVEN`: server power is supplied directly, for example from telemetry;
+  the backend can derive temperature from that power.
+- `TEMPERATURE_DRIVEN`: server or rack temperature is supplied directly, for
+  example from telemetry; temperature is not derived from utilization or power.
+
+Rules:
+
+- If `dataInputMode` is absent, `DatacenterDefinition.dataInputMode()` returns
+  `UTILIZATION_DRIVEN`.
+- If present, `dataInputMode` must be a non-null string matching one of the
+  allowed enum names exactly.
+- `POWER_DRIVEN` and `TEMPERATURE_DRIVEN` are exposed as backend contracts for
+  upcoming telemetry/digital-twin work. Existing JSON configurations remain
+  compatible because the default mode preserves the current behavior.
 
 ## layout.room
 

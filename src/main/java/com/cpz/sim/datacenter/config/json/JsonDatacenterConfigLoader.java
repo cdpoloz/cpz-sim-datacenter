@@ -3,6 +3,7 @@ package com.cpz.sim.datacenter.config.json;
 import com.cpz.sim.datacenter.config.DatacenterConfigException;
 import com.cpz.sim.datacenter.config.DatacenterConfigLoader;
 import com.cpz.sim.datacenter.config.definition.*;
+import com.cpz.sim.datacenter.input.DatacenterDataInputMode;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -43,7 +44,8 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
                     readRequired(root, "servers", path, SERVERS_TYPE),
                     readOptionalTemperature(root, path),
                     readOptionalHealth(root, path),
-                    readOptionalCooling(root, path)
+                    readOptionalCooling(root, path),
+                    readOptionalDataInputMode(root, path)
             );
         } catch (IOException exception) {
             throw new DatacenterConfigException("Could not load datacenter config from path: " + path, exception);
@@ -94,6 +96,23 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
         if (coolingNode == null) return null;
         if (coolingNode.isNull()) throw new DatacenterConfigException("Cooling block cannot be null in datacenter config: " + path);
         return JSON_MAPPER.readValue(coolingNode.traverse(JSON_MAPPER), CoolingConfigDefinition.class);
+    }
+
+    private static DatacenterDataInputMode readOptionalDataInputMode(JsonNode root, Path path) {
+        JsonNode modeNode = root.get("dataInputMode");
+        if (modeNode == null) return DatacenterDataInputMode.UTILIZATION_DRIVEN;
+        if (modeNode.isNull())
+            throw new DatacenterConfigException("dataInputMode cannot be null in datacenter config: " + path);
+        if (!modeNode.isTextual())
+            throw new DatacenterConfigException("dataInputMode must be a string in datacenter config: " + path);
+        try {
+            return DatacenterDataInputMode.valueOf(modeNode.textValue());
+        } catch (IllegalArgumentException exception) {
+            throw new DatacenterConfigException(
+                    "Unknown dataInputMode '" + modeNode.textValue() + "' in datacenter config: " + path,
+                    exception
+            );
+        }
     }
 
     private static <T> T readRequired(JsonNode root, String propertyName, Path path, Class<T> type) throws IOException {

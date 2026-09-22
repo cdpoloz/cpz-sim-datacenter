@@ -92,6 +92,58 @@ class TemperatureSystemTest {
     }
 
     @Test
+    void shouldAcceptDirectTemperatureForTemperatureDrivenMode() {
+        Datacenter datacenter = createDatacenterWithOneServer(HardwareStatus.OK, 0.75f);
+        TemperatureSystem system = new TemperatureSystem(
+                datacenter,
+                TemperatureSystemOptions.defaults(),
+                new SimpleServerTemperatureModel()
+        );
+
+        system.setTemperatureCelsius(SERVER_CODE, 42.5);
+
+        assertEquals(
+                42.5,
+                system.getThermalState(SERVER_CODE).getTemperatureCelsius(),
+                EPSILON
+        );
+    }
+
+    @Test
+    void shouldRejectDirectTemperatureForUnknownServer() {
+        Datacenter datacenter = createDatacenterWithOneServer(HardwareStatus.OK, 0.75f);
+        TemperatureSystem system = new TemperatureSystem(
+                datacenter,
+                TemperatureSystemOptions.defaults(),
+                new SimpleServerTemperatureModel()
+        );
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> system.setTemperatureCelsius("UNKNOWN", 42.5)
+        );
+
+        assertEquals("Unknown server code: UNKNOWN", exception.getMessage());
+    }
+
+    @Test
+    void shouldRejectNonFiniteDirectTemperature() {
+        Datacenter datacenter = createDatacenterWithOneServer(HardwareStatus.OK, 0.75f);
+        TemperatureSystem system = new TemperatureSystem(
+                datacenter,
+                TemperatureSystemOptions.defaults(),
+                new SimpleServerTemperatureModel()
+        );
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> system.setTemperatureCelsius(SERVER_CODE, Double.NaN)
+        );
+
+        assertEquals("temperatureCelsius must be finite", exception.getMessage());
+    }
+
+    @Test
     void increasesTemperatureWhenServerHasPowerConsumption() {
         Datacenter datacenter = createDatacenterWithOneServer(HardwareStatus.OK, 0.75f);
         TemperatureSystemOptions options = new TemperatureSystemOptions(
