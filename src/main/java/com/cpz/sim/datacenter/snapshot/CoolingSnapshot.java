@@ -94,6 +94,15 @@ public record CoolingSnapshot(long tickIndex, List<CoolingUnitSnapshot> units, L
         return zones.stream().mapToDouble(CoolingZoneSnapshot::coolingDeficitWatts).sum();
     }
 
+    /**
+     * Returns the total electrical power consumed by enabled cooling units.
+     *
+     * @return cooling electrical power in watts
+     */
+    public double totalElectricalPowerWatts() {
+        return units.stream().mapToDouble(CoolingUnitSnapshot::currentElectricalPowerWatts).sum();
+    }
+
     private static void validateUniqueUnitCodes(List<CoolingUnitSnapshot> units) {
         Set<String> unitCodes = new HashSet<>();
         for (CoolingUnitSnapshot unit : units) {
