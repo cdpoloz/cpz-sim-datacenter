@@ -40,14 +40,19 @@ public final class PowerInputSystem implements Simulatable {
         for (Server server : datacenter.getServers()) {
             if (server.getStatus() == HardwareStatus.OFFLINE) {
                 server.setCurrentPowerWatts(0.0);
+                server.estimateUtilizationFromCurrentPower();
                 continue;
             }
             server.setCurrentPowerWatts(powerInputSource.currentPowerWatts(server, tick));
+            server.estimateUtilizationFromCurrentPower();
         }
     }
 
     @Override
     public void reset() {
-        for (Server server : datacenter.getServers()) server.setCurrentPowerWatts(0.0);
+        for (Server server : datacenter.getServers()) {
+            server.setCurrentPowerWatts(0.0);
+            server.estimateUtilizationFromCurrentPower();
+        }
     }
 }
