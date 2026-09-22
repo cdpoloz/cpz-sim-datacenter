@@ -10,6 +10,7 @@ import java.util.Set;
  *
  * @param code unique code of the cooling unit
  * @param ratedAirflowCubicMetersPerSecond nominal airflow
+ * @param ratedElectricalPowerWatts nominal electrical power consumed while enabled
  * @param ratedCoolingCapacityWatts nominal cooling capacity
  * @param supplyAirTemperatureCelsius nominal supplied-air temperature
  * @param influences cooling zones affected by the unit
@@ -20,6 +21,7 @@ import java.util.Set;
 public record SupplyCoolingUnitDefinition(
         String code,
         double ratedAirflowCubicMetersPerSecond,
+        double ratedElectricalPowerWatts,
         double ratedCoolingCapacityWatts,
         double supplyAirTemperatureCelsius,
         List<CoolingZoneInfluence> influences,
@@ -36,11 +38,32 @@ public record SupplyCoolingUnitDefinition(
      */
     public SupplyCoolingUnitDefinition {
         validateCommon(code, ratedAirflowCubicMetersPerSecond, influences);
+        if (!Double.isFinite(ratedElectricalPowerWatts) || ratedElectricalPowerWatts < 0.0)
+            throw new IllegalArgumentException("ratedElectricalPowerWatts must be finite and greater than or equal to 0.0");
         if (!Double.isFinite(ratedCoolingCapacityWatts) || ratedCoolingCapacityWatts <= 0.0)
             throw new IllegalArgumentException("ratedCoolingCapacityWatts must be finite and greater than 0.0");
         if (!Double.isFinite(supplyAirTemperatureCelsius))
             throw new IllegalArgumentException("supplyAirTemperatureCelsius must be finite");
         influences = List.copyOf(influences);
+    }
+
+    public SupplyCoolingUnitDefinition(
+            String code,
+            double ratedAirflowCubicMetersPerSecond,
+            double ratedCoolingCapacityWatts,
+            double supplyAirTemperatureCelsius,
+            List<CoolingZoneInfluence> influences,
+            boolean initiallyEnabled
+    ) {
+        this(
+                code,
+                ratedAirflowCubicMetersPerSecond,
+                0.0,
+                ratedCoolingCapacityWatts,
+                supplyAirTemperatureCelsius,
+                influences,
+                initiallyEnabled
+        );
     }
 
     @Override
