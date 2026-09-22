@@ -125,6 +125,7 @@ class CoolingSystemTest {
                 new SupplyCoolingUnitDefinition(
                         "SUPPLY-01",
                         4.0,
+                        2_400.0,
                         12_000.0,
                         18.0,
                         List.of(new CoolingZoneInfluence("ZONE-01", 1.0)),
@@ -134,6 +135,7 @@ class CoolingSystemTest {
                 new ExhaustCoolingUnitDefinition(
                         "EXHAUST-01",
                         4.0,
+                        800.0,
                         List.of(new CoolingZoneInfluence("ZONE-01", 1.0)),
                         false
                 );
@@ -182,12 +184,15 @@ class CoolingSystemTest {
         assertEquals("SUPPLY-01", supplySnapshot.unitCode());
         assertTrue(supplySnapshot.enabled());
         assertEquals(4.0, supplySnapshot.currentAirflowCubicMetersPerSecond());
+        assertEquals(2_400.0, supplySnapshot.currentElectricalPowerWatts());
         assertEquals(12_000.0, supplySnapshot.currentCoolingPowerWatts());
         CoolingUnitSnapshot exhaustSnapshot = snapshot.units().get(1);
         assertEquals("EXHAUST-01", exhaustSnapshot.unitCode());
         assertFalse(exhaustSnapshot.enabled());
         assertEquals(0.0, exhaustSnapshot.currentAirflowCubicMetersPerSecond());
+        assertEquals(0.0, exhaustSnapshot.currentElectricalPowerWatts());
         assertEquals(0.0, exhaustSnapshot.currentCoolingPowerWatts());
+        assertEquals(2_400.0, snapshot.totalElectricalPowerWatts());
     }
 
     @Test
