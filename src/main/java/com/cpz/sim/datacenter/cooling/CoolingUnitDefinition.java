@@ -34,6 +34,13 @@ public sealed interface CoolingUnitDefinition permits SupplyCoolingUnitDefinitio
     double ratedAirflowCubicMetersPerSecond();
 
     /**
+     * Returns the nominal electrical power consumed while the unit is enabled.
+     *
+     * @return electrical power in watts
+     */
+    double ratedElectricalPowerWatts();
+
+    /**
      * Returns the zones affected by the unit.
      *
      * @return immutable influence list
