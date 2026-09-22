@@ -13,8 +13,9 @@ import java.util.Optional;
  * the complete datacenter. Temperature and utilization averages include online
  * servers only.</p>
  *
- * <p>Cooling power, total facility power and PUE are represented by
- * {@link Double#NaN} until a cooling system is available.</p>
+ * <p>Cooling power represents the electrical power consumed by enabled
+ * cooling units. Cooling power, total facility power and PUE are represented
+ * by {@link Double#NaN} until a cooling system is available.</p>
  *
  * @author CPZ
  */
@@ -35,6 +36,8 @@ public record DatacenterOperationalSnapshot(
         double totalFacilityPowerWatts,
         double pue
 ) {
+
+    private static final double POWER_EPSILON = 1.0e-9;
 
     public DatacenterOperationalSnapshot {
         if (tickIndex < 0L) throw new IllegalArgumentException("tickIndex must be >= 0");
@@ -92,9 +95,12 @@ public record DatacenterOperationalSnapshot(
         requireFiniteAndNonNegative(currentItPowerWatts, "currentItPowerWatts");
         if (idleItPowerWatts > maxItPowerWatts) throw new IllegalArgumentException("idleItPowerWatts must not exceed maxItPowerWatts");
         if (currentItPowerWatts > maxItPowerWatts) throw new IllegalArgumentException("currentItPowerWatts must not exceed maxItPowerWatts");
-        requireNaN(coolingPowerWatts, "coolingPowerWatts");
-        requireNaN(totalFacilityPowerWatts, "totalFacilityPowerWatts");
-        requireNaN(pue, "pue");
+        validateFacilityPower(
+                currentItPowerWatts,
+                coolingPowerWatts,
+                totalFacilityPowerWatts,
+                pue
+        );
     }
 
     public DatacenterOperationalSnapshot(
@@ -191,7 +197,36 @@ public record DatacenterOperationalSnapshot(
         if (!Double.isFinite(value) || value < 0.0) throw new IllegalArgumentException(fieldName + " must be finite and >= 0");
     }
 
-    private static void requireNaN(double value, String fieldName) {
-        if (!Double.isNaN(value)) throw new IllegalArgumentException(fieldName + " must be NaN until cooling data is available");
+    private static void validateFacilityPower(
+            double currentItPowerWatts,
+            double coolingPowerWatts,
+            double totalFacilityPowerWatts,
+            double pue
+    ) {
+        boolean hasCoolingPower = !Double.isNaN(coolingPowerWatts);
+        boolean hasTotalFacilityPower = !Double.isNaN(totalFacilityPowerWatts);
+        boolean hasPue = !Double.isNaN(pue);
+        if (!hasCoolingPower && !hasTotalFacilityPower && !hasPue) return;
+        if (!hasCoolingPower || !hasTotalFacilityPower)
+            throw new IllegalArgumentException("coolingPowerWatts and totalFacilityPowerWatts must both be available when cooling data exists");
+        requireFiniteAndNonNegative(coolingPowerWatts, "coolingPowerWatts");
+        requireFiniteAndNonNegative(totalFacilityPowerWatts, "totalFacilityPowerWatts");
+        double expectedTotalFacilityPowerWatts = currentItPowerWatts + coolingPowerWatts;
+        if (!nearlyEqual(totalFacilityPowerWatts, expectedTotalFacilityPowerWatts))
+            throw new IllegalArgumentException("totalFacilityPowerWatts must equal currentItPowerWatts plus coolingPowerWatts");
+        if (currentItPowerWatts == 0.0) {
+            if (hasPue) throw new IllegalArgumentException("pue must be NaN when currentItPowerWatts is zero");
+            return;
+        }
+        if (!hasPue) throw new IllegalArgumentException("pue must be available when currentItPowerWatts is greater than zero and cooling data exists");
+        if (!Double.isFinite(pue) || pue < 1.0)
+            throw new IllegalArgumentException("pue must be finite and greater than or equal to 1.0");
+        double expectedPue = totalFacilityPowerWatts / currentItPowerWatts;
+        if (!nearlyEqual(pue, expectedPue))
+            throw new IllegalArgumentException("pue must equal totalFacilityPowerWatts divided by currentItPowerWatts");
+    }
+
+    private static boolean nearlyEqual(double left, double right) {
+        return Math.abs(left - right) <= POWER_EPSILON;
     }
 }
