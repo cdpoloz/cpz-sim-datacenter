@@ -78,6 +78,10 @@ Rules:
 - `POWER_DRIVEN` and `TEMPERATURE_DRIVEN` are exposed as backend contracts for
   upcoming telemetry/digital-twin work. Existing JSON configurations remain
   compatible because the default mode preserves the current behavior.
+- When `dataInputMode` is `POWER_DRIVEN`, the simulation pipeline must register a
+  power input system instead of `WorkloadSystem` and `PowerConsumptionSystem`.
+  Power can come from a simulated source, a telemetry adapter, or a future rack-level
+  adapter. Server utilization remains available, but it is estimated from power.
 
 ## layout.room
 
