@@ -40,9 +40,10 @@ Available in `0.1.0-alpha.1`:
 - Cooling zones resolved from installed server locations using `columns` plus `rackCodes`.
 - `SUPPLY` and `EXHAUST` cooling units with weighted influences, initial enabled state, and mutable runtime control.
 - Workload strategy through `WorkloadSource`, with noise-based and scaled workloads.
-- Data input modes through `DatacenterDataInputMode`: the current
-  `UTILIZATION_DRIVEN` pipeline is explicit, with extension points for
-  `POWER_DRIVEN` and `TEMPERATURE_DRIVEN`.
+- Data input modes through `DatacenterDataInputMode`: `UTILIZATION_DRIVEN`
+  uses utilization as the authoritative input, `POWER_DRIVEN` uses server power
+  as the authoritative input, and `TEMPERATURE_DRIVEN` is reserved for future
+  telemetry-backed simulations.
 - Integration with `FractalNoise` from `cpz-utils` for variable workloads.
 - Per-server `workloadFactor` read from JSON and applied through `ScaledWorkloadSource`.
 - Energy snapshots through `EnergyConsumptionSnapshotProvider`, `EnergyConsumptionSnapshot` and `ServerEnergySnapshot`.
@@ -226,9 +227,12 @@ the simulation:
 ```
 
 Supported values are `UTILIZATION_DRIVEN`, `POWER_DRIVEN`, and
-`TEMPERATURE_DRIVEN`. The current complete pipeline is `UTILIZATION_DRIVEN`;
-`POWER_DRIVEN` and `TEMPERATURE_DRIVEN` are exposed as backend contracts for
-future telemetry and digital-twin integrations.
+`TEMPERATURE_DRIVEN`. `UTILIZATION_DRIVEN` supplies utilization through a
+`WorkloadSource` and derives server power from it. `POWER_DRIVEN` supplies
+server power through a `ServerPowerInputSource`; server utilization remains
+available but is estimated from power so snapshots, health checks, and UI panels
+remain compatible. `TEMPERATURE_DRIVEN` is reserved for future telemetry and
+digital-twin integrations.
 
 ---
 
@@ -351,8 +355,11 @@ For consumer applications that need to register systems from configuration,
 which parts of the state are backend-derived and which parts are externally
 supplied. In the current mode, utilization is supplied through `WorkloadSource`;
 power is derived by `PowerConsumptionSystem`; temperature is derived by
-`TemperatureSystem`. Future telemetry adapters can use `PowerInputSystem` or
-`TemperatureInputSystem` instead of the corresponding derived system.
+`TemperatureSystem`. In `POWER_DRIVEN`, server power is supplied through
+`PowerInputSystem` and `ServerPowerInputSource`; utilization is estimated from
+that power. Future telemetry adapters can replace the simulated power source
+without changing the downstream cooling, temperature, health, energy, or
+snapshot pipeline.
 
 ---
 
@@ -405,8 +412,8 @@ first cooling integration from JSON to runtime snapshots. Future work outside
 the current scope:
 
 - Stable final `0.1.0` API.
-- First production implementation of `POWER_DRIVEN` mode using telemetry or
-  externally provided server power.
+- Rack-level power input and rack-to-server power distribution for
+  `POWER_DRIVEN` simulations.
 - First production implementation of `TEMPERATURE_DRIVEN` mode using telemetry
   or externally provided server/rack temperature.
 - More detailed rack inlet, room, and cooling-zone thermal modeling.
