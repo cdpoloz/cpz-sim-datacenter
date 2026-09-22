@@ -10,6 +10,7 @@ import java.util.List;
  *
  * @param code unique cooling-unit code
  * @param ratedAirflowCubicMetersPerSecond nominal extraction airflow
+ * @param ratedElectricalPowerWatts nominal electrical power consumed while enabled
  * @param influences cooling zones affected by the unit
  * @param initiallyEnabled whether the unit starts enabled
  *
@@ -18,7 +19,17 @@ import java.util.List;
 public record ExhaustCoolingUnitConfigDefinition(
         String code,
         double ratedAirflowCubicMetersPerSecond,
+        double ratedElectricalPowerWatts,
         List<CoolingZoneInfluenceConfigDefinition> influences,
         boolean initiallyEnabled
 ) {
+
+    public ExhaustCoolingUnitConfigDefinition(
+            String code,
+            double ratedAirflowCubicMetersPerSecond,
+            List<CoolingZoneInfluenceConfigDefinition> influences,
+            boolean initiallyEnabled
+    ) {
+        this(code, ratedAirflowCubicMetersPerSecond, 0.0, influences, initiallyEnabled);
+    }
 }
