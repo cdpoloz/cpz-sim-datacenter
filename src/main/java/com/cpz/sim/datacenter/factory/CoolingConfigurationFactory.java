@@ -110,6 +110,7 @@ public final class CoolingConfigurationFactory {
         return new SupplyCoolingUnitDefinition(
                 definition.code(),
                 definition.ratedAirflowCubicMetersPerSecond(),
+                definition.ratedElectricalPowerWatts(),
                 definition.ratedCoolingCapacityWatts(),
                 definition.supplyAirTemperatureCelsius(),
                 createInfluences(definition.influences()),
@@ -121,6 +122,7 @@ public final class CoolingConfigurationFactory {
         return new ExhaustCoolingUnitDefinition(
                 definition.code(),
                 definition.ratedAirflowCubicMetersPerSecond(),
+                definition.ratedElectricalPowerWatts(),
                 createInfluences(definition.influences()),
                 definition.initiallyEnabled()
         );
