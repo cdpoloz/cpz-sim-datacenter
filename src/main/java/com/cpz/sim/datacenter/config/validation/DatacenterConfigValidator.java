@@ -475,6 +475,8 @@ public final class DatacenterConfigValidator {
     ) {
         if (!Double.isFinite(unit.ratedAirflowCubicMetersPerSecond()) || unit.ratedAirflowCubicMetersPerSecond() <= 0.0)
             errors.add(context + " must have finite ratedAirflowCubicMetersPerSecond > 0");
+        if (!Double.isFinite(unit.ratedElectricalPowerWatts()) || unit.ratedElectricalPowerWatts() < 0.0)
+            errors.add(context + " must have finite ratedElectricalPowerWatts >= 0");
         if (!Double.isFinite(unit.ratedCoolingCapacityWatts()) || unit.ratedCoolingCapacityWatts() <= 0.0)
             errors.add(context + " must have finite ratedCoolingCapacityWatts > 0");
         if (!Double.isFinite(unit.supplyAirTemperatureCelsius()))
@@ -516,6 +518,8 @@ public final class DatacenterConfigValidator {
     ) {
         if (!Double.isFinite(unit.ratedAirflowCubicMetersPerSecond()) || unit.ratedAirflowCubicMetersPerSecond() <= 0.0)
             errors.add(context + " must have finite ratedAirflowCubicMetersPerSecond > 0");
+        if (!Double.isFinite(unit.ratedElectricalPowerWatts()) || unit.ratedElectricalPowerWatts() < 0.0)
+            errors.add(context + " must have finite ratedElectricalPowerWatts >= 0");
     }
 
     private static void validateCoolingExhaustUnitInfluences(CoolingConfigDefinition cooling, List<String> errors) {
