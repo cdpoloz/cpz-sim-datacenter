@@ -7,6 +7,7 @@ import com.cpz.sim.datacenter.config.validation.DatacenterConfigValidationExcept
 import com.cpz.sim.datacenter.factory.DatacenterFactory;
 import com.cpz.sim.datacenter.input.DatacenterDataInputMode;
 import com.cpz.sim.datacenter.input.PowerInputGranularity;
+import com.cpz.sim.datacenter.input.TemperatureInputGranularity;
 import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.model.ServerRole;
 import com.cpz.sim.datacenter.model.ServerThermalProperties;
@@ -155,6 +156,7 @@ class JsonDatacenterConfigLoaderTest {
         assertNull(definition.cooling());
         assertEquals(DatacenterDataInputMode.UTILIZATION_DRIVEN, definition.dataInputMode());
         assertEquals(PowerInputGranularity.SERVER, definition.powerInputGranularity());
+        assertEquals(TemperatureInputGranularity.RACK, definition.temperatureInputGranularity());
     }
 
     @Test
@@ -173,6 +175,15 @@ class JsonDatacenterConfigLoaderTest {
         );
 
         assertEquals(PowerInputGranularity.SERVER, definition.powerInputGranularity());
+    }
+
+    @Test
+    void shouldDefaultTemperatureInputGranularityToRack() throws IOException {
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(
+                writeSingleServerConfig("", "")
+        );
+
+        assertEquals(TemperatureInputGranularity.RACK, definition.temperatureInputGranularity());
     }
 
     @ParameterizedTest
@@ -201,6 +212,20 @@ class JsonDatacenterConfigLoaderTest {
         DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(configPath);
 
         assertEquals(granularity, definition.powerInputGranularity());
+    }
+
+    @ParameterizedTest
+    @EnumSource(TemperatureInputGranularity.class)
+    void shouldLoadExplicitTemperatureInputGranularity(TemperatureInputGranularity granularity) throws IOException {
+        Path configPath = writeSingleServerConfig(
+                "\"temperatureInputGranularity\": \"" + granularity.name() + "\",",
+                "",
+                ""
+        );
+
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(configPath);
+
+        assertEquals(granularity, definition.temperatureInputGranularity());
     }
 
     @Test
@@ -265,6 +290,22 @@ class JsonDatacenterConfigLoaderTest {
         );
 
         assertTrue(exception.getMessage().contains("Unknown powerInputGranularity 'ROOM'"));
+    }
+
+    @Test
+    void shouldRejectUnknownTemperatureInputGranularity() throws IOException {
+        Path configPath = writeSingleServerConfig(
+                "\"temperatureInputGranularity\": \"SERVER\",",
+                "",
+                ""
+        );
+
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(configPath)
+        );
+
+        assertTrue(exception.getMessage().contains("Unknown temperatureInputGranularity 'SERVER'"));
     }
 
     @Test

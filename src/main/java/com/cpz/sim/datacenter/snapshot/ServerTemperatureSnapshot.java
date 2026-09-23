@@ -11,9 +11,12 @@ import java.util.Objects;
  *
  * <p>{@code column + rackCode + slot} identifies the physical server location.
  *
- * <p>{@code temperatureCelsius} represents a simplified internal server
- * temperature derived from server power. It is not rack inlet or room
- * temperature.
+ * <p>{@code temperatureCelsius} represents the effective server temperature
+ * included in this snapshot. Its source depends on the active data input mode:
+ * in utilization-driven and power-driven simulations it is typically calculated
+ * by the thermal model, while in rack-level temperature-driven simulations it
+ * may be an observed rack temperature applied to the server. This snapshot does
+ * not encode whether the value is source data or inferred/calculated state.
  *
  * <p>When captured after the health system, {@code status} is the status
  * calculated for the tick, with {@code OFFLINE} preserved.

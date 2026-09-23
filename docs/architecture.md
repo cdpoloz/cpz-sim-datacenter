@@ -199,8 +199,36 @@ input.
 
 ### TEMPERATURE_DRIVEN
 
-`TEMPERATURE_DRIVEN` is reserved for future telemetry-backed simulations where
-temperature readings are the authoritative input.
+`TEMPERATURE_DRIVEN` uses observed temperature as the authoritative input. The
+first backend implementation supports rack-level input.
+
+```text
+RACK:
+RackTemperatureInputSource
+-> RackTemperatureInputSystem
+-> TemperatureSystem state
+-> EnergyConsumptionSystem / snapshot providers
+```
+
+`RackTemperatureInputSystem` reads one observed temperature per rack and applies
+it to installed online servers in that rack. It infers server power from a
+clamped temperature ratio:
+
+```text
+(observedRackTemperatureCelsius - ambientTemperatureCelsius)
+/ (maxReferenceTemperatureCelsius - ambientTemperatureCelsius)
+```
+
+The ratio is clamped to `[0, 1]`, then mapped onto each online server's
+`idlePowerWatts..maxPowerWatts` range. Server utilization is inferred from that
+power through the same `Server.estimateUtilizationFromCurrentPower()` path used
+by power-driven input. Offline servers keep zero power and zero utilization.
+The default maximum reference temperature is `85.0 C`; it is only an inference
+reference for normalizing the ratio above. It is not a universal health limit
+and does not replace the server-health temperature thresholds.
+
+The first cut intentionally does not model per-slot gradients, aisle-level input,
+room-level input, or server-level temperature telemetry.
 
 `DatacenterDataInputModePlanner` returns a `DatacenterDataInputModePlan` so a UI
 or telemetry adapter can decide which systems to register without inspecting

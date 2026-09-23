@@ -2,6 +2,7 @@ package com.cpz.sim.datacenter.config.definition;
 
 import com.cpz.sim.datacenter.input.DatacenterDataInputMode;
 import com.cpz.sim.datacenter.input.PowerInputGranularity;
+import com.cpz.sim.datacenter.input.TemperatureInputGranularity;
 
 import java.util.List;
 import java.util.Objects;
@@ -18,6 +19,7 @@ import java.util.Objects;
  * @param cooling optional cooling-system configuration
  * @param dataInputMode authoritative input variable for the simulation pipeline
  * @param powerInputGranularity telemetry granularity for power-driven input
+ * @param temperatureInputGranularity telemetry granularity for temperature-driven input
  *
  * @author CPZ
  */
@@ -30,12 +32,43 @@ public record DatacenterDefinition(
         HealthSystemOptionsDefinition health,
         CoolingConfigDefinition cooling,
         DatacenterDataInputMode dataInputMode,
-        PowerInputGranularity powerInputGranularity
+        PowerInputGranularity powerInputGranularity,
+        TemperatureInputGranularity temperatureInputGranularity
 ) {
 
     public DatacenterDefinition {
         dataInputMode = Objects.requireNonNullElse(dataInputMode, DatacenterDataInputMode.UTILIZATION_DRIVEN);
         powerInputGranularity = Objects.requireNonNullElse(powerInputGranularity, PowerInputGranularity.SERVER);
+        temperatureInputGranularity =
+                Objects.requireNonNullElse(temperatureInputGranularity, TemperatureInputGranularity.RACK);
+    }
+
+    /**
+     * Preserves the constructor introduced with power input granularity.
+     */
+    public DatacenterDefinition(
+            String name,
+            DatacenterLayoutDefinition layout,
+            List<ServerModelDefinition> serverModels,
+            List<ServerDefinition> servers,
+            TemperatureSystemOptionsDefinition temperature,
+            HealthSystemOptionsDefinition health,
+            CoolingConfigDefinition cooling,
+            DatacenterDataInputMode dataInputMode,
+            PowerInputGranularity powerInputGranularity
+    ) {
+        this(
+                name,
+                layout,
+                serverModels,
+                servers,
+                temperature,
+                health,
+                cooling,
+                dataInputMode,
+                powerInputGranularity,
+                TemperatureInputGranularity.RACK
+        );
     }
 
     /**

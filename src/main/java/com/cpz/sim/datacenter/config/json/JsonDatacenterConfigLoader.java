@@ -5,6 +5,7 @@ import com.cpz.sim.datacenter.config.DatacenterConfigLoader;
 import com.cpz.sim.datacenter.config.definition.*;
 import com.cpz.sim.datacenter.input.DatacenterDataInputMode;
 import com.cpz.sim.datacenter.input.PowerInputGranularity;
+import com.cpz.sim.datacenter.input.TemperatureInputGranularity;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -47,7 +48,8 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
                     readOptionalHealth(root, path),
                     readOptionalCooling(root, path),
                     readOptionalDataInputMode(root, path),
-                    readOptionalPowerInputGranularity(root, path)
+                    readOptionalPowerInputGranularity(root, path),
+                    readOptionalTemperatureInputGranularity(root, path)
             );
         } catch (IOException exception) {
             throw new DatacenterConfigException("Could not load datacenter config from path: " + path, exception);
@@ -129,6 +131,23 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
         } catch (IllegalArgumentException exception) {
             throw new DatacenterConfigException(
                     "Unknown powerInputGranularity '" + granularityNode.textValue() + "' in datacenter config: " + path,
+                    exception
+            );
+        }
+    }
+
+    private static TemperatureInputGranularity readOptionalTemperatureInputGranularity(JsonNode root, Path path) {
+        JsonNode granularityNode = root.get("temperatureInputGranularity");
+        if (granularityNode == null) return TemperatureInputGranularity.RACK;
+        if (granularityNode.isNull())
+            throw new DatacenterConfigException("temperatureInputGranularity cannot be null in datacenter config: " + path);
+        if (!granularityNode.isTextual())
+            throw new DatacenterConfigException("temperatureInputGranularity must be a string in datacenter config: " + path);
+        try {
+            return TemperatureInputGranularity.valueOf(granularityNode.textValue());
+        } catch (IllegalArgumentException exception) {
+            throw new DatacenterConfigException(
+                    "Unknown temperatureInputGranularity '" + granularityNode.textValue() + "' in datacenter config: " + path,
                     exception
             );
         }

@@ -43,6 +43,8 @@ Main fields:
   `UTILIZATION_DRIVEN`.
 - `powerInputGranularity`: optional power input granularity for
   `POWER_DRIVEN`. Defaults to `SERVER`.
+- `temperatureInputGranularity`: optional temperature input granularity for
+  `TEMPERATURE_DRIVEN`. Defaults to `RACK`.
 
 ## dataInputMode
 
@@ -68,8 +70,8 @@ Allowed values:
   backend derives IT power and server temperature.
 - `POWER_DRIVEN`: server power is supplied directly, for example from telemetry;
   the backend can derive temperature from that power.
-- `TEMPERATURE_DRIVEN`: server or rack temperature is supplied directly, for
-  example from telemetry; temperature is not derived from utilization or power.
+- `TEMPERATURE_DRIVEN`: rack temperature is supplied directly; power and
+  utilization are inferred from that observed temperature.
 
 Rules:
 
@@ -77,9 +79,9 @@ Rules:
   `UTILIZATION_DRIVEN`.
 - If present, `dataInputMode` must be a non-null string matching one of the
   allowed enum names exactly.
-- `POWER_DRIVEN` and `TEMPERATURE_DRIVEN` are exposed as backend contracts for
-  upcoming telemetry/digital-twin work. Existing JSON configurations remain
-  compatible because the default mode preserves the current behavior.
+- `POWER_DRIVEN` and `TEMPERATURE_DRIVEN` are backend contracts for
+  telemetry/digital-twin work. Existing JSON configurations remain compatible
+  because the default mode preserves the current behavior.
 - When `dataInputMode` is `POWER_DRIVEN`, the simulation pipeline must register a
   power input system instead of `WorkloadSystem` and `PowerConsumptionSystem`.
   Power can come from a simulated source, a telemetry adapter, or a rack-level
@@ -147,6 +149,57 @@ Rack-level policy:
 - `RackPowerToServerPowerInputSource` distributes rack power to online servers.
 - If rack power exceeds online server physical capacity, per-server maximum
   clamps apply and the distributed sum may not conserve the original rack power.
+
+## temperatureInputGranularity
+
+`temperatureInputGranularity` selects the observed temperature granularity used
+by `TEMPERATURE_DRIVEN`.
+
+Allowed values:
+
+- `RACK`: temperature is supplied per rack through `RackTemperatureInputSource`
+  and applied by `RackTemperatureInputSystem`.
+
+Rules:
+
+- If `temperatureInputGranularity` is absent,
+  `DatacenterDefinition.temperatureInputGranularity()` returns `RACK`.
+- If present, it must be a non-null string matching an allowed enum name exactly.
+- The field only affects `TEMPERATURE_DRIVEN`; consumers should not interpret it
+  without also checking `dataInputMode`.
+- `TEMPERATURE_DRIVEN/SERVER`, `TEMPERATURE_DRIVEN/AISLE`, and
+  `TEMPERATURE_DRIVEN/ROOM` are not implemented.
+
+Rack-level temperature-driven example:
+
+```json
+{
+  "name": "Temperature Driven Rack Example",
+  "dataInputMode": "TEMPERATURE_DRIVEN",
+  "temperatureInputGranularity": "RACK",
+  "layout": {
+    "racks": []
+  },
+  "serverModels": [],
+  "servers": []
+}
+```
+
+Rack-level inference policy:
+
+- `RackTemperatureInputSystem` considers installed online servers only.
+- The observed rack temperature is written as the current temperature of online
+  servers in that rack.
+- Power is inferred from the clamped ratio between ambient temperature and a
+  maximum reference temperature.
+- The default maximum reference temperature is `85.0 C`. It is an inference
+  reference for normalizing that ratio, not a universal health threshold and not
+  a replacement for configured health hysteresis thresholds.
+- Inferred power is clamped to each server's `idlePowerWatts..maxPowerWatts`
+  range.
+- Utilization is inferred from power through the same server helper used by
+  `POWER_DRIVEN`.
+- Offline servers keep zero power and zero utilization.
 
 ## layout.room
 

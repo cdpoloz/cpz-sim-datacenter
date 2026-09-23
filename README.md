@@ -43,7 +43,8 @@ Available in `0.1.0-alpha.1`:
 - Data input modes through `DatacenterDataInputMode`: `UTILIZATION_DRIVEN`
   uses utilization as the authoritative input, `POWER_DRIVEN` uses electrical
   power as the authoritative input with server or rack granularity, and
-  `TEMPERATURE_DRIVEN` is reserved for future telemetry-backed simulations.
+  `TEMPERATURE_DRIVEN` uses rack temperature as the authoritative input in its
+  first backend implementation.
 - Integration with `FractalNoise` from `cpz-utils` for variable workloads.
 - Per-server `workloadFactor` read from JSON and applied through `ScaledWorkloadSource`.
 - Energy snapshots through `EnergyConsumptionSnapshotProvider`, `EnergyConsumptionSnapshot` and `ServerEnergySnapshot`.
@@ -231,8 +232,9 @@ Supported values are `UTILIZATION_DRIVEN`, `POWER_DRIVEN`, and
 `WorkloadSource` and derives server power from it. `POWER_DRIVEN` supplies
 server power through a `ServerPowerInputSource`; server utilization remains
 available but is estimated from power so snapshots, health checks, and UI panels
-remain compatible. `TEMPERATURE_DRIVEN` is reserved for future telemetry and
-digital-twin integrations.
+remain compatible. `TEMPERATURE_DRIVEN` supplies observed rack temperature
+through a `RackTemperatureInputSource`; server power and utilization are
+inferred conservatively from that temperature.
 
 For `POWER_DRIVEN`, optional top-level `powerInputGranularity` selects the
 simulated power-input granularity:
@@ -251,6 +253,25 @@ is absent. `SERVER` simulates power directly per server with
 `RackPowerToServerPowerInputSource`, and still feeds `PowerInputSystem` as a
 `ServerPowerInputSource`. `UTILIZATION_DRIVEN` behavior is unchanged even if the
 granularity field is present.
+
+For `TEMPERATURE_DRIVEN`, optional top-level `temperatureInputGranularity`
+selects the temperature-input granularity. The first supported value is `RACK`,
+and it is the default when the field is absent:
+
+```json
+{
+  "dataInputMode": "TEMPERATURE_DRIVEN",
+  "temperatureInputGranularity": "RACK"
+}
+```
+
+In `TEMPERATURE_DRIVEN/RACK`, `RackTemperatureInputSystem` applies the observed
+rack temperature to online servers in the rack, infers server power from the
+configured ambient-to-reference temperature range, and then reuses the existing
+power-to-utilization inference on each server.
+The default maximum reference temperature is `85.0 C`; it is an inference
+reference used to normalize the thermal ratio, not a universal health threshold
+and not a replacement for configured health hysteresis thresholds.
 
 ---
 
@@ -380,6 +401,11 @@ does not distinguish the origin because both paths expose `ServerPowerInputSourc
 Future telemetry adapters can replace the simulated power source without
 changing the downstream cooling, temperature, health, energy, or snapshot
 pipeline.
+In `TEMPERATURE_DRIVEN/RACK`, `RackTemperatureInputSystem` writes observed rack
+temperature into `TemperatureSystem` for online servers and infers server power
+and utilization before downstream energy and snapshot providers read state.
+Consumers should interpret `temperatureInputGranularity` only together with
+`dataInputMode = TEMPERATURE_DRIVEN`; other modes ignore that field.
 
 ---
 
