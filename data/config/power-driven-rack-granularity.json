@@ -1,0 +1,42 @@
+{
+  "name": "Power Driven Rack Granularity Example",
+  "dataInputMode": "POWER_DRIVEN",
+  "powerInputGranularity": "RACK",
+  "layout": {
+    "racks": [
+      {
+        "code": "RACK-C01-R01",
+        "column": "C01",
+        "row": "R01",
+        "slots": ["U01", "U02"]
+      }
+    ]
+  },
+  "serverModels": [
+    {
+      "modelCode": "SRV-DEMO-001",
+      "manufacturer": "CPZ",
+      "model": "Demo Server",
+      "idlePowerWatts": 100.0,
+      "maxPowerWatts": 300.0
+    }
+  ],
+  "servers": [
+    {
+      "rackCode": "RACK-C01-R01",
+      "slot": "U01",
+      "modelCode": "SRV-DEMO-001",
+      "status": "OK",
+      "role": "AI",
+      "workloadFactor": 1.0
+    },
+    {
+      "rackCode": "RACK-C01-R01",
+      "slot": "U02",
+      "modelCode": "SRV-DEMO-001",
+      "status": "OK",
+      "role": "GPU",
+      "workloadFactor": 1.0
+    }
+  ]
+}

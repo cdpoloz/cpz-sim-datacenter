@@ -6,6 +6,7 @@ import com.cpz.sim.datacenter.config.definition.RackDefinition;
 import com.cpz.sim.datacenter.config.validation.DatacenterConfigValidationException;
 import com.cpz.sim.datacenter.factory.DatacenterFactory;
 import com.cpz.sim.datacenter.input.DatacenterDataInputMode;
+import com.cpz.sim.datacenter.input.PowerInputGranularity;
 import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.model.ServerRole;
 import com.cpz.sim.datacenter.model.ServerThermalProperties;
@@ -153,6 +154,7 @@ class JsonDatacenterConfigLoaderTest {
         assertNull(definition.health());
         assertNull(definition.cooling());
         assertEquals(DatacenterDataInputMode.UTILIZATION_DRIVEN, definition.dataInputMode());
+        assertEquals(PowerInputGranularity.SERVER, definition.powerInputGranularity());
     }
 
     @Test
@@ -162,6 +164,15 @@ class JsonDatacenterConfigLoaderTest {
         );
 
         assertEquals(DatacenterDataInputMode.UTILIZATION_DRIVEN, definition.dataInputMode());
+    }
+
+    @Test
+    void shouldDefaultPowerInputGranularityToServer() throws IOException {
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(
+                writeSingleServerConfig("", "")
+        );
+
+        assertEquals(PowerInputGranularity.SERVER, definition.powerInputGranularity());
     }
 
     @ParameterizedTest
@@ -176,6 +187,36 @@ class JsonDatacenterConfigLoaderTest {
         DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(configPath);
 
         assertEquals(mode, definition.dataInputMode());
+    }
+
+    @ParameterizedTest
+    @EnumSource(PowerInputGranularity.class)
+    void shouldLoadExplicitPowerInputGranularity(PowerInputGranularity granularity) throws IOException {
+        Path configPath = writeSingleServerConfig(
+                "\"powerInputGranularity\": \"" + granularity.name() + "\",",
+                "",
+                ""
+        );
+
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(configPath);
+
+        assertEquals(granularity, definition.powerInputGranularity());
+    }
+
+    @Test
+    void shouldKeepUtilizationDrivenModeWhenPowerInputGranularityIsRack() throws IOException {
+        Path configPath = writeSingleServerConfig(
+                """
+                        "dataInputMode": "UTILIZATION_DRIVEN",
+                        "powerInputGranularity": "RACK",""",
+                "",
+                ""
+        );
+
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(configPath);
+
+        assertEquals(DatacenterDataInputMode.UTILIZATION_DRIVEN, definition.dataInputMode());
+        assertEquals(PowerInputGranularity.RACK, definition.powerInputGranularity());
     }
 
     @Test
@@ -208,6 +249,22 @@ class JsonDatacenterConfigLoaderTest {
         );
 
         assertTrue(exception.getMessage().contains("Unknown dataInputMode 'UNKNOWN_MODE'"));
+    }
+
+    @Test
+    void shouldRejectUnknownPowerInputGranularity() throws IOException {
+        Path configPath = writeSingleServerConfig(
+                "\"powerInputGranularity\": \"ROOM\",",
+                "",
+                ""
+        );
+
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(configPath)
+        );
+
+        assertTrue(exception.getMessage().contains("Unknown powerInputGranularity 'ROOM'"));
     }
 
     @Test

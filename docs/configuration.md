@@ -41,6 +41,8 @@ Main fields:
 - `cooling`: optional cooling-system configuration.
 - `dataInputMode`: optional authoritative input mode. Defaults to
   `UTILIZATION_DRIVEN`.
+- `powerInputGranularity`: optional power input granularity for
+  `POWER_DRIVEN`. Defaults to `SERVER`.
 
 ## dataInputMode
 
@@ -80,8 +82,71 @@ Rules:
   compatible because the default mode preserves the current behavior.
 - When `dataInputMode` is `POWER_DRIVEN`, the simulation pipeline must register a
   power input system instead of `WorkloadSystem` and `PowerConsumptionSystem`.
-  Power can come from a simulated source, a telemetry adapter, or a future rack-level
+  Power can come from a simulated source, a telemetry adapter, or a rack-level
   adapter. Server utilization remains available, but it is estimated from power.
+
+## powerInputGranularity
+
+`powerInputGranularity` selects the simulated power source granularity used by
+`POWER_DRIVEN`.
+
+Allowed values:
+
+- `SERVER`: power is simulated directly per server with
+  `NoiseServerPowerInputSource`.
+- `RACK`: power is simulated as aggregate rack power with
+  `NoiseRackPowerInputSource`, then adapted through
+  `RackPowerToServerPowerInputSource`.
+
+Rules:
+
+- If `powerInputGranularity` is absent, `DatacenterDefinition.powerInputGranularity()`
+  returns `SERVER`.
+- If present, it must be a non-null string matching one of the allowed enum names
+  exactly.
+- The field only affects `POWER_DRIVEN`. `UTILIZATION_DRIVEN` keeps its normal
+  workload-to-power behavior even if `powerInputGranularity` is present.
+- `PowerInputSystem` always receives a `ServerPowerInputSource`, so it does not
+  distinguish server-level input from rack-level input.
+
+Server-level power-driven example:
+
+```json
+{
+  "name": "Power Driven Server Example",
+  "dataInputMode": "POWER_DRIVEN",
+  "powerInputGranularity": "SERVER",
+  "layout": {
+    "racks": []
+  },
+  "serverModels": [],
+  "servers": []
+}
+```
+
+Rack-level power-driven example:
+
+```json
+{
+  "name": "Power Driven Rack Example",
+  "dataInputMode": "POWER_DRIVEN",
+  "powerInputGranularity": "RACK",
+  "layout": {
+    "racks": []
+  },
+  "serverModels": [],
+  "servers": []
+}
+```
+
+Rack-level policy:
+
+- `NoiseRackPowerInputSource` considers installed online servers only.
+- Rack power is calculated between aggregate idle and aggregate maximum power.
+- The activity range depends on the dominant online server role in the rack.
+- `RackPowerToServerPowerInputSource` distributes rack power to online servers.
+- If rack power exceeds online server physical capacity, per-server maximum
+  clamps apply and the distributed sum may not conserve the original rack power.
 
 ## layout.room
 

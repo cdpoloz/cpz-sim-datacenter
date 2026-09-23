@@ -4,6 +4,7 @@ import com.cpz.sim.datacenter.config.DatacenterConfigException;
 import com.cpz.sim.datacenter.config.DatacenterConfigLoader;
 import com.cpz.sim.datacenter.config.definition.*;
 import com.cpz.sim.datacenter.input.DatacenterDataInputMode;
+import com.cpz.sim.datacenter.input.PowerInputGranularity;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -45,7 +46,8 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
                     readOptionalTemperature(root, path),
                     readOptionalHealth(root, path),
                     readOptionalCooling(root, path),
-                    readOptionalDataInputMode(root, path)
+                    readOptionalDataInputMode(root, path),
+                    readOptionalPowerInputGranularity(root, path)
             );
         } catch (IOException exception) {
             throw new DatacenterConfigException("Could not load datacenter config from path: " + path, exception);
@@ -110,6 +112,23 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
         } catch (IllegalArgumentException exception) {
             throw new DatacenterConfigException(
                     "Unknown dataInputMode '" + modeNode.textValue() + "' in datacenter config: " + path,
+                    exception
+            );
+        }
+    }
+
+    private static PowerInputGranularity readOptionalPowerInputGranularity(JsonNode root, Path path) {
+        JsonNode granularityNode = root.get("powerInputGranularity");
+        if (granularityNode == null) return PowerInputGranularity.SERVER;
+        if (granularityNode.isNull())
+            throw new DatacenterConfigException("powerInputGranularity cannot be null in datacenter config: " + path);
+        if (!granularityNode.isTextual())
+            throw new DatacenterConfigException("powerInputGranularity must be a string in datacenter config: " + path);
+        try {
+            return PowerInputGranularity.valueOf(granularityNode.textValue());
+        } catch (IllegalArgumentException exception) {
+            throw new DatacenterConfigException(
+                    "Unknown powerInputGranularity '" + granularityNode.textValue() + "' in datacenter config: " + path,
                     exception
             );
         }

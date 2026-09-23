@@ -144,7 +144,7 @@ derived from utilization through `PowerConsumptionSystem`.
 
 ### POWER_DRIVEN
 
-`POWER_DRIVEN` uses server power as the authoritative input.
+`POWER_DRIVEN` uses electrical power as the authoritative input.
 
 ```text
 PowerInputSystem
@@ -168,6 +168,34 @@ utilization signal.
 
 A simulated implementation can use `NoiseServerPowerInputSource`, optionally
 with role-based factors through `ServerRolePowerFactorProvider`.
+
+Power input can be simulated at two granularities:
+
+```text
+SERVER:
+NoiseServerPowerInputSource
+-> PowerInputSystem
+
+RACK:
+NoiseRackPowerInputSource
+-> RackPowerToServerPowerInputSource
+-> PowerInputSystem
+```
+
+`PowerInputSystem` always consumes a `ServerPowerInputSource`, so it does not
+know whether power originated per server or as aggregate rack power. With
+`PowerInputGranularity.SERVER`, power is generated directly per server. With
+`PowerInputGranularity.RACK`, rack power is generated first and then distributed
+to online servers in the rack.
+
+`NoiseRackPowerInputSource` sums idle and maximum power across installed online
+servers in each rack. It computes aggregate rack power between aggregate idle and
+aggregate maximum power. The activity range is chosen from the dominant online
+server role in the rack. `RackPowerToServerPowerInputSource` distributes rack
+power to installed online servers using server electrical capacity weights. If
+the rack-level input exceeds online server physical capacity, server-level
+maximum power clamps apply and the distributed sum may be lower than the rack
+input.
 
 ### TEMPERATURE_DRIVEN
 
@@ -229,7 +257,8 @@ If the server is `OFFLINE`, `Server.updatePowerConsumption()` leaves
 In `POWER_DRIVEN`, `PowerInputSystem` sets `currentPowerWatts` directly from a
 `ServerPowerInputSource`. The backend then estimates utilization from the
 current power value so existing snapshots and health checks continue to receive
-a utilization value.
+a utilization value. The `ServerPowerInputSource` may be direct server-level
+input or a rack-level adapter.
 
 `EnergyConsumptionSystem` accumulates energy in Wh:
 

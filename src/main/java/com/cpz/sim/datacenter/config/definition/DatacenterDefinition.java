@@ -1,6 +1,7 @@
 package com.cpz.sim.datacenter.config.definition;
 
 import com.cpz.sim.datacenter.input.DatacenterDataInputMode;
+import com.cpz.sim.datacenter.input.PowerInputGranularity;
 
 import java.util.List;
 import java.util.Objects;
@@ -16,6 +17,7 @@ import java.util.Objects;
  * @param health optional server-health configuration
  * @param cooling optional cooling-system configuration
  * @param dataInputMode authoritative input variable for the simulation pipeline
+ * @param powerInputGranularity telemetry granularity for power-driven input
  *
  * @author CPZ
  */
@@ -27,11 +29,29 @@ public record DatacenterDefinition(
         TemperatureSystemOptionsDefinition temperature,
         HealthSystemOptionsDefinition health,
         CoolingConfigDefinition cooling,
-        DatacenterDataInputMode dataInputMode
+        DatacenterDataInputMode dataInputMode,
+        PowerInputGranularity powerInputGranularity
 ) {
 
     public DatacenterDefinition {
         dataInputMode = Objects.requireNonNullElse(dataInputMode, DatacenterDataInputMode.UTILIZATION_DRIVEN);
+        powerInputGranularity = Objects.requireNonNullElse(powerInputGranularity, PowerInputGranularity.SERVER);
+    }
+
+    /**
+     * Preserves the constructor introduced with data input modes.
+     */
+    public DatacenterDefinition(
+            String name,
+            DatacenterLayoutDefinition layout,
+            List<ServerModelDefinition> serverModels,
+            List<ServerDefinition> servers,
+            TemperatureSystemOptionsDefinition temperature,
+            HealthSystemOptionsDefinition health,
+            CoolingConfigDefinition cooling,
+            DatacenterDataInputMode dataInputMode
+    ) {
+        this(name, layout, serverModels, servers, temperature, health, cooling, dataInputMode, PowerInputGranularity.SERVER);
     }
 
     /**

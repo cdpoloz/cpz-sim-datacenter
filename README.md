@@ -41,9 +41,9 @@ Available in `0.1.0-alpha.1`:
 - `SUPPLY` and `EXHAUST` cooling units with weighted influences, initial enabled state, and mutable runtime control.
 - Workload strategy through `WorkloadSource`, with noise-based and scaled workloads.
 - Data input modes through `DatacenterDataInputMode`: `UTILIZATION_DRIVEN`
-  uses utilization as the authoritative input, `POWER_DRIVEN` uses server power
-  as the authoritative input, and `TEMPERATURE_DRIVEN` is reserved for future
-  telemetry-backed simulations.
+  uses utilization as the authoritative input, `POWER_DRIVEN` uses electrical
+  power as the authoritative input with server or rack granularity, and
+  `TEMPERATURE_DRIVEN` is reserved for future telemetry-backed simulations.
 - Integration with `FractalNoise` from `cpz-utils` for variable workloads.
 - Per-server `workloadFactor` read from JSON and applied through `ScaledWorkloadSource`.
 - Energy snapshots through `EnergyConsumptionSnapshotProvider`, `EnergyConsumptionSnapshot` and `ServerEnergySnapshot`.
@@ -234,6 +234,24 @@ available but is estimated from power so snapshots, health checks, and UI panels
 remain compatible. `TEMPERATURE_DRIVEN` is reserved for future telemetry and
 digital-twin integrations.
 
+For `POWER_DRIVEN`, optional top-level `powerInputGranularity` selects the
+simulated power-input granularity:
+
+```json
+{
+  "dataInputMode": "POWER_DRIVEN",
+  "powerInputGranularity": "RACK"
+}
+```
+
+Supported values are `SERVER` and `RACK`; the default is `SERVER` when the field
+is absent. `SERVER` simulates power directly per server with
+`NoiseServerPowerInputSource`. `RACK` simulates aggregate rack power with
+`NoiseRackPowerInputSource`, adapts it through
+`RackPowerToServerPowerInputSource`, and still feeds `PowerInputSystem` as a
+`ServerPowerInputSource`. `UTILIZATION_DRIVEN` behavior is unchanged even if the
+granularity field is present.
+
 ---
 
 ## Simulation Pipeline and Snapshots
@@ -357,9 +375,11 @@ supplied. In the current mode, utilization is supplied through `WorkloadSource`;
 power is derived by `PowerConsumptionSystem`; temperature is derived by
 `TemperatureSystem`. In `POWER_DRIVEN`, server power is supplied through
 `PowerInputSystem` and `ServerPowerInputSource`; utilization is estimated from
-that power. Future telemetry adapters can replace the simulated power source
-without changing the downstream cooling, temperature, health, energy, or
-snapshot pipeline.
+that power. The source can be server-level or rack-level; `PowerInputSystem`
+does not distinguish the origin because both paths expose `ServerPowerInputSource`.
+Future telemetry adapters can replace the simulated power source without
+changing the downstream cooling, temperature, health, energy, or snapshot
+pipeline.
 
 ---
 
