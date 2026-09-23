@@ -223,6 +223,9 @@ The ratio is clamped to `[0, 1]`, then mapped onto each online server's
 `idlePowerWatts..maxPowerWatts` range. Server utilization is inferred from that
 power through the same `Server.estimateUtilizationFromCurrentPower()` path used
 by power-driven input. Offline servers keep zero power and zero utilization.
+Rack temperature input can come from fixed/manual values through
+`MapRackTemperatureInputSource` or from smooth deterministic backend simulation
+through `SimulatedRackTemperatureInputSource`.
 The default maximum reference temperature is `85.0 C`; it is only an inference
 reference for normalizing the ratio above. It is not a universal health limit
 and does not replace the server-health temperature thresholds.

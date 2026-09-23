@@ -159,6 +159,9 @@ Allowed values:
 
 - `RACK`: temperature is supplied per rack through `RackTemperatureInputSource`
   and applied by `RackTemperatureInputSystem`.
+- Backend rack-temperature sources include fixed/manual values via
+  `MapRackTemperatureInputSource` and smooth deterministic simulated values via
+  `SimulatedRackTemperatureInputSource`.
 
 Rules:
 

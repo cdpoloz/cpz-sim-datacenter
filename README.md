@@ -269,6 +269,10 @@ In `TEMPERATURE_DRIVEN/RACK`, `RackTemperatureInputSystem` applies the observed
 rack temperature to online servers in the rack, infers server power from the
 configured ambient-to-reference temperature range, and then reuses the existing
 power-to-utilization inference on each server.
+Rack temperatures can be supplied manually with `MapRackTemperatureInputSource`
+or generated deterministically with `SimulatedRackTemperatureInputSource` for
+backend scenarios that need smooth per-tick variation without UI-side data
+generation.
 The default maximum reference temperature is `85.0 C`; it is an inference
 reference used to normalize the thermal ratio, not a universal health threshold
 and not a replacement for configured health hysteresis thresholds.
