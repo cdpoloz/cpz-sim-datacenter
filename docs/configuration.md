@@ -49,8 +49,7 @@ Main fields:
 ## dataInputMode
 
 `dataInputMode` declares which external or simulated variable drives the
-datacenter simulation. If omitted, the backend uses `UTILIZATION_DRIVEN`, which
-is the current complete pipeline.
+datacenter simulation. If omitted, the backend uses `UTILIZATION_DRIVEN`.
 
 ```json
 {
@@ -69,9 +68,11 @@ Allowed values:
 - `UTILIZATION_DRIVEN`: utilization is supplied through `WorkloadSource`; the
   backend derives IT power and server temperature.
 - `POWER_DRIVEN`: server power is supplied directly, for example from telemetry;
-  the backend can derive temperature from that power.
-- `TEMPERATURE_DRIVEN`: rack temperature is supplied directly; power and
-  utilization are inferred from that observed temperature.
+  utilization is inferred from power, and the backend derives temperature from
+  that power.
+- `TEMPERATURE_DRIVEN`: observed rack or hot-aisle temperature is supplied
+  directly; rack/server temperature, power, and utilization are inferred from
+  that observed temperature.
 
 Rules:
 
@@ -79,13 +80,14 @@ Rules:
   `UTILIZATION_DRIVEN`.
 - If present, `dataInputMode` must be a non-null string matching one of the
   allowed enum names exactly.
-- `POWER_DRIVEN` and `TEMPERATURE_DRIVEN` are backend contracts for
-  telemetry/digital-twin work. Existing JSON configurations remain compatible
-  because the default mode preserves the current behavior.
-- When `dataInputMode` is `POWER_DRIVEN`, the simulation pipeline must register a
-  power input system instead of `WorkloadSystem` and `PowerConsumptionSystem`.
-  Power can come from a simulated source, a telemetry adapter, or a rack-level
-  adapter. Server utilization remains available, but it is estimated from power.
+- Existing JSON configurations remain compatible because the default mode
+  preserves the historical utilization-driven behavior.
+- Consumers should use `DatacenterInputPipelineFactory` to register input
+  systems for the configured mode. It avoids duplicating mode-specific
+  registration rules in UI or telemetry code.
+- `TemperatureInputSourceFactory` is the backend factory that chooses
+  `SimulatedRackTemperatureInputSource` for `RACK` or the hot-aisle adapter
+  stack for `AISLE`.
 
 ## powerInputGranularity
 
@@ -159,9 +161,16 @@ Allowed values:
 
 - `RACK`: temperature is supplied per rack through `RackTemperatureInputSource`
   and applied by `RackTemperatureInputSystem`.
+- `AISLE`: temperature is supplied per hot aisle through
+  `AisleTemperatureInputSource`, adapted to rack observations through
+  `AisleTemperatureToRackTemperatureInputSource`, and then applied by
+  `RackTemperatureInputSystem`.
 - Backend rack-temperature sources include fixed/manual values via
   `MapRackTemperatureInputSource` and smooth deterministic simulated values via
   `SimulatedRackTemperatureInputSource`.
+- Backend aisle-temperature sources include fixed/manual values via
+  `MapAisleTemperatureInputSource` and smooth deterministic simulated values via
+  `SimulatedAisleTemperatureInputSource`.
 
 Rules:
 
@@ -170,8 +179,26 @@ Rules:
 - If present, it must be a non-null string matching an allowed enum name exactly.
 - The field only affects `TEMPERATURE_DRIVEN`; consumers should not interpret it
   without also checking `dataInputMode`.
-- `TEMPERATURE_DRIVEN/SERVER`, `TEMPERATURE_DRIVEN/AISLE`, and
-  `TEMPERATURE_DRIVEN/ROOM` are not implemented.
+- `TEMPERATURE_DRIVEN/SERVER` and `TEMPERATURE_DRIVEN/ROOM` are not implemented.
+- `TEMPERATURE_DRIVEN/AISLE` means hot aisle, not cold aisle. The current
+  production factory uses `StandardHotAisleCodeResolver` for the standard/demo
+  layout.
+
+Current standard hot-aisle mapping:
+
+```text
+C01       -> HA01
+C02 / C03 -> HA02
+C04 / C05 -> HA03
+C06 / C07 -> HA04
+C08       -> HA05
+```
+
+Columns sharing a hot aisle receive the same base observed temperature for the
+same tick. Per-rack differences within one hot aisle are future work requiring
+gradients, multiple sensors, localized recirculation, or another more detailed
+thermal model. Supporting arbitrary layouts should move this hot-aisle mapping
+into configuration.
 
 Rack-level temperature-driven example:
 
@@ -188,11 +215,29 @@ Rack-level temperature-driven example:
 }
 ```
 
+Hot-aisle-level temperature-driven example:
+
+```json
+{
+  "name": "Temperature Driven Hot Aisle Example",
+  "dataInputMode": "TEMPERATURE_DRIVEN",
+  "temperatureInputGranularity": "AISLE",
+  "layout": {
+    "racks": []
+  },
+  "serverModels": [],
+  "servers": []
+}
+```
+
 Rack-level inference policy:
 
 - `RackTemperatureInputSystem` considers installed online servers only.
 - The observed rack temperature is written as the current temperature of online
   servers in that rack.
+- In aisle-level mode, the observed hot-aisle temperature is first resolved to a
+  rack temperature with `StandardHotAisleCodeResolver` in the current
+  standard/demo layout.
 - Power is inferred from the clamped ratio between ambient temperature and a
   maximum reference temperature.
 - The default maximum reference temperature is `85.0 C`. It is an inference
@@ -203,6 +248,10 @@ Rack-level inference policy:
 - Utilization is inferred from power through the same server helper used by
   `POWER_DRIVEN`.
 - Offline servers keep zero power and zero utilization.
+- In `TEMPERATURE_DRIVEN`, `RackTemperatureInputSystem` writes observed or
+  adapted temperature into `TemperatureSystem`. Do not register
+  `TemperatureSystem` afterward as a simulatable in the same tick, or it will
+  recalculate temperature from power and overwrite the observed input.
 
 ## layout.room
 

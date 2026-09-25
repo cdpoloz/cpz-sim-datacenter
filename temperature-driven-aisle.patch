@@ -1,0 +1,781 @@
+diff --git a/README.md b/README.md
+index 0a2cc76..e22b15e 100644
+--- a/README.md
++++ b/README.md
+@@ -232,9 +232,9 @@ Supported values are `UTILIZATION_DRIVEN`, `POWER_DRIVEN`, and
+ `WorkloadSource` and derives server power from it. `POWER_DRIVEN` supplies
+ server power through a `ServerPowerInputSource`; server utilization remains
+ available but is estimated from power so snapshots, health checks, and UI panels
+-remain compatible. `TEMPERATURE_DRIVEN` supplies observed rack temperature
+-through a `RackTemperatureInputSource`; server power and utilization are
+-inferred conservatively from that temperature.
++remain compatible. `TEMPERATURE_DRIVEN` supplies observed temperature through
++rack-level input, or aisle-level input adapted to rack observations; server
++power and utilization are inferred conservatively from that temperature.
+ 
+ For `POWER_DRIVEN`, optional top-level `powerInputGranularity` selects the
+ simulated power-input granularity:
+@@ -255,8 +255,8 @@ is absent. `SERVER` simulates power directly per server with
+ granularity field is present.
+ 
+ For `TEMPERATURE_DRIVEN`, optional top-level `temperatureInputGranularity`
+-selects the temperature-input granularity. The first supported value is `RACK`,
+-and it is the default when the field is absent:
++selects the temperature-input granularity. Supported values are `RACK` and
++`AISLE`; the default is `RACK` when the field is absent:
+ 
+ ```json
+ {
+@@ -273,6 +273,13 @@ Rack temperatures can be supplied manually with `MapRackTemperatureInputSource`
+ or generated deterministically with `SimulatedRackTemperatureInputSource` for
+ backend scenarios that need smooth per-tick variation without UI-side data
+ generation.
++In `TEMPERATURE_DRIVEN/AISLE`, aisle observations are supplied through
++`AisleTemperatureInputSource` and adapted to rack observations with
++`AisleTemperatureToRackTemperatureInputSource`. The adapter receives a
++consumer-owned rack-to-aisle resolver, so the backend does not hard-code a
++specific room layout or hot-aisle naming scheme. Aisle temperatures can be
++supplied manually with `MapAisleTemperatureInputSource` or generated
++deterministically with `SimulatedAisleTemperatureInputSource`.
+ The default maximum reference temperature is `85.0 C`; it is an inference
+ reference used to normalize the thermal ratio, not a universal health threshold
+ and not a replacement for configured health hysteresis thresholds.
+@@ -407,7 +414,9 @@ changing the downstream cooling, temperature, health, energy, or snapshot
+ pipeline.
+ In `TEMPERATURE_DRIVEN/RACK`, `RackTemperatureInputSystem` writes observed rack
+ temperature into `TemperatureSystem` for online servers and infers server power
+-and utilization before downstream energy and snapshot providers read state.
++and utilization before downstream energy and snapshot providers read state. In
++`TEMPERATURE_DRIVEN/AISLE`, aisle observations are first adapted to rack
++observations, then consumed by the same rack temperature input system.
+ Consumers should interpret `temperatureInputGranularity` only together with
+ `dataInputMode = TEMPERATURE_DRIVEN`; other modes ignore that field.
+ 
+@@ -462,10 +471,9 @@ first cooling integration from JSON to runtime snapshots. Future work outside
+ the current scope:
+ 
+ - Stable final `0.1.0` API.
+-- Rack-level power input and rack-to-server power distribution for
+-  `POWER_DRIVEN` simulations.
+-- First production implementation of `TEMPERATURE_DRIVEN` mode using telemetry
+-  or externally provided server/rack temperature.
++- Additional production telemetry adapters for externally provided power and
++  temperature feeds.
++- Server-level and room-level temperature input.
+ - More detailed rack inlet, room, and cooling-zone thermal modeling.
+ - UI or visualization.
+ - More complete public contracts for consumer applications.
+diff --git a/docs/architecture.md b/docs/architecture.md
+index e5207bd..70d3828 100644
+--- a/docs/architecture.md
++++ b/docs/architecture.md
+@@ -200,7 +200,8 @@ input.
+ ### TEMPERATURE_DRIVEN
+ 
+ `TEMPERATURE_DRIVEN` uses observed temperature as the authoritative input. The
+-first backend implementation supports rack-level input.
++backend supports rack-level input and aisle-level input adapted to rack
++observations.
+ 
+ ```text
+ RACK:
+@@ -208,6 +209,13 @@ RackTemperatureInputSource
+ -> RackTemperatureInputSystem
+ -> TemperatureSystem state
+ -> EnergyConsumptionSystem / snapshot providers
++
++AISLE:
++AisleTemperatureInputSource
++-> AisleTemperatureToRackTemperatureInputSource
++-> RackTemperatureInputSystem
++-> TemperatureSystem state
++-> EnergyConsumptionSystem / snapshot providers
+ ```
+ 
+ `RackTemperatureInputSystem` reads one observed temperature per rack and applies
+@@ -226,11 +234,17 @@ by power-driven input. Offline servers keep zero power and zero utilization.
+ Rack temperature input can come from fixed/manual values through
+ `MapRackTemperatureInputSource` or from smooth deterministic backend simulation
+ through `SimulatedRackTemperatureInputSource`.
++Aisle temperature input follows the same inference policy after
++`AisleTemperatureToRackTemperatureInputSource` resolves each rack to an aisle
++code. The rack-to-aisle mapping is intentionally consumer-owned so the backend
++does not hard-code a specific room layout. Aisle values can come from
++`MapAisleTemperatureInputSource` or from smooth deterministic backend
++simulation through `SimulatedAisleTemperatureInputSource`.
+ The default maximum reference temperature is `85.0 C`; it is only an inference
+ reference for normalizing the ratio above. It is not a universal health limit
+ and does not replace the server-health temperature thresholds.
+ 
+-The first cut intentionally does not model per-slot gradients, aisle-level input,
++The current implementation intentionally does not model per-slot gradients,
+ room-level input, or server-level temperature telemetry.
+ 
+ `DatacenterDataInputModePlanner` returns a `DatacenterDataInputModePlan` so a UI
+diff --git a/docs/configuration.md b/docs/configuration.md
+index 9b935c8..4c90437 100644
+--- a/docs/configuration.md
++++ b/docs/configuration.md
+@@ -159,9 +159,16 @@ Allowed values:
+ 
+ - `RACK`: temperature is supplied per rack through `RackTemperatureInputSource`
+   and applied by `RackTemperatureInputSystem`.
++- `AISLE`: temperature is supplied per aisle through
++  `AisleTemperatureInputSource`, adapted to rack observations through
++  `AisleTemperatureToRackTemperatureInputSource`, and then applied by
++  `RackTemperatureInputSystem`.
+ - Backend rack-temperature sources include fixed/manual values via
+   `MapRackTemperatureInputSource` and smooth deterministic simulated values via
+   `SimulatedRackTemperatureInputSource`.
++- Backend aisle-temperature sources include fixed/manual values via
++  `MapAisleTemperatureInputSource` and smooth deterministic simulated values via
++  `SimulatedAisleTemperatureInputSource`.
+ 
+ Rules:
+ 
+@@ -170,8 +177,7 @@ Rules:
+ - If present, it must be a non-null string matching an allowed enum name exactly.
+ - The field only affects `TEMPERATURE_DRIVEN`; consumers should not interpret it
+   without also checking `dataInputMode`.
+-- `TEMPERATURE_DRIVEN/SERVER`, `TEMPERATURE_DRIVEN/AISLE`, and
+-  `TEMPERATURE_DRIVEN/ROOM` are not implemented.
++- `TEMPERATURE_DRIVEN/SERVER` and `TEMPERATURE_DRIVEN/ROOM` are not implemented.
+ 
+ Rack-level temperature-driven example:
+ 
+@@ -193,6 +199,8 @@ Rack-level inference policy:
+ - `RackTemperatureInputSystem` considers installed online servers only.
+ - The observed rack temperature is written as the current temperature of online
+   servers in that rack.
++- In aisle-level mode, the observed aisle temperature is first resolved to a
++  rack temperature with a consumer-owned rack-to-aisle mapping.
+ - Power is inferred from the clamped ratio between ambient temperature and a
+   maximum reference temperature.
+ - The default maximum reference temperature is `85.0 C`. It is an inference
+diff --git a/src/main/java/com/cpz/sim/datacenter/input/AisleTemperatureInputSource.java b/src/main/java/com/cpz/sim/datacenter/input/AisleTemperatureInputSource.java
+new file mode 100644
+index 0000000..4d1628f
+--- /dev/null
++++ b/src/main/java/com/cpz/sim/datacenter/input/AisleTemperatureInputSource.java
+@@ -0,0 +1,22 @@
++package com.cpz.sim.datacenter.input;
++
++import com.cpz.sim.foundation.time.SimulationTick;
++
++/**
++ * Supplies externally measured or simulated aisle temperature for
++ * temperature-driven datacenter simulations.
++ *
++ * @author CPZ
++ */
++@FunctionalInterface
++public interface AisleTemperatureInputSource {
++
++    /**
++     * Returns the observed aisle temperature for the current tick.
++     *
++     * @param aisleCode stable aisle identifier
++     * @param tick current simulation tick
++     * @return temperature in degrees Celsius
++     */
++    double temperatureCelsius(String aisleCode, SimulationTick tick);
++}
+diff --git a/src/main/java/com/cpz/sim/datacenter/input/AisleTemperatureToRackTemperatureInputSource.java b/src/main/java/com/cpz/sim/datacenter/input/AisleTemperatureToRackTemperatureInputSource.java
+new file mode 100644
+index 0000000..9a2792b
+--- /dev/null
++++ b/src/main/java/com/cpz/sim/datacenter/input/AisleTemperatureToRackTemperatureInputSource.java
+@@ -0,0 +1,41 @@
++package com.cpz.sim.datacenter.input;
++
++import com.cpz.sim.datacenter.model.RackLocation;
++import com.cpz.sim.foundation.time.SimulationTick;
++
++import java.util.Objects;
++import java.util.function.Function;
++
++/**
++ * Adapts aisle-level temperature observations to rack-level observations.
++ *
++ * <p>The datacenter core does not assign a fixed physical meaning to an aisle.
++ * Consumers provide a resolver that maps each rack location to the stable aisle
++ * code whose observation should be used for that rack.</p>
++ *
++ * @author CPZ
++ */
++public final class AisleTemperatureToRackTemperatureInputSource implements RackTemperatureInputSource {
++
++    private final AisleTemperatureInputSource aisleTemperatureInputSource;
++    private final Function<RackLocation, String> aisleCodeResolver;
++
++    public AisleTemperatureToRackTemperatureInputSource(
++            AisleTemperatureInputSource aisleTemperatureInputSource,
++            Function<RackLocation, String> aisleCodeResolver
++    ) {
++        this.aisleTemperatureInputSource =
++                Objects.requireNonNull(aisleTemperatureInputSource, "aisleTemperatureInputSource must not be null");
++        this.aisleCodeResolver = Objects.requireNonNull(aisleCodeResolver, "aisleCodeResolver must not be null");
++    }
++
++    @Override
++    public double temperatureCelsius(RackLocation rackLocation, SimulationTick tick) {
++        Objects.requireNonNull(rackLocation, "rackLocation must not be null");
++        Objects.requireNonNull(tick, "tick must not be null");
++        String aisleCode = aisleCodeResolver.apply(rackLocation);
++        Objects.requireNonNull(aisleCode, "resolved aisleCode must not be null");
++        if (aisleCode.isBlank()) throw new IllegalArgumentException("resolved aisleCode must not be blank");
++        return aisleTemperatureInputSource.temperatureCelsius(aisleCode, tick);
++    }
++}
+diff --git a/src/main/java/com/cpz/sim/datacenter/input/MapAisleTemperatureInputSource.java b/src/main/java/com/cpz/sim/datacenter/input/MapAisleTemperatureInputSource.java
+new file mode 100644
+index 0000000..56850d7
+--- /dev/null
++++ b/src/main/java/com/cpz/sim/datacenter/input/MapAisleTemperatureInputSource.java
+@@ -0,0 +1,49 @@
++package com.cpz.sim.datacenter.input;
++
++import com.cpz.sim.foundation.time.SimulationTick;
++
++import java.util.Map;
++import java.util.Objects;
++
++/**
++ * Supplies aisle temperatures from an immutable map with a default fallback.
++ *
++ * @author CPZ
++ */
++public final class MapAisleTemperatureInputSource implements AisleTemperatureInputSource {
++
++    private final Map<String, Double> temperatureByAisleCode;
++    private final double defaultTemperatureCelsius;
++
++    public MapAisleTemperatureInputSource(
++            Map<String, Double> temperatureByAisleCode,
++            double defaultTemperatureCelsius
++    ) {
++        this.temperatureByAisleCode = Map.copyOf(
++                Objects.requireNonNull(temperatureByAisleCode, "temperatureByAisleCode must not be null")
++        );
++        validateTemperature(defaultTemperatureCelsius, "defaultTemperatureCelsius");
++        for (Map.Entry<String, Double> entry : this.temperatureByAisleCode.entrySet()) {
++            String aisleCode = entry.getKey();
++            Objects.requireNonNull(aisleCode, "aisleCode must not be null");
++            if (aisleCode.isBlank()) throw new IllegalArgumentException("aisleCode must not be blank");
++            if (entry.getValue() == null)
++                throw new IllegalArgumentException("temperatureCelsius must not be null for aisle: " + aisleCode);
++            validateTemperature(entry.getValue(), "temperatureCelsius for aisle: " + aisleCode);
++        }
++        this.defaultTemperatureCelsius = defaultTemperatureCelsius;
++    }
++
++    @Override
++    public double temperatureCelsius(String aisleCode, SimulationTick tick) {
++        Objects.requireNonNull(aisleCode, "aisleCode must not be null");
++        if (aisleCode.isBlank()) throw new IllegalArgumentException("aisleCode must not be blank");
++        Objects.requireNonNull(tick, "tick must not be null");
++        return temperatureByAisleCode.getOrDefault(aisleCode, defaultTemperatureCelsius);
++    }
++
++    private static void validateTemperature(double temperatureCelsius, String name) {
++        if (!Double.isFinite(temperatureCelsius))
++            throw new IllegalArgumentException(name + " must be finite");
++    }
++}
+diff --git a/src/main/java/com/cpz/sim/datacenter/input/SimulatedAisleTemperatureInputSource.java b/src/main/java/com/cpz/sim/datacenter/input/SimulatedAisleTemperatureInputSource.java
+new file mode 100644
+index 0000000..e188f99
+--- /dev/null
++++ b/src/main/java/com/cpz/sim/datacenter/input/SimulatedAisleTemperatureInputSource.java
+@@ -0,0 +1,109 @@
++package com.cpz.sim.datacenter.input;
++
++import com.cpz.sim.foundation.time.SimulationTick;
++
++import java.util.Objects;
++
++/**
++ * Generates deterministic simulated aisle temperatures for aisle-level
++ * temperature-driven simulations.
++ *
++ * <p>Each aisle receives a stable spatial base temperature derived from its
++ * aisle code. A smooth sinusoidal component based on the simulation tick index
++ * is then added and clamped to the configured temperature range.</p>
++ *
++ * @author CPZ
++ */
++public final class SimulatedAisleTemperatureInputSource implements AisleTemperatureInputSource {
++
++    public static final double DEFAULT_MIN_TEMPERATURE_CELSIUS = 30.0;
++    public static final double DEFAULT_MAX_TEMPERATURE_CELSIUS = 65.0;
++    public static final double DEFAULT_TEMPORAL_AMPLITUDE_CELSIUS = 3.0;
++    public static final double DEFAULT_TEMPORAL_FREQUENCY = 0.05;
++
++    private final double minTemperatureCelsius;
++    private final double maxTemperatureCelsius;
++    private final double temporalAmplitudeCelsius;
++    private final double temporalFrequency;
++
++    public SimulatedAisleTemperatureInputSource() {
++        this(
++                DEFAULT_MIN_TEMPERATURE_CELSIUS,
++                DEFAULT_MAX_TEMPERATURE_CELSIUS,
++                DEFAULT_TEMPORAL_AMPLITUDE_CELSIUS,
++                DEFAULT_TEMPORAL_FREQUENCY
++        );
++    }
++
++    public SimulatedAisleTemperatureInputSource(
++            double minTemperatureCelsius,
++            double maxTemperatureCelsius,
++            double temporalAmplitudeCelsius,
++            double temporalFrequency
++    ) {
++        validateFinite(minTemperatureCelsius, "minTemperatureCelsius");
++        validateFinite(maxTemperatureCelsius, "maxTemperatureCelsius");
++        if (minTemperatureCelsius >= maxTemperatureCelsius)
++            throw new IllegalArgumentException("minTemperatureCelsius must be lower than maxTemperatureCelsius");
++        validateFiniteNonNegative(temporalAmplitudeCelsius, "temporalAmplitudeCelsius");
++        validateFiniteNonNegative(temporalFrequency, "temporalFrequency");
++        this.minTemperatureCelsius = minTemperatureCelsius;
++        this.maxTemperatureCelsius = maxTemperatureCelsius;
++        this.temporalAmplitudeCelsius = temporalAmplitudeCelsius;
++        this.temporalFrequency = temporalFrequency;
++    }
++
++    @Override
++    public double temperatureCelsius(String aisleCode, SimulationTick tick) {
++        Objects.requireNonNull(aisleCode, "aisleCode must not be null");
++        if (aisleCode.isBlank()) throw new IllegalArgumentException("aisleCode must not be blank");
++        Objects.requireNonNull(tick, "tick must not be null");
++        double baseTemperatureCelsius = baseTemperatureFor(aisleCode);
++        double temporalOscillation = temporalAmplitudeCelsius
++                * Math.sin(tick.index() * temporalFrequency + phaseFor(aisleCode));
++        return clamp(
++                baseTemperatureCelsius + temporalOscillation,
++                minTemperatureCelsius,
++                maxTemperatureCelsius
++        );
++    }
++
++    private double baseTemperatureFor(String aisleCode) {
++        double effectiveAmplitude = Math.min(
++                temporalAmplitudeCelsius,
++                (maxTemperatureCelsius - minTemperatureCelsius) / 2.0
++        );
++        double baseMin = minTemperatureCelsius + effectiveAmplitude;
++        double baseMax = maxTemperatureCelsius - effectiveAmplitude;
++        if (baseMin >= baseMax) return (minTemperatureCelsius + maxTemperatureCelsius) / 2.0;
++        return baseMin + normalizedAisleValue(aisleCode, 0) * (baseMax - baseMin);
++    }
++
++    private static double phaseFor(String aisleCode) {
++        return normalizedAisleValue(aisleCode, 1) * Math.PI * 2.0;
++    }
++
++    private static double normalizedAisleValue(String aisleCode, int salt) {
++        int hash = stableHash(aisleCode, salt);
++        return Math.floorMod(hash, 10_000) / 9_999.0;
++    }
++
++    private static int stableHash(String value, int salt) {
++        int hash = 17 + salt * 131;
++        for (int i = 0; i < value.length(); i++) hash = 31 * hash + value.charAt(i);
++        return hash;
++    }
++
++    private static void validateFinite(double value, String name) {
++        if (!Double.isFinite(value)) throw new IllegalArgumentException(name + " must be finite");
++    }
++
++    private static void validateFiniteNonNegative(double value, String name) {
++        if (!Double.isFinite(value) || value < 0.0)
++            throw new IllegalArgumentException(name + " must be finite and non-negative");
++    }
++
++    private static double clamp(double value, double min, double max) {
++        return Math.max(min, Math.min(max, value));
++    }
++}
+diff --git a/src/main/java/com/cpz/sim/datacenter/input/TemperatureInputGranularity.java b/src/main/java/com/cpz/sim/datacenter/input/TemperatureInputGranularity.java
+index f78c20c..f0765b9 100644
+--- a/src/main/java/com/cpz/sim/datacenter/input/TemperatureInputGranularity.java
++++ b/src/main/java/com/cpz/sim/datacenter/input/TemperatureInputGranularity.java
+@@ -11,5 +11,11 @@ public enum TemperatureInputGranularity {
+      * Temperature is supplied as an aggregate rack observation and applied to
+      * installed online servers in that rack.
+      */
+-    RACK
++    RACK,
++
++    /**
++     * Temperature is supplied as an aggregate aisle observation and adapted to
++     * rack observations before being applied to installed online servers.
++     */
++    AISLE
+ }
+diff --git a/src/test/java/com/cpz/sim/datacenter/input/AisleTemperatureToRackTemperatureInputSourceTest.java b/src/test/java/com/cpz/sim/datacenter/input/AisleTemperatureToRackTemperatureInputSourceTest.java
+new file mode 100644
+index 0000000..bcf5917
+--- /dev/null
++++ b/src/test/java/com/cpz/sim/datacenter/input/AisleTemperatureToRackTemperatureInputSourceTest.java
+@@ -0,0 +1,78 @@
++package com.cpz.sim.datacenter.input;
++
++import com.cpz.sim.datacenter.model.RackLocation;
++import com.cpz.sim.foundation.time.SimulationTick;
++import org.junit.jupiter.api.Test;
++
++import java.time.Duration;
++import java.util.Map;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertThrows;
++
++class AisleTemperatureToRackTemperatureInputSourceTest {
++
++    private static final RackLocation FIRST_RACK_LOCATION = new RackLocation("C02", "R01");
++    private static final RackLocation SECOND_RACK_LOCATION = new RackLocation("C03", "R01");
++
++    @Test
++    void shouldUseResolvedAisleTemperatureForRack() {
++        AisleTemperatureToRackTemperatureInputSource source =
++                new AisleTemperatureToRackTemperatureInputSource(
++                        new MapAisleTemperatureInputSource(Map.of("HA01", 54.0), 25.0),
++                        rackLocation -> "HA01"
++                );
++
++        assertEquals(54.0, source.temperatureCelsius(FIRST_RACK_LOCATION, tick()), 0.0001);
++    }
++
++    @Test
++    void shouldAllowDifferentRacksToResolveToDifferentAisles() {
++        AisleTemperatureToRackTemperatureInputSource source =
++                new AisleTemperatureToRackTemperatureInputSource(
++                        new MapAisleTemperatureInputSource(Map.of("HA01", 50.0, "HA02", 60.0), 25.0),
++                        rackLocation -> rackLocation.column().equals("C02") ? "HA01" : "HA02"
++                );
++
++        assertEquals(50.0, source.temperatureCelsius(FIRST_RACK_LOCATION, tick()), 0.0001);
++        assertEquals(60.0, source.temperatureCelsius(SECOND_RACK_LOCATION, tick()), 0.0001);
++    }
++
++    @Test
++    void shouldRejectInvalidResolvedAisleCode() {
++        AisleTemperatureToRackTemperatureInputSource nullAisleSource =
++                new AisleTemperatureToRackTemperatureInputSource(
++                        new MapAisleTemperatureInputSource(Map.of(), 25.0),
++                        rackLocation -> null
++                );
++        AisleTemperatureToRackTemperatureInputSource blankAisleSource =
++                new AisleTemperatureToRackTemperatureInputSource(
++                        new MapAisleTemperatureInputSource(Map.of(), 25.0),
++                        rackLocation -> " "
++                );
++
++        assertThrows(NullPointerException.class, () -> nullAisleSource.temperatureCelsius(FIRST_RACK_LOCATION, tick()));
++        assertThrows(
++                IllegalArgumentException.class,
++                () -> blankAisleSource.temperatureCelsius(FIRST_RACK_LOCATION, tick())
++        );
++    }
++
++    @Test
++    void shouldRejectInvalidConstructorArguments() {
++        MapAisleTemperatureInputSource aisleSource = new MapAisleTemperatureInputSource(Map.of(), 25.0);
++
++        assertThrows(
++                NullPointerException.class,
++                () -> new AisleTemperatureToRackTemperatureInputSource(null, RackLocation::column)
++        );
++        assertThrows(
++                NullPointerException.class,
++                () -> new AisleTemperatureToRackTemperatureInputSource(aisleSource, null)
++        );
++    }
++
++    private static SimulationTick tick() {
++        return new SimulationTick(1L, Duration.ofMinutes(1), Duration.ofMinutes(1));
++    }
++}
+diff --git a/src/test/java/com/cpz/sim/datacenter/input/MapAisleTemperatureInputSourceTest.java b/src/test/java/com/cpz/sim/datacenter/input/MapAisleTemperatureInputSourceTest.java
+new file mode 100644
+index 0000000..b5620b2
+--- /dev/null
++++ b/src/test/java/com/cpz/sim/datacenter/input/MapAisleTemperatureInputSourceTest.java
+@@ -0,0 +1,59 @@
++package com.cpz.sim.datacenter.input;
++
++import com.cpz.sim.foundation.time.SimulationTick;
++import org.junit.jupiter.api.Test;
++
++import java.time.Duration;
++import java.util.Map;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertThrows;
++
++class MapAisleTemperatureInputSourceTest {
++
++    @Test
++    void shouldReturnExplicitAisleTemperature() {
++        MapAisleTemperatureInputSource source =
++                new MapAisleTemperatureInputSource(Map.of("HA01", 52.0), 25.0);
++
++        assertEquals(52.0, source.temperatureCelsius("HA01", tick()), 0.0001);
++    }
++
++    @Test
++    void shouldReturnDefaultTemperatureWhenAisleHasNoExplicitValue() {
++        MapAisleTemperatureInputSource source =
++                new MapAisleTemperatureInputSource(Map.of("HA01", 52.0), 25.0);
++
++        assertEquals(25.0, source.temperatureCelsius("HA02", tick()), 0.0001);
++    }
++
++    @Test
++    void shouldRejectInvalidTemperaturesAndAisleCodes() {
++        assertThrows(
++                IllegalArgumentException.class,
++                () -> new MapAisleTemperatureInputSource(Map.of(), Double.NaN)
++        );
++        assertThrows(
++                IllegalArgumentException.class,
++                () -> new MapAisleTemperatureInputSource(Map.of("HA01", Double.POSITIVE_INFINITY), 25.0)
++        );
++        assertThrows(
++                IllegalArgumentException.class,
++                () -> new MapAisleTemperatureInputSource(Map.of("", 52.0), 25.0)
++        );
++    }
++
++    @Test
++    void shouldRejectInvalidRuntimeArguments() {
++        MapAisleTemperatureInputSource source =
++                new MapAisleTemperatureInputSource(Map.of("HA01", 52.0), 25.0);
++
++        assertThrows(NullPointerException.class, () -> source.temperatureCelsius(null, tick()));
++        assertThrows(IllegalArgumentException.class, () -> source.temperatureCelsius("", tick()));
++        assertThrows(NullPointerException.class, () -> source.temperatureCelsius("HA01", null));
++    }
++
++    private static SimulationTick tick() {
++        return new SimulationTick(1L, Duration.ofMinutes(1), Duration.ofMinutes(1));
++    }
++}
+diff --git a/src/test/java/com/cpz/sim/datacenter/input/SimulatedAisleTemperatureInputSourceTest.java b/src/test/java/com/cpz/sim/datacenter/input/SimulatedAisleTemperatureInputSourceTest.java
+new file mode 100644
+index 0000000..45824de
+--- /dev/null
++++ b/src/test/java/com/cpz/sim/datacenter/input/SimulatedAisleTemperatureInputSourceTest.java
+@@ -0,0 +1,86 @@
++package com.cpz.sim.datacenter.input;
++
++import com.cpz.sim.foundation.time.SimulationTick;
++import org.junit.jupiter.api.Test;
++
++import java.time.Duration;
++
++import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
++import static org.junit.jupiter.api.Assertions.assertNotEquals;
++import static org.junit.jupiter.api.Assertions.assertThrows;
++import static org.junit.jupiter.api.Assertions.assertTrue;
++
++class SimulatedAisleTemperatureInputSourceTest {
++
++    @Test
++    void shouldReturnFiniteValues() {
++        SimulatedAisleTemperatureInputSource source = new SimulatedAisleTemperatureInputSource();
++
++        double temperatureCelsius = source.temperatureCelsius("HA01", tick(1));
++
++        assertTrue(Double.isFinite(temperatureCelsius));
++    }
++
++    @Test
++    void shouldRespectConfiguredMinAndMaxTemperatures() {
++        SimulatedAisleTemperatureInputSource source =
++                new SimulatedAisleTemperatureInputSource(30.0, 40.0, 20.0, 0.5);
++
++        for (int i = 0; i < 200; i++) {
++            double temperatureCelsius = source.temperatureCelsius("HA01", tick(i));
++            assertTrue(temperatureCelsius >= 30.0);
++            assertTrue(temperatureCelsius <= 40.0);
++        }
++    }
++
++    @Test
++    void shouldAllowDifferentAislesToReturnDifferentTemperatures() {
++        SimulatedAisleTemperatureInputSource source =
++                new SimulatedAisleTemperatureInputSource(30.0, 65.0, 3.0, 0.05);
++
++        assertNotEquals(
++                source.temperatureCelsius("HA01", tick(25)),
++                source.temperatureCelsius("HA02", tick(25))
++        );
++    }
++
++    @Test
++    void shouldAllowSameAisleToVaryAcrossTicks() {
++        SimulatedAisleTemperatureInputSource source =
++                new SimulatedAisleTemperatureInputSource(30.0, 65.0, 3.0, 0.05);
++
++        assertNotEquals(
++                source.temperatureCelsius("HA01", tick(1)),
++                source.temperatureCelsius("HA01", tick(40))
++        );
++    }
++
++    @Test
++    void shouldRejectInvalidParameters() {
++        assertThrows(
++                IllegalArgumentException.class,
++                () -> new SimulatedAisleTemperatureInputSource(Double.NaN, 65.0, 3.0, 0.05)
++        );
++        assertThrows(
++                IllegalArgumentException.class,
++                () -> new SimulatedAisleTemperatureInputSource(65.0, 30.0, 3.0, 0.05)
++        );
++        assertThrows(
++                IllegalArgumentException.class,
++                () -> new SimulatedAisleTemperatureInputSource(30.0, 65.0, -0.01, 0.05)
++        );
++        assertThrows(
++                IllegalArgumentException.class,
++                () -> new SimulatedAisleTemperatureInputSource(30.0, 65.0, 3.0, Double.POSITIVE_INFINITY)
++        );
++    }
++
++    @Test
++    void shouldAcceptDefaultConstructor() {
++        assertDoesNotThrow(() -> new SimulatedAisleTemperatureInputSource());
++    }
++
++    private static SimulationTick tick(long index) {
++        return new SimulationTick(index, Duration.ofSeconds(index * 60L), Duration.ofSeconds(60));
++    }
++}
+diff --git a/src/test/java/com/cpz/sim/datacenter/integration/TemperatureDrivenAisleSimulationIntegrationTest.java b/src/test/java/com/cpz/sim/datacenter/integration/TemperatureDrivenAisleSimulationIntegrationTest.java
+new file mode 100644
+index 0000000..da93978
+--- /dev/null
++++ b/src/test/java/com/cpz/sim/datacenter/integration/TemperatureDrivenAisleSimulationIntegrationTest.java
+@@ -0,0 +1,118 @@
++package com.cpz.sim.datacenter.integration;
++
++import com.cpz.sim.datacenter.input.AisleTemperatureToRackTemperatureInputSource;
++import com.cpz.sim.datacenter.input.MapAisleTemperatureInputSource;
++import com.cpz.sim.datacenter.model.Datacenter;
++import com.cpz.sim.datacenter.model.HardwareStatus;
++import com.cpz.sim.datacenter.model.Rack;
++import com.cpz.sim.datacenter.model.RackCode;
++import com.cpz.sim.datacenter.model.RackLocation;
++import com.cpz.sim.datacenter.model.Server;
++import com.cpz.sim.datacenter.model.ServerConfig;
++import com.cpz.sim.datacenter.model.ServerLocation;
++import com.cpz.sim.datacenter.model.ServerRole;
++import com.cpz.sim.datacenter.snapshot.TemperatureSnapshot;
++import com.cpz.sim.datacenter.snapshot.TemperatureSnapshotProvider;
++import com.cpz.sim.datacenter.system.RackTemperatureInputSystem;
++import com.cpz.sim.datacenter.system.TemperatureSystem;
++import com.cpz.sim.datacenter.temperature.SimpleServerTemperatureModel;
++import com.cpz.sim.datacenter.temperature.TemperatureSystemOptions;
++import com.cpz.sim.foundation.engine.SimulationEngine;
++import com.cpz.sim.foundation.time.SimulationClock;
++import com.cpz.sim.foundation.time.SimulationTick;
++import org.junit.jupiter.api.Test;
++
++import java.time.Duration;
++import java.util.List;
++import java.util.Map;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++
++class TemperatureDrivenAisleSimulationIntegrationTest {
++
++    private static final RackCode FIRST_RACK_CODE = new RackCode("RACK-C02-R01");
++    private static final RackCode SECOND_RACK_CODE = new RackCode("RACK-C03-R01");
++    private static final RackLocation FIRST_RACK_LOCATION = new RackLocation("C02", FIRST_RACK_CODE);
++    private static final RackLocation SECOND_RACK_LOCATION = new RackLocation("C03", SECOND_RACK_CODE);
++    private static final TemperatureSystemOptions OPTIONS =
++            new TemperatureSystemOptions(25.0, 25.0, 5000.0, 8.0);
++
++    @Test
++    void shouldRunTemperatureDrivenAislePipelineAndExposeSnapshots() {
++        Datacenter datacenter = datacenter();
++        TemperatureSystem temperatureSystem =
++                new TemperatureSystem(datacenter, OPTIONS, new SimpleServerTemperatureModel());
++        RackTemperatureInputSystem inputSystem =
++                new RackTemperatureInputSystem(
++                        datacenter,
++                        temperatureSystem,
++                        new AisleTemperatureToRackTemperatureInputSource(
++                                new MapAisleTemperatureInputSource(Map.of("HA01", 55.0), 25.0),
++                                rackLocation -> "HA01"
++                        ),
++                        OPTIONS
++                );
++        SimulationEngine engine = new SimulationEngine(new SimulationClock(Duration.ofMinutes(1)));
++        engine.register(inputSystem);
++
++        SimulationTick tick = engine.step();
++
++        TemperatureSnapshot snapshot =
++                new TemperatureSnapshotProvider(datacenter, temperatureSystem, OPTIONS).snapshot(tick);
++        assertEquals(1L, tick.index());
++        assertEquals(2, snapshot.servers().size());
++        assertEquals(55.0, snapshot.servers().get(0).temperatureCelsius(), 0.0001);
++        assertEquals(55.0, snapshot.servers().get(1).temperatureCelsius(), 0.0001);
++        assertEquals(200.0, snapshot.servers().get(0).currentPowerWatts(), 0.0001);
++        assertEquals(200.0, snapshot.servers().get(1).currentPowerWatts(), 0.0001);
++        assertEquals(0.5, snapshot.servers().get(0).utilization(), 0.0001);
++        assertEquals(0.5, snapshot.servers().get(1).utilization(), 0.0001);
++    }
++
++    @Test
++    void shouldAllowAislesToDriveDifferentRackTemperatures() {
++        Datacenter datacenter = datacenter();
++        TemperatureSystem temperatureSystem =
++                new TemperatureSystem(datacenter, OPTIONS, new SimpleServerTemperatureModel());
++        RackTemperatureInputSystem inputSystem =
++                new RackTemperatureInputSystem(
++                        datacenter,
++                        temperatureSystem,
++                        new AisleTemperatureToRackTemperatureInputSource(
++                                new MapAisleTemperatureInputSource(Map.of("HA01", 55.0, "HA02", 67.0), 25.0),
++                                rackLocation -> rackLocation.equals(FIRST_RACK_LOCATION) ? "HA01" : "HA02"
++                        ),
++                        OPTIONS
++                );
++
++        inputSystem.update(tick());
++
++        List<Server> servers = datacenter.getServers();
++        assertEquals(55.0, temperatureSystem.getThermalState(servers.get(0).getCode()).getTemperatureCelsius(), 0.0001);
++        assertEquals(67.0, temperatureSystem.getThermalState(servers.get(1).getCode()).getTemperatureCelsius(), 0.0001);
++    }
++
++    private static Datacenter datacenter() {
++        Rack firstRack = new Rack(FIRST_RACK_CODE, FIRST_RACK_LOCATION, List.of("U01"));
++        Rack secondRack = new Rack(SECOND_RACK_CODE, SECOND_RACK_LOCATION, List.of("U01"));
++        Server firstServer =
++                new Server(
++                        new ServerLocation("C02", FIRST_RACK_CODE, "U01"),
++                        new ServerConfig("MODEL-01", "CPZ", "Temperature Test Server", 100.0f, 300.0f),
++                        HardwareStatus.OK,
++                        ServerRole.GENERAL_PURPOSE
++                );
++        Server secondServer =
++                new Server(
++                        new ServerLocation("C03", SECOND_RACK_CODE, "U01"),
++                        new ServerConfig("MODEL-02", "CPZ", "Temperature Test Server", 100.0f, 300.0f),
++                        HardwareStatus.OK,
++                        ServerRole.GENERAL_PURPOSE
++                );
++        return new Datacenter(List.of(firstRack, secondRack), List.of(firstServer, secondServer));
++    }
++
++    private static SimulationTick tick() {
++        return new SimulationTick(1L, Duration.ofMinutes(1), Duration.ofMinutes(1));
++    }
++}

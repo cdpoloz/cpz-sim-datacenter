@@ -164,7 +164,8 @@ ambient temperature.
 
 ### `PowerConsumptionSystem`
 
-The intended causal order is:
+In `UTILIZATION_DRIVEN` and `POWER_DRIVEN`, `TemperatureSystem` derives
+temperature from current server power. The utilization-driven causal order is:
 
 ```text
 WorkloadSystem
@@ -177,6 +178,12 @@ WorkloadSystem
 `TemperatureSystem` must run after `PowerConsumptionSystem` so it reads the
 current tick's `currentPowerWatts`. `ServerHealthSystem` must run after
 `TemperatureSystem` so it evaluates the temperature produced for that tick.
+
+In `TEMPERATURE_DRIVEN`, temperature is the authoritative input. Use
+`DatacenterInputPipelineFactory` so `RackTemperatureInputSystem` writes the
+observed rack or hot-aisle-derived temperature into `TemperatureSystem` state.
+Do not run `TemperatureSystem.update(...)` afterward in that mode, because it
+would recalculate temperature from power and overwrite the observed input.
 
 ### `ServerHealthSystem`
 

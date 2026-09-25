@@ -3,6 +3,7 @@ package com.cpz.sim.datacenter.example;
 import com.cpz.sim.datacenter.config.definition.DatacenterDefinition;
 import com.cpz.sim.datacenter.config.json.JsonDatacenterConfigLoader;
 import com.cpz.sim.datacenter.factory.DatacenterFactory;
+import com.cpz.sim.datacenter.factory.DatacenterInputPipelineFactory;
 import com.cpz.sim.datacenter.factory.TemperatureSystemOptionsFactory;
 import com.cpz.sim.datacenter.factory.WorkloadFactorProviderFactory;
 import com.cpz.sim.datacenter.model.Datacenter;
@@ -12,9 +13,7 @@ import com.cpz.sim.datacenter.snapshot.ServerTemperatureSnapshot;
 import com.cpz.sim.datacenter.snapshot.TemperatureSnapshot;
 import com.cpz.sim.datacenter.snapshot.TemperatureSnapshotProvider;
 import com.cpz.sim.datacenter.system.EnergyConsumptionSystem;
-import com.cpz.sim.datacenter.system.PowerConsumptionSystem;
 import com.cpz.sim.datacenter.system.TemperatureSystem;
-import com.cpz.sim.datacenter.system.WorkloadSystem;
 import com.cpz.sim.datacenter.temperature.SimpleServerTemperatureModel;
 import com.cpz.sim.datacenter.temperature.TemperatureSystemOptions;
 import com.cpz.sim.datacenter.workload.NoiseWorkloadSource;
@@ -47,8 +46,6 @@ public class JsonTemperatureSimulationDemo {
         TemperatureSystemOptions temperatureOptions =
                 new TemperatureSystemOptionsFactory().create(definition);
         WorkloadSource workloadSource = createWorkloadSource(definition);
-        WorkloadSystem workloadSystem = new WorkloadSystem(datacenter, workloadSource);
-        PowerConsumptionSystem powerConsumptionSystem = new PowerConsumptionSystem(datacenter);
         TemperatureSystem temperatureSystem = new TemperatureSystem(
                 datacenter,
                 temperatureOptions,
@@ -63,9 +60,15 @@ public class JsonTemperatureSimulationDemo {
         SimulationEngine engine = new SimulationEngine(
                 new SimulationClock(Duration.ofMinutes(5))
         );
-        engine.register(workloadSystem);
-        engine.register(powerConsumptionSystem);
-        engine.register(temperatureSystem);
+        new DatacenterInputPipelineFactory().registerInputSystems(
+                engine,
+                definition,
+                datacenter,
+                temperatureSystem,
+                temperatureOptions,
+                workloadSource,
+                null
+        );
         engine.register(energyConsumptionSystem);
         printLoadedConfiguration(definition, datacenter, temperatureOptions);
         for (int i = 0; i < 6; i++) {

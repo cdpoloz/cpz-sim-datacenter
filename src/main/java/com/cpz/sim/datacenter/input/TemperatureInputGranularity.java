@@ -11,5 +11,11 @@ public enum TemperatureInputGranularity {
      * Temperature is supplied as an aggregate rack observation and applied to
      * installed online servers in that rack.
      */
-    RACK
+    RACK,
+
+    /**
+     * Temperature is supplied as an aggregate aisle observation and adapted to
+     * rack observations before being applied to installed online servers.
+     */
+    AISLE
 }

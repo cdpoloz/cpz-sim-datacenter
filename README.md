@@ -43,8 +43,8 @@ Available in `0.1.0-alpha.1`:
 - Data input modes through `DatacenterDataInputMode`: `UTILIZATION_DRIVEN`
   uses utilization as the authoritative input, `POWER_DRIVEN` uses electrical
   power as the authoritative input with server or rack granularity, and
-  `TEMPERATURE_DRIVEN` uses rack temperature as the authoritative input in its
-  first backend implementation.
+  `TEMPERATURE_DRIVEN` uses observed rack or hot-aisle temperature as the
+  authoritative input.
 - Integration with `FractalNoise` from `cpz-utils` for variable workloads.
 - Per-server `workloadFactor` read from JSON and applied through `ScaledWorkloadSource`.
 - Energy snapshots through `EnergyConsumptionSnapshotProvider`, `EnergyConsumptionSnapshot` and `ServerEnergySnapshot`.
@@ -229,12 +229,14 @@ the simulation:
 
 Supported values are `UTILIZATION_DRIVEN`, `POWER_DRIVEN`, and
 `TEMPERATURE_DRIVEN`. `UTILIZATION_DRIVEN` supplies utilization through a
-`WorkloadSource` and derives server power from it. `POWER_DRIVEN` supplies
-server power through a `ServerPowerInputSource`; server utilization remains
-available but is estimated from power so snapshots, health checks, and UI panels
-remain compatible. `TEMPERATURE_DRIVEN` supplies observed rack temperature
-through a `RackTemperatureInputSource`; server power and utilization are
-inferred conservatively from that temperature.
+`WorkloadSource` and derives server power and temperature from it.
+`POWER_DRIVEN` supplies server power through a `ServerPowerInputSource`; server
+utilization remains available but is estimated from power so snapshots, health
+checks, and UI panels remain compatible. Temperature is still derived from
+power, cooling, and the thermal model. `TEMPERATURE_DRIVEN` supplies observed
+temperature through rack-level input, or hot-aisle-level input adapted to rack
+observations; rack/server temperature, server power, and utilization are
+inferred conservatively from that observed temperature.
 
 For `POWER_DRIVEN`, optional top-level `powerInputGranularity` selects the
 simulated power-input granularity:
@@ -255,8 +257,8 @@ is absent. `SERVER` simulates power directly per server with
 granularity field is present.
 
 For `TEMPERATURE_DRIVEN`, optional top-level `temperatureInputGranularity`
-selects the temperature-input granularity. The first supported value is `RACK`,
-and it is the default when the field is absent:
+selects the temperature-input granularity. Supported values are `RACK` and
+`AISLE`; the default is `RACK` when the field is absent:
 
 ```json
 {
@@ -273,6 +275,29 @@ Rack temperatures can be supplied manually with `MapRackTemperatureInputSource`
 or generated deterministically with `SimulatedRackTemperatureInputSource` for
 backend scenarios that need smooth per-tick variation without UI-side data
 generation.
+In `TEMPERATURE_DRIVEN/AISLE`, the observed input is hot-aisle temperature, not
+cold-aisle temperature. `AisleTemperatureInputSource` supplies that value and
+`AisleTemperatureToRackTemperatureInputSource` adapts it to rack observations.
+For the current standard/demo layout, `StandardHotAisleCodeResolver` maps
+columns to hot aisles as follows:
+
+```text
+C01       -> HA01
+C02 / C03 -> HA02
+C04 / C05 -> HA03
+C06 / C07 -> HA04
+C08       -> HA05
+```
+
+Columns that share the same hot aisle receive the same base observed
+temperature for the same tick. Differences inside one hot aisle would require a
+future model for gradients, multiple sensors, distance to extraction, localized
+recirculation, or similar effects; they are not part of the current
+implementation. Aisle temperatures can be supplied manually with
+`MapAisleTemperatureInputSource` or generated deterministically with
+`SimulatedAisleTemperatureInputSource`. The current resolver is intentionally a
+minimum solution for the standard/demo layout; supporting arbitrary layouts
+should move hot-aisle mapping into configuration.
 The default maximum reference temperature is `85.0 C`; it is an inference
 reference used to normalize the thermal ratio, not a universal health threshold
 and not a replacement for configured health hysteresis thresholds.
@@ -281,7 +306,7 @@ and not a replacement for configured health hysteresis thresholds.
 
 ## Simulation Pipeline and Snapshots
 
-The expected causal simulation order without cooling is:
+The historical utilization-driven causal simulation order without cooling is:
 
 ```text
 WorkloadSystem
@@ -302,8 +327,15 @@ WorkloadSystem
 -> EnergyConsumptionSnapshotProvider / TemperatureSnapshotProvider / HealthSnapshotProvider
 ```
 
-Recommended flow using JSON `workloadFactor`, `FractalNoise`, `NoiseWorkloadSource`
-and `ScaledWorkloadSource`:
+For consumer applications, prefer `DatacenterInputPipelineFactory` to register
+the input-side systems from `dataInputMode` and the configured granularities.
+This avoids duplicating mode-specific rules in a UI or adapter, especially the
+rule that `TEMPERATURE_DRIVEN` writes observed temperature through
+`RackTemperatureInputSystem` and must not run `TemperatureSystem.update(...)`
+afterward.
+
+Recommended flow using JSON `workloadFactor`, `FractalNoise`,
+`NoiseWorkloadSource`, and `ScaledWorkloadSource`:
 
 ```java
 DatacenterDefinition definition =
@@ -337,9 +369,15 @@ ServerHealthSystem healthSystem =
 EnergyConsumptionSystem energySystem = new EnergyConsumptionSystem(datacenter);
 
 SimulationEngine engine = new SimulationEngine(new SimulationClock(Duration.ofMinutes(30)));
-engine.register(new WorkloadSystem(datacenter, workload));
-engine.register(new PowerConsumptionSystem(datacenter));
-engine.register(temperatureSystem);
+new DatacenterInputPipelineFactory().registerInputSystems(
+        engine,
+        definition,
+        datacenter,
+        temperatureSystem,
+        temperatureOptions,
+        workload,
+        null
+);
 engine.register(healthSystem);
 engine.register(energySystem);
 
@@ -367,7 +405,8 @@ preserved `OFFLINE` status). Temperature and health are exposed through separate
 snapshot models. See [Temperature Model](docs/temperature.md) and
 [Server Health](docs/server-health.md).
 
-When cooling is configured from JSON, the causal order becomes:
+When cooling is configured from JSON for a power-derived temperature pipeline,
+the causal order becomes:
 
 ```text
 WorkloadSystem
@@ -393,21 +432,29 @@ JSON
 -> CoolingSnapshot
 ```
 
-For consumer applications that need to register systems from configuration,
-`DatacenterDataInputModePlanner.planFor(definition.dataInputMode())` describes
-which parts of the state are backend-derived and which parts are externally
-supplied. In the current mode, utilization is supplied through `WorkloadSource`;
-power is derived by `PowerConsumptionSystem`; temperature is derived by
-`TemperatureSystem`. In `POWER_DRIVEN`, server power is supplied through
-`PowerInputSystem` and `ServerPowerInputSource`; utilization is estimated from
-that power. The source can be server-level or rack-level; `PowerInputSystem`
-does not distinguish the origin because both paths expose `ServerPowerInputSource`.
-Future telemetry adapters can replace the simulated power source without
-changing the downstream cooling, temperature, health, energy, or snapshot
-pipeline.
-In `TEMPERATURE_DRIVEN/RACK`, `RackTemperatureInputSystem` writes observed rack
-temperature into `TemperatureSystem` for online servers and infers server power
-and utilization before downstream energy and snapshot providers read state.
+For consumer applications that need to inspect the plan without registering
+systems, `DatacenterDataInputModePlanner.planFor(definition.dataInputMode())`
+describes which parts of the state are backend-derived and which parts are
+externally supplied. `DatacenterInputPipelineFactory` is the productive
+assembly point. In `UTILIZATION_DRIVEN`, utilization is supplied through
+`WorkloadSource`, power is derived by `PowerConsumptionSystem`, and temperature
+is derived by `TemperatureSystem`. In `POWER_DRIVEN`, server power is supplied
+through `PowerInputSystem` and `ServerPowerInputSource`; utilization is
+estimated from that power, and temperature is still derived from power/cooling
+through `TemperatureSystem`. The source can be server-level or rack-level;
+`PowerInputSystem` does not distinguish the origin because both paths expose
+`ServerPowerInputSource`.
+In `TEMPERATURE_DRIVEN/RACK`, `TemperatureInputSourceFactory` creates a rack
+temperature source and `RackTemperatureInputSystem` writes observed rack
+temperature into `TemperatureSystem` for online servers. In
+`TEMPERATURE_DRIVEN/AISLE`, `TemperatureInputSourceFactory` creates an
+`AisleTemperatureToRackTemperatureInputSource` backed by
+`SimulatedAisleTemperatureInputSource` and `StandardHotAisleCodeResolver`; the
+adapted rack observations are then consumed by `RackTemperatureInputSystem`.
+In both temperature-driven granularities, server power and utilization are
+inferred before downstream energy and snapshot providers read state, and
+`TemperatureSystem` must not be registered later as a simulatable that
+recalculates temperature from power.
 Consumers should interpret `temperatureInputGranularity` only together with
 `dataInputMode = TEMPERATURE_DRIVEN`; other modes ignore that field.
 
@@ -420,6 +467,8 @@ The demos are located in `src/main/java/com/cpz/sim/datacenter/example`:
 - `DatacenterSimulationDemo`: in-code datacenter simulation.
 - `NoiseWorkloadSimulationDemo`: in-code datacenter using `FractalNoise`.
 - `JsonDatacenterSimulationDemo`: loads `data/config/demo-datacenter-medium.json`, uses `FractalNoise` and `ScaledWorkloadSource`.
+- `JsonTemperatureSimulationDemo`: loads JSON and delegates input-system
+  registration to `DatacenterInputPipelineFactory`.
 - `EnergySnapshotSimulationDemo`: loads JSON, simulates `FractalNoise + workloadFactor` with the energy-only pipeline, and emits energy snapshots.
 - `TemperatureSimulationDemo`: in-code simulation with workload, power, temperature, and energy systems plus separate energy and temperature snapshots; it does not register `ServerHealthSystem`.
 - `CoolingSimulationDemo`: in-code simulation with cooling units, cooling snapshots, and temperature integration.
@@ -462,10 +511,12 @@ first cooling integration from JSON to runtime snapshots. Future work outside
 the current scope:
 
 - Stable final `0.1.0` API.
-- Rack-level power input and rack-to-server power distribution for
-  `POWER_DRIVEN` simulations.
-- First production implementation of `TEMPERATURE_DRIVEN` mode using telemetry
-  or externally provided server/rack temperature.
+- Additional production telemetry adapters for externally provided power and
+  temperature feeds.
+- Server-level and room-level temperature input.
+- Configurable hot-aisle mapping for arbitrary layouts.
+- Hot-aisle gradients, multiple sensors per aisle, and localized recirculation
+  effects.
 - More detailed rack inlet, room, and cooling-zone thermal modeling.
 - UI or visualization.
 - More complete public contracts for consumer applications.

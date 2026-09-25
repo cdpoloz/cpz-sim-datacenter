@@ -15,7 +15,11 @@ backend.
 - `com.cpz.sim.datacenter.config.definition`: objects that represent JSON (`DatacenterDefinition`, `RackDefinition`, `ServerModelDefinition`, `ServerDefinition`) plus helpers for effective rack slots.
 - `com.cpz.sim.datacenter.config.json`: JSON loading with Jackson (`JsonDatacenterConfigLoader`).
 - `com.cpz.sim.datacenter.config.validation`: validation of definitions before building the domain.
-- `com.cpz.sim.datacenter.factory`: domain construction and option/provider factories (`DatacenterFactory`, `WorkloadFactorProviderFactory`, `TemperatureSystemOptionsFactory`, `ServerHealthOptionsFactory`).
+- `com.cpz.sim.datacenter.factory`: domain construction, option/provider
+  factories, and input-pipeline assembly (`DatacenterFactory`,
+  `WorkloadFactorProviderFactory`, `TemperatureSystemOptionsFactory`,
+  `ServerHealthOptionsFactory`, `TemperatureInputSourceFactory`,
+  `DatacenterInputPipelineFactory`).
 - `com.cpz.sim.datacenter.input`: data input modes and telemetry-source contracts.
 - `com.cpz.sim.datacenter.workload`: workload strategies (`WorkloadSource` and its implementations).
 - `com.cpz.sim.datacenter.temperature`: server thermal state and temperature model contracts.
@@ -108,7 +112,8 @@ and the health system does not overwrite it.
 The systems implement `Simulatable` from `cpz-sim-foundation` and are registered in
 `SimulationEngine`.
 
-Registration order matters:
+Registration order matters. For the default utilization-driven pipeline without
+cooling, the order is:
 
 ```text
 WorkloadSystem
@@ -140,7 +145,8 @@ WorkloadSystem
 ```
 
 In this mode, server utilization is supplied by `WorkloadSource`. Server power is
-derived from utilization through `PowerConsumptionSystem`.
+derived from utilization through `PowerConsumptionSystem`, and temperature is
+derived from power/cooling through `TemperatureSystem`.
 
 ### POWER_DRIVEN
 
@@ -164,7 +170,8 @@ estimated value derived from current power:
 
 The estimated utilization is clamped to `[0, 1]`. It exists for health checks,
 snapshots, and UI compatibility. It should not be interpreted as a measured
-utilization signal.
+utilization signal. Temperature remains derived from power/cooling through
+`TemperatureSystem`.
 
 A simulated implementation can use `NoiseServerPowerInputSource`, optionally
 with role-based factors through `ServerRolePowerFactorProvider`.
@@ -200,11 +207,19 @@ input.
 ### TEMPERATURE_DRIVEN
 
 `TEMPERATURE_DRIVEN` uses observed temperature as the authoritative input. The
-first backend implementation supports rack-level input.
+backend supports rack-level input and hot-aisle-level input adapted to rack
+observations.
 
 ```text
 RACK:
 RackTemperatureInputSource
+-> RackTemperatureInputSystem
+-> TemperatureSystem state
+-> EnergyConsumptionSystem / snapshot providers
+
+AISLE:
+AisleTemperatureInputSource
+-> AisleTemperatureToRackTemperatureInputSource
 -> RackTemperatureInputSystem
 -> TemperatureSystem state
 -> EnergyConsumptionSystem / snapshot providers
@@ -226,26 +241,78 @@ by power-driven input. Offline servers keep zero power and zero utilization.
 Rack temperature input can come from fixed/manual values through
 `MapRackTemperatureInputSource` or from smooth deterministic backend simulation
 through `SimulatedRackTemperatureInputSource`.
+Hot-aisle temperature input follows the same inference policy after
+`AisleTemperatureToRackTemperatureInputSource` resolves each rack to a hot-aisle
+code. In the current standard/demo layout, `TemperatureInputSourceFactory`
+wires `AisleTemperatureToRackTemperatureInputSource` with
+`SimulatedAisleTemperatureInputSource` and `StandardHotAisleCodeResolver`:
+
+```text
+C01       -> HA01
+C02 / C03 -> HA02
+C04 / C05 -> HA03
+C06 / C07 -> HA04
+C08       -> HA05
+```
+
+`AISLE` means hot aisle, not cold aisle. Columns sharing the same hot aisle
+receive the same base observed temperature for the same tick. Per-rack
+differences within one hot aisle would require a future model for gradients,
+multiple sensors, distance to extraction, localized recirculation, or similar
+effects. The current resolver is a minimum implementation for the standard/demo
+layout; arbitrary layouts should eventually move hot-aisle mapping into
+configuration.
 The default maximum reference temperature is `85.0 C`; it is only an inference
 reference for normalizing the ratio above. It is not a universal health limit
 and does not replace the server-health temperature thresholds.
 
-The first cut intentionally does not model per-slot gradients, aisle-level input,
+The current implementation intentionally does not model per-slot gradients,
 room-level input, or server-level temperature telemetry.
 
-`DatacenterDataInputModePlanner` returns a `DatacenterDataInputModePlan` so a UI
-or telemetry adapter can decide which systems to register without inspecting
-implementation details. JSON definitions default to `UTILIZATION_DRIVEN` when
-`dataInputMode` is omitted.
+`TemperatureInputSourceFactory` is the productive factory for temperature input
+sources by `TemperatureInputGranularity`. `DatacenterInputPipelineFactory` is
+the productive assembly point for registering input systems by
+`DatacenterDataInputMode`. UI and telemetry consumers should delegate to it
+instead of duplicating local `WorkloadSystem`, `PowerConsumptionSystem`,
+`RackTemperatureInputSystem`, or `TemperatureSystem` registration logic.
+`DatacenterDataInputModePlanner` remains useful when consumers need to inspect
+which state transitions a mode expects without registering systems. JSON
+definitions default to `UTILIZATION_DRIVEN` when `dataInputMode` is omitted.
 
 ## Causal Order
 
-1. `WorkloadSystem` computes `Server.utilization` for each operational server.
-2. `PowerConsumptionSystem` recalculates `Server.currentPowerWatts`.
-3. `TemperatureSystem` updates a representative internal server temperature from current server power.
-4. `ServerHealthSystem` evaluates current utilization and temperature, updates active alert reasons, and derives `HardwareStatus` for every non-`OFFLINE` server.
-5. `EnergyConsumptionSystem` integrates accumulated energy using total IT power and `tick.deltaSeconds()`.
-6. Snapshot providers such as `EnergyConsumptionSnapshotProvider`, `TemperatureSnapshotProvider`, and `HealthSnapshotProvider` read the resulting state and build immutable DTOs.
+The input-side systems differ by mode:
+
+```text
+UTILIZATION_DRIVEN:
+WorkloadSystem
+-> PowerConsumptionSystem
+-> TemperatureSystem
+
+POWER_DRIVEN/SERVER or POWER_DRIVEN/RACK:
+PowerInputSystem
+-> TemperatureSystem
+
+TEMPERATURE_DRIVEN/RACK or TEMPERATURE_DRIVEN/AISLE:
+RackTemperatureInputSystem
+```
+
+After the active input-side pipeline has updated utilization, power, and
+temperature state, common downstream systems can run:
+
+```text
+ServerHealthSystem
+-> EnergyConsumptionSystem
+-> snapshot providers
+```
+
+In `TEMPERATURE_DRIVEN`, `RackTemperatureInputSystem` writes the observed or
+adapted temperature directly into `TemperatureSystem` state. Do not register
+`TemperatureSystem` afterward as a simulatable in the same tick, because that
+would recalculate temperature from power and overwrite the observed input.
+Snapshot providers such as `EnergyConsumptionSnapshotProvider`,
+`TemperatureSnapshotProvider`, and `HealthSnapshotProvider` read the resulting
+state and build immutable DTOs.
 
 If this order is changed, power, temperature, health, or energy values may not
 represent the same tick.
