@@ -2,6 +2,7 @@ package com.cpz.sim.datacenter.factory;
 
 import com.cpz.sim.datacenter.config.definition.DatacenterDefinition;
 import com.cpz.sim.datacenter.config.definition.DatacenterLayoutDefinition;
+import com.cpz.sim.datacenter.config.definition.HotAisleDefinition;
 import com.cpz.sim.datacenter.config.definition.RackDefinition;
 import com.cpz.sim.datacenter.config.definition.ServerDefinition;
 import com.cpz.sim.datacenter.config.definition.ServerModelDefinition;
@@ -45,7 +46,7 @@ class DatacenterInputPipelineFactoryTest {
             new TemperatureSystemOptions(25.0, 25.0, 5000.0, 8.0);
 
     @Test
-    void shouldWireTemperatureDrivenAislePipelineWithStandardHotAisleResolver() {
+    void shouldWireTemperatureDrivenAislePipelineWithConfiguredHotAisles() {
         DatacenterDefinition definition = standardDefinition(TemperatureInputGranularity.AISLE);
         Datacenter datacenter = new DatacenterFactory().create(definition);
         TemperatureSystem temperatureSystem = temperatureSystem(datacenter);
@@ -162,16 +163,20 @@ class DatacenterInputPipelineFactoryTest {
     private static DatacenterDefinition standardDefinition(TemperatureInputGranularity granularity) {
         return new DatacenterDefinition(
                 "Datacenter Input Pipeline Factory Test",
-                new DatacenterLayoutDefinition(List.of(
-                        rackDefinition("C01"),
-                        rackDefinition("C02"),
-                        rackDefinition("C03"),
-                        rackDefinition("C04"),
-                        rackDefinition("C05"),
-                        rackDefinition("C06"),
-                        rackDefinition("C07"),
-                        rackDefinition("C08")
-                )),
+                new DatacenterLayoutDefinition(
+                        null,
+                        standardHotAisles(),
+                        List.of(
+                                rackDefinition("C01"),
+                                rackDefinition("C02"),
+                                rackDefinition("C03"),
+                                rackDefinition("C04"),
+                                rackDefinition("C05"),
+                                rackDefinition("C06"),
+                                rackDefinition("C07"),
+                                rackDefinition("C08")
+                        )
+                ),
                 List.of(new ServerModelDefinition("MODEL-01", "CPZ", "Temperature Test Server", 100.0f, 300.0f)),
                 List.of(
                         serverDefinition("C01"),
@@ -189,6 +194,16 @@ class DatacenterInputPipelineFactoryTest {
                 DatacenterDataInputMode.TEMPERATURE_DRIVEN,
                 null,
                 granularity
+        );
+    }
+
+    private static List<HotAisleDefinition> standardHotAisles() {
+        return List.of(
+                new HotAisleDefinition("HA01", List.of("C01")),
+                new HotAisleDefinition("HA02", List.of("C02", "C03")),
+                new HotAisleDefinition("HA03", List.of("C04", "C05")),
+                new HotAisleDefinition("HA04", List.of("C06", "C07")),
+                new HotAisleDefinition("HA05", List.of("C08"))
         );
     }
 

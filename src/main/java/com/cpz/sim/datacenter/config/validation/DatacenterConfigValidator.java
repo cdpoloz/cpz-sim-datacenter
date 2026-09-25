@@ -68,7 +68,64 @@ public final class DatacenterConfigValidator {
             if (isBlank(rack.row())) errors.add(context + " must have a non-blank row");
             validateRackSlots(rack, context, errors);
         }
+        validateHotAisles(layout.hotAisles(), columns, errors);
         return new LayoutIndex(racksByLocation, racksByCode, columns);
+    }
+
+    private static void validateHotAisles(
+            List<HotAisleDefinition> hotAisles,
+            Set<String> layoutColumns,
+            List<String> errors
+    ) {
+        if (hotAisles == null) return;
+        Set<String> hotAisleCodes = new HashSet<>();
+        Map<String, String> hotAisleCodeByColumn = new HashMap<>();
+        for (int i = 0; i < hotAisles.size(); i++) {
+            HotAisleDefinition hotAisle = hotAisles.get(i);
+            if (hotAisle == null) {
+                errors.add("Hot aisle at index " + i + " cannot be null");
+                continue;
+            }
+            String context = "Hot aisle at index " + i;
+            if (isBlank(hotAisle.code())) {
+                errors.add(context + " must have a non-blank code");
+            } else if (!hotAisleCodes.add(hotAisle.code())) {
+                errors.add("Duplicated hot aisle code: " + hotAisle.code());
+            }
+            validateHotAisleColumns(hotAisle, context, layoutColumns, hotAisleCodeByColumn, errors);
+        }
+    }
+
+    private static void validateHotAisleColumns(
+            HotAisleDefinition hotAisle,
+            String context,
+            Set<String> layoutColumns,
+            Map<String, String> hotAisleCodeByColumn,
+            List<String> errors
+    ) {
+        if (hotAisle.columns() == null) {
+            errors.add(context + " columns list cannot be null");
+            return;
+        }
+        if (hotAisle.columns().isEmpty()) {
+            errors.add(context + " must have a non-empty columns list");
+            return;
+        }
+        for (int columnIndex = 0; columnIndex < hotAisle.columns().size(); columnIndex++) {
+            String column = hotAisle.columns().get(columnIndex);
+            if (isBlank(column)) {
+                errors.add(context + " has null or blank column at index " + columnIndex);
+                continue;
+            }
+            if (!layoutColumns.contains(column)) {
+                errors.add(context + " references unknown layout column: " + column);
+            }
+            String previousHotAisleCode = hotAisleCodeByColumn.putIfAbsent(column, hotAisle.code());
+            if (previousHotAisleCode != null) {
+                errors.add("Column " + column + " belongs to multiple hot aisles: "
+                        + previousHotAisleCode + " and " + hotAisle.code());
+            }
+        }
     }
 
     private static void validateRackSlots(RackDefinition rack, String context, List<String> errors) {

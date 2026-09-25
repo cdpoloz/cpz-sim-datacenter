@@ -33,6 +33,8 @@ Main fields:
 
 - `name`: non-blank datacenter name.
 - `layout.room`: optional metadata for the room associated with the active layout.
+- `layout.hotAisles`: optional hot-aisle to rack-column mapping for
+  `TEMPERATURE_DRIVEN/AISLE`.
 - `layout.racks`: available physical infrastructure.
 - `serverModels`: server model catalog.
 - `servers`: servers installed in specific racks and slots.
@@ -180,11 +182,14 @@ Rules:
 - The field only affects `TEMPERATURE_DRIVEN`; consumers should not interpret it
   without also checking `dataInputMode`.
 - `TEMPERATURE_DRIVEN/SERVER` and `TEMPERATURE_DRIVEN/ROOM` are not implemented.
-- `TEMPERATURE_DRIVEN/AISLE` means hot aisle, not cold aisle. The current
-  production factory uses `StandardHotAisleCodeResolver` for the standard/demo
-  layout.
+- `TEMPERATURE_DRIVEN/AISLE` means hot aisle, not cold aisle.
+- When `layout.hotAisles` is present, `TemperatureInputSourceFactory` uses that
+  configuration to resolve each rack column to a hot-aisle code.
+- When `layout.hotAisles` is absent, the factory falls back to
+  `StandardHotAisleCodeResolver` for compatibility with the standard/demo
+  layout only.
 
-Current standard hot-aisle mapping:
+Standard/demo fallback hot-aisle mapping:
 
 ```text
 C01       -> HA01
@@ -197,8 +202,7 @@ C08       -> HA05
 Columns sharing a hot aisle receive the same base observed temperature for the
 same tick. Per-rack differences within one hot aisle are future work requiring
 gradients, multiple sensors, localized recirculation, or another more detailed
-thermal model. Supporting arbitrary layouts should move this hot-aisle mapping
-into configuration.
+thermal model. Arbitrary layouts should declare `layout.hotAisles`.
 
 Rack-level temperature-driven example:
 
@@ -236,8 +240,8 @@ Rack-level inference policy:
 - The observed rack temperature is written as the current temperature of online
   servers in that rack.
 - In aisle-level mode, the observed hot-aisle temperature is first resolved to a
-  rack temperature with `StandardHotAisleCodeResolver` in the current
-  standard/demo layout.
+  rack temperature using `layout.hotAisles` when configured, or the
+  standard/demo fallback resolver when that configuration is absent.
 - Power is inferred from the clamped ratio between ambient temperature and a
   maximum reference temperature.
 - The default maximum reference temperature is `85.0 C`. It is an inference
@@ -281,6 +285,43 @@ Rules:
 - If `layout.room` is absent, `DatacenterDefinition.layout().room()` is `null`.
 - If `layout.room` is present, it cannot be `null`.
 - `layout.room.code` and `layout.room.name` are required when the block is present.
+
+## layout.hotAisles
+
+`layout.hotAisles` is optional for compatibility. When present, each entry
+declares one hot aisle code and the rack columns that share that hot aisle. In
+`TEMPERATURE_DRIVEN/AISLE`, aisle temperature input is interpreted as observed
+hot-aisle temperature; the backend uses this mapping to adapt each rack to the
+hot-aisle observation for its column.
+
+Example:
+
+```json
+{
+  "layout": {
+    "hotAisles": [
+      { "code": "HA01", "columns": ["C01"] },
+      { "code": "HA02", "columns": ["C02", "C03"] },
+      { "code": "HA03", "columns": ["C04", "C05"] },
+      { "code": "HA04", "columns": ["C06", "C07"] },
+      { "code": "HA05", "columns": ["C08"] }
+    ],
+    "racks": []
+  }
+}
+```
+
+Rules:
+
+- If `layout.hotAisles` is absent, `DatacenterDefinition.layout().hotAisles()`
+  is `null` and `TEMPERATURE_DRIVEN/AISLE` uses the standard/demo fallback.
+- If present, the list cannot contain `null` entries.
+- Each hot aisle `code` must be non-null and non-blank.
+- Each `columns` list must be non-null and non-empty.
+- Column codes cannot be null or blank.
+- Hot aisle codes cannot be duplicated.
+- A column cannot belong to more than one hot aisle.
+- Declared columns must exist in `layout.racks`.
 
 ## layout.racks
 

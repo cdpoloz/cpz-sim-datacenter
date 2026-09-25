@@ -7,6 +7,7 @@ import java.util.function.Function;
 
 /**
  * Resolves rack columns from the standard demo layout to hot-aisle codes.
+ * Prefer {@link ConfiguredHotAisleCodeResolver} for arbitrary layouts.
  *
  * @author CPZ
  */

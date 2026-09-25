@@ -567,6 +567,33 @@ class JsonDatacenterConfigLoaderTest {
     }
 
     @Test
+    void shouldLoadDatacenterDefinitionWithLayoutHotAisles()
+            throws IOException {
+        Path path = writeConfigWithHotAisles("""
+        [
+          {
+            "code": "HA01",
+            "columns": ["A01"]
+          },
+          {
+            "code": "HA02",
+            "columns": ["A02", "A03"]
+          }
+        ]
+        """);
+
+        DatacenterDefinition definition =
+                new JsonDatacenterConfigLoader().load(path);
+
+        assertNotNull(definition.layout().hotAisles());
+        assertEquals(2, definition.layout().hotAisles().size());
+        assertEquals("HA01", definition.layout().hotAisles().getFirst().code());
+        assertEquals(List.of("A01"), definition.layout().hotAisles().getFirst().columns());
+        assertEquals("HA02", definition.layout().hotAisles().get(1).code());
+        assertEquals(List.of("A02", "A03"), definition.layout().hotAisles().get(1).columns());
+    }
+
+    @Test
     void shouldLoadDatacenterDefinitionWithExplicitSlots() {
         JsonDatacenterConfigLoader loader = new JsonDatacenterConfigLoader();
         DatacenterDefinition definition = loader.load(resourcePath("datacenter/explicit-slots-datacenter.json"));
@@ -700,6 +727,19 @@ class JsonDatacenterConfigLoaderTest {
 
     private Path writeConfigWithRoom(String roomValue)
             throws IOException {
+        return writeConfigWithLayoutProperty("room", roomValue, "datacenter-with-room.json");
+    }
+
+    private Path writeConfigWithHotAisles(String hotAislesValue)
+            throws IOException {
+        return writeConfigWithLayoutProperty("hotAisles", hotAislesValue, "datacenter-with-hot-aisles.json");
+    }
+
+    private Path writeConfigWithLayoutProperty(
+            String propertyName,
+            String propertyValue,
+            String fileName
+    ) throws IOException {
         String originalJson = Files.readString(
                 resourcePath("datacenter/valid-datacenter.json")
         );
@@ -725,13 +765,15 @@ class JsonDatacenterConfigLoaderTest {
 
         String jsonWithRoom =
                 originalJson.substring(0, insertionIndex)
-                        + "    \"room\": "
-                        + roomValue
+                        + "    \""
+                        + propertyName
+                        + "\": "
+                        + propertyValue
                         + ",\n"
                         + originalJson.substring(insertionIndex);
 
         return Files.writeString(
-                tempDirectory.resolve("datacenter-with-room.json"),
+                tempDirectory.resolve(fileName),
                 jsonWithRoom
         );
     }

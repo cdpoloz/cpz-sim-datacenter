@@ -243,9 +243,11 @@ Rack temperature input can come from fixed/manual values through
 through `SimulatedRackTemperatureInputSource`.
 Hot-aisle temperature input follows the same inference policy after
 `AisleTemperatureToRackTemperatureInputSource` resolves each rack to a hot-aisle
-code. In the current standard/demo layout, `TemperatureInputSourceFactory`
-wires `AisleTemperatureToRackTemperatureInputSource` with
-`SimulatedAisleTemperatureInputSource` and `StandardHotAisleCodeResolver`:
+code. `TemperatureInputSourceFactory` wires
+`AisleTemperatureToRackTemperatureInputSource` with
+`SimulatedAisleTemperatureInputSource`; when `layout.hotAisles` is present it
+uses the configured mapping, and when it is absent it keeps
+`StandardHotAisleCodeResolver` as a standard/demo fallback:
 
 ```text
 C01       -> HA01
@@ -259,9 +261,8 @@ C08       -> HA05
 receive the same base observed temperature for the same tick. Per-rack
 differences within one hot aisle would require a future model for gradients,
 multiple sensors, distance to extraction, localized recirculation, or similar
-effects. The current resolver is a minimum implementation for the standard/demo
-layout; arbitrary layouts should eventually move hot-aisle mapping into
-configuration.
+effects. `StandardHotAisleCodeResolver` is only a fallback for the demo layout;
+arbitrary layouts should configure `layout.hotAisles`.
 The default maximum reference temperature is `85.0 C`; it is only an inference
 reference for normalizing the ratio above. It is not a universal health limit
 and does not replace the server-health temperature thresholds.

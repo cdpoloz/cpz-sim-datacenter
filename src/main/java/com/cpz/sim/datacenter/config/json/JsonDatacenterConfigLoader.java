@@ -25,6 +25,8 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
 
     private static final TypeReference<List<RackDefinition>> RACKS_TYPE = new TypeReference<>() {
     };
+    private static final TypeReference<List<HotAisleDefinition>> HOT_AISLES_TYPE = new TypeReference<>() {
+    };
     private static final TypeReference<List<ServerModelDefinition>> SERVER_MODELS_TYPE = new TypeReference<>() {
     };
     private static final TypeReference<List<ServerDefinition>> SERVERS_TYPE = new TypeReference<>() {
@@ -63,10 +65,11 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
         if (!layoutNode.isObject())
             throw new DatacenterConfigException("Layout block must be an object in datacenter config: " + path);
 
-        rejectUnknownProperties(layoutNode, List.of("room", "racks"), "layout", path);
+        rejectUnknownProperties(layoutNode, List.of("room", "hotAisles", "racks"), "layout", path);
 
         return new DatacenterLayoutDefinition(
                 readOptionalRoom(layoutNode, path),
+                readOptionalHotAisles(layoutNode, path),
                 readRequired(layoutNode, "racks", path, RACKS_TYPE)
         );
     }
@@ -85,6 +88,14 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
         if (roomNode.isNull())
             throw new DatacenterConfigException("Room block cannot be null in datacenter config: " + path);
         return JSON_MAPPER.readValue(roomNode.traverse(JSON_MAPPER), RoomDefinition.class);
+    }
+
+    private static List<HotAisleDefinition> readOptionalHotAisles(JsonNode root, Path path) throws IOException {
+        JsonNode hotAislesNode = root.get("hotAisles");
+        if (hotAislesNode == null) return null;
+        if (hotAislesNode.isNull())
+            throw new DatacenterConfigException("layout.hotAisles cannot be null in datacenter config: " + path);
+        return JSON_MAPPER.readValue(hotAislesNode.traverse(JSON_MAPPER), HOT_AISLES_TYPE);
     }
 
     private static HealthSystemOptionsDefinition readOptionalHealth(JsonNode root, Path path) throws IOException {

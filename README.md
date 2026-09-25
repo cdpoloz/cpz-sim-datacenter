@@ -278,8 +278,22 @@ generation.
 In `TEMPERATURE_DRIVEN/AISLE`, the observed input is hot-aisle temperature, not
 cold-aisle temperature. `AisleTemperatureInputSource` supplies that value and
 `AisleTemperatureToRackTemperatureInputSource` adapts it to rack observations.
-For the current standard/demo layout, `StandardHotAisleCodeResolver` maps
-columns to hot aisles as follows:
+The recommended path is to declare `layout.hotAisles` so the backend can map
+rack columns to hot-aisle codes from configuration:
+
+```json
+"layout": {
+  "hotAisles": [
+    { "code": "HA01", "columns": ["C01"] },
+    { "code": "HA02", "columns": ["C02", "C03"] }
+  ],
+  "racks": []
+}
+```
+
+When `layout.hotAisles` is absent, `TemperatureInputSourceFactory` keeps a
+compatibility fallback for the current standard/demo layout through
+`StandardHotAisleCodeResolver`:
 
 ```text
 C01       -> HA01
@@ -295,9 +309,8 @@ future model for gradients, multiple sensors, distance to extraction, localized
 recirculation, or similar effects; they are not part of the current
 implementation. Aisle temperatures can be supplied manually with
 `MapAisleTemperatureInputSource` or generated deterministically with
-`SimulatedAisleTemperatureInputSource`. The current resolver is intentionally a
-minimum solution for the standard/demo layout; supporting arbitrary layouts
-should move hot-aisle mapping into configuration.
+`SimulatedAisleTemperatureInputSource`. `StandardHotAisleCodeResolver` is only a
+demo-layout fallback; arbitrary layouts should configure `layout.hotAisles`.
 The default maximum reference temperature is `85.0 C`; it is an inference
 reference used to normalize the thermal ratio, not a universal health threshold
 and not a replacement for configured health hysteresis thresholds.
@@ -449,8 +462,10 @@ temperature source and `RackTemperatureInputSystem` writes observed rack
 temperature into `TemperatureSystem` for online servers. In
 `TEMPERATURE_DRIVEN/AISLE`, `TemperatureInputSourceFactory` creates an
 `AisleTemperatureToRackTemperatureInputSource` backed by
-`SimulatedAisleTemperatureInputSource` and `StandardHotAisleCodeResolver`; the
-adapted rack observations are then consumed by `RackTemperatureInputSystem`.
+`SimulatedAisleTemperatureInputSource`. If `layout.hotAisles` is present, the
+factory uses the configured column-to-hot-aisle mapping; otherwise it falls back
+to `StandardHotAisleCodeResolver` for the standard/demo layout. The adapted rack
+observations are then consumed by `RackTemperatureInputSystem`.
 In both temperature-driven granularities, server power and utilization are
 inferred before downstream energy and snapshot providers read state, and
 `TemperatureSystem` must not be registered later as a simulatable that
