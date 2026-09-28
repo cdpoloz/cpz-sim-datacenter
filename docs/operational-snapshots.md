@@ -67,17 +67,17 @@ aggregates.
 
 ## Hot-aisle temperature history
 
-`HotAisleTemperatureHistoryRecorder` records a rolling, in-memory series after
+`HotAisleTemperatureHistoryRecorder` records an in-memory series after
 each operational snapshot has been captured. It groups racks through the same
 `Function<RackLocation, String>` used to resolve hot-aisle codes; applications
 can therefore use `StandardHotAisleCodeResolver` or
 `ConfiguredHotAisleCodeResolver` for `layout.hotAisles`.
 
-The default retention is 60 samples per hot aisle (60 simulation minutes with
-the standard one-minute tick). Each `HotAisleTemperatureSample` contains the
-hot-aisle code, tick index, and average temperature. The average is weighted by
-the online-server count of each rack. Racks without online servers do not
-contribute, and an aisle without valid temperature data receives no sample.
+Each `HotAisleTemperatureSample` contains the hot-aisle code, tick index, and
+average temperature. The average is weighted by the online-server count of each
+rack. Racks without online servers do not contribute, and an aisle without valid
+temperature data receives no sample. Every valid sample is retained for the
+lifetime of the history instance; there is no maximum window or FIFO eviction.
 
 Pass the recorder to the extended `DatacenterSimulationHistoryRecorder`
 constructor. Its `record(tick)` call captures the operational snapshot and then
@@ -105,7 +105,9 @@ List<HotAisleTemperatureSample> series =
 ```
 
 `samples(code)` returns an immutable list in ascending tick order and returns an
-empty list for an unknown aisle or one with no samples. The history is not
-long-term persistence; creating a new recorder creates a new empty window, and
+empty list for an unknown aisle or one with no samples. The history remains in
+memory for the lifetime of the simulation instance and is not long-term
+persistence. Creating a new recorder creates an empty history, and
 `DatacenterSimulationHistoryRecorder.clear()` clears its attached hot-aisle
-history as well.
+history as well. Consumers such as the UI should choose how many of the retained
+samples to present based on available display space.
