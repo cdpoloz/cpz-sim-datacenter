@@ -342,6 +342,7 @@ class DatacenterOperationalSnapshotProviderTest {
         assertAll(
                 () -> assertEquals(TICK_INDEX, snapshot.tickIndex()),
                 () -> assertEquals(ELAPSED_SECONDS, snapshot.elapsedSeconds(), EPSILON),
+                () -> assertEquals(60.0, snapshot.roomTemperatureCelsius(), EPSILON),
                 () -> assertEquals(2, snapshot.rackCount()),
                 () -> assertEquals(3, populatedRack.installedServerCount()),
                 () -> assertEquals(2, populatedRack.onlineServerCount()),
@@ -432,6 +433,7 @@ class DatacenterOperationalSnapshotProviderTest {
                 () -> assertEquals(0, rack.onlineServerCount()),
                 () -> assertTrue(Double.isNaN(rack.averageOnlineTemperatureCelsius())),
                 () -> assertEquals(19.5, rack.representativeTemperatureCelsius(), EPSILON),
+                () -> assertEquals(19.5, snapshot.roomTemperatureCelsius(), EPSILON),
                 () -> assertTrue(rack.hasInstalledServers()),
                 () -> assertFalse(rack.hasOnlineServers())
         );
@@ -737,7 +739,7 @@ class DatacenterOperationalSnapshotProviderTest {
                 () -> assertEquals(2, snapshot.rackCount()),
                 () -> assertEquals(1, snapshot.columnCount()),
                 () -> assertEquals(
-                        24.0,
+                        60.0,
                         snapshot.roomTemperatureCelsius(),
                         EPSILON
                 )
@@ -1109,7 +1111,7 @@ class DatacenterOperationalSnapshotProviderTest {
                 () -> assertEquals(3, snapshot.rackCount()),
                 () -> assertEquals(2, snapshot.columnCount()),
                 () -> assertEquals(
-                        24.0,
+                        55.0,
                         snapshot.roomTemperatureCelsius(),
                         EPSILON
                 )
