@@ -77,8 +77,6 @@ ServerHealthOptions healthOptions =
         new ServerHealthOptionsFactory().create(definition);
 
 SimulationEngine engine = new SimulationEngine(new SimulationClock(Duration.ofMinutes(30)));
-engine.register(new WorkloadSystem(datacenter, workload));
-engine.register(new PowerConsumptionSystem(datacenter));
 
 TemperatureSystem temperatureSystem;
 ServerHealthSystem healthSystem;
@@ -91,7 +89,15 @@ if (maybeCoolingConfiguration.isEmpty()) {
     );
     healthSystem =
             new ServerHealthSystem(datacenter, temperatureSystem, healthOptions);
-    engine.register(temperatureSystem);
+    new DatacenterInputPipelineFactory().registerInputSystems(
+            engine,
+            definition,
+            datacenter,
+            temperatureSystem,
+            temperatureOptions,
+            workload,
+            null
+    );
     engine.register(healthSystem);
     engine.register(energySystem);
 
@@ -119,6 +125,8 @@ if (maybeCoolingConfiguration.isEmpty()) {
     healthSystem =
             new ServerHealthSystem(datacenter, temperatureSystem, healthOptions);
 
+    engine.register(new WorkloadSystem(datacenter, workload));
+    engine.register(new PowerConsumptionSystem(datacenter));
     SimulationTick tick = engine.step();
     CoolingTickInput coolingInput = new CoolingTickInput(
             tick.index(),
@@ -143,14 +151,22 @@ if (maybeCoolingConfiguration.isEmpty()) {
 Without cooling, the required system registration order is:
 
 ```text
-WorkloadSystem
--> PowerConsumptionSystem
--> TemperatureSystem
+DatacenterInputPipelineFactory input systems
 -> ServerHealthSystem
 -> EnergyConsumptionSystem
 ```
 
-With cooling enabled from JSON, the per-tick causal order becomes:
+`DatacenterInputPipelineFactory` is the recommended backend-owned assembly
+point for UI consumers. It chooses the correct input-side systems from
+`dataInputMode`, `powerInputGranularity`, and `temperatureInputGranularity`.
+Avoid duplicating local registration logic in the UI, such as always registering
+`WorkloadSystem`, `PowerConsumptionSystem`, and `TemperatureSystem`. In
+`TEMPERATURE_DRIVEN/AISLE`, the factory registers `RackTemperatureInputSystem`
+with a hot-aisle adapter; registering `TemperatureSystem` afterward as a
+simulatable would overwrite the observed temperature.
+
+With cooling enabled from JSON for a utilization-driven or power-driven
+temperature pipeline, the per-tick causal order becomes:
 
 ```text
 WorkloadSystem

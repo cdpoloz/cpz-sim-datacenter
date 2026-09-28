@@ -46,8 +46,8 @@ utilization and temperature, except that `OFFLINE` is preserved.
 
 ## When to Generate It
 
-Generate the snapshot after running the tick and after the systems have been
-updated in this order:
+Generate the snapshot after running the tick and after the systems for the
+active input mode have updated. For `UTILIZATION_DRIVEN`, the order is:
 
 ```text
 WorkloadSystem
@@ -59,6 +59,10 @@ WorkloadSystem
 
 The provider does not advance the simulation. It only reads the current state of
 the datacenter and the energy system.
+
+For `POWER_DRIVEN` and `TEMPERATURE_DRIVEN`, use
+`DatacenterInputPipelineFactory` to assemble the input-side systems, then run
+`ServerHealthSystem` and `EnergyConsumptionSystem` before reading snapshots.
 
 Temperature and health data are exposed separately through
 `TemperatureSnapshotProvider` and `HealthSnapshotProvider`. They are intentionally

@@ -33,12 +33,229 @@ Main fields:
 
 - `name`: non-blank datacenter name.
 - `layout.room`: optional metadata for the room associated with the active layout.
+- `layout.hotAisles`: optional hot-aisle to rack-column mapping for
+  `TEMPERATURE_DRIVEN/AISLE`.
 - `layout.racks`: available physical infrastructure.
 - `serverModels`: server model catalog.
 - `servers`: servers installed in specific racks and slots.
 - `temperature`: optional thermal model configuration.
 - `health`: optional server health threshold configuration.
 - `cooling`: optional cooling-system configuration.
+- `dataInputMode`: optional authoritative input mode. Defaults to
+  `UTILIZATION_DRIVEN`.
+- `powerInputGranularity`: optional power input granularity for
+  `POWER_DRIVEN`. Defaults to `SERVER`.
+- `temperatureInputGranularity`: optional temperature input granularity for
+  `TEMPERATURE_DRIVEN`. Defaults to `RACK`.
+
+## dataInputMode
+
+`dataInputMode` declares which external or simulated variable drives the
+datacenter simulation. If omitted, the backend uses `UTILIZATION_DRIVEN`.
+
+```json
+{
+  "name": "Demo Datacenter",
+  "dataInputMode": "UTILIZATION_DRIVEN",
+  "layout": {
+    "racks": []
+  },
+  "serverModels": [],
+  "servers": []
+}
+```
+
+Allowed values:
+
+- `UTILIZATION_DRIVEN`: utilization is supplied through `WorkloadSource`; the
+  backend derives IT power and server temperature.
+- `POWER_DRIVEN`: server power is supplied directly, for example from telemetry;
+  utilization is inferred from power, and the backend derives temperature from
+  that power.
+- `TEMPERATURE_DRIVEN`: observed rack or hot-aisle temperature is supplied
+  directly; rack/server temperature, power, and utilization are inferred from
+  that observed temperature.
+
+Rules:
+
+- If `dataInputMode` is absent, `DatacenterDefinition.dataInputMode()` returns
+  `UTILIZATION_DRIVEN`.
+- If present, `dataInputMode` must be a non-null string matching one of the
+  allowed enum names exactly.
+- Existing JSON configurations remain compatible because the default mode
+  preserves the historical utilization-driven behavior.
+- Consumers should use `DatacenterInputPipelineFactory` to register input
+  systems for the configured mode. It avoids duplicating mode-specific
+  registration rules in UI or telemetry code.
+- `TemperatureInputSourceFactory` is the backend factory that chooses
+  `SimulatedRackTemperatureInputSource` for `RACK` or the hot-aisle adapter
+  stack for `AISLE`.
+
+## powerInputGranularity
+
+`powerInputGranularity` selects the simulated power source granularity used by
+`POWER_DRIVEN`.
+
+Allowed values:
+
+- `SERVER`: power is simulated directly per server with
+  `NoiseServerPowerInputSource`.
+- `RACK`: power is simulated as aggregate rack power with
+  `NoiseRackPowerInputSource`, then adapted through
+  `RackPowerToServerPowerInputSource`.
+
+Rules:
+
+- If `powerInputGranularity` is absent, `DatacenterDefinition.powerInputGranularity()`
+  returns `SERVER`.
+- If present, it must be a non-null string matching one of the allowed enum names
+  exactly.
+- The field only affects `POWER_DRIVEN`. `UTILIZATION_DRIVEN` keeps its normal
+  workload-to-power behavior even if `powerInputGranularity` is present.
+- `PowerInputSystem` always receives a `ServerPowerInputSource`, so it does not
+  distinguish server-level input from rack-level input.
+
+Server-level power-driven example:
+
+```json
+{
+  "name": "Power Driven Server Example",
+  "dataInputMode": "POWER_DRIVEN",
+  "powerInputGranularity": "SERVER",
+  "layout": {
+    "racks": []
+  },
+  "serverModels": [],
+  "servers": []
+}
+```
+
+Rack-level power-driven example:
+
+```json
+{
+  "name": "Power Driven Rack Example",
+  "dataInputMode": "POWER_DRIVEN",
+  "powerInputGranularity": "RACK",
+  "layout": {
+    "racks": []
+  },
+  "serverModels": [],
+  "servers": []
+}
+```
+
+Rack-level policy:
+
+- `NoiseRackPowerInputSource` considers installed online servers only.
+- Rack power is calculated between aggregate idle and aggregate maximum power.
+- The activity range depends on the dominant online server role in the rack.
+- `RackPowerToServerPowerInputSource` distributes rack power to online servers.
+- If rack power exceeds online server physical capacity, per-server maximum
+  clamps apply and the distributed sum may not conserve the original rack power.
+
+## temperatureInputGranularity
+
+`temperatureInputGranularity` selects the observed temperature granularity used
+by `TEMPERATURE_DRIVEN`.
+
+Allowed values:
+
+- `RACK`: temperature is supplied per rack through `RackTemperatureInputSource`
+  and applied by `RackTemperatureInputSystem`.
+- `AISLE`: temperature is supplied per hot aisle through
+  `AisleTemperatureInputSource`, adapted to rack observations through
+  `AisleTemperatureToRackTemperatureInputSource`, and then applied by
+  `RackTemperatureInputSystem`.
+- Backend rack-temperature sources include fixed/manual values via
+  `MapRackTemperatureInputSource` and smooth deterministic simulated values via
+  `SimulatedRackTemperatureInputSource`.
+- Backend aisle-temperature sources include fixed/manual values via
+  `MapAisleTemperatureInputSource` and smooth deterministic simulated values via
+  `SimulatedAisleTemperatureInputSource`.
+
+Rules:
+
+- If `temperatureInputGranularity` is absent,
+  `DatacenterDefinition.temperatureInputGranularity()` returns `RACK`.
+- If present, it must be a non-null string matching an allowed enum name exactly.
+- The field only affects `TEMPERATURE_DRIVEN`; consumers should not interpret it
+  without also checking `dataInputMode`.
+- `TEMPERATURE_DRIVEN/SERVER` and `TEMPERATURE_DRIVEN/ROOM` are not implemented.
+- `TEMPERATURE_DRIVEN/AISLE` means hot aisle, not cold aisle.
+- When `layout.hotAisles` is present, `TemperatureInputSourceFactory` uses that
+  configuration to resolve each rack column to a hot-aisle code.
+- When `layout.hotAisles` is absent, the factory falls back to
+  `StandardHotAisleCodeResolver` for compatibility with the standard/demo
+  layout only.
+
+Standard/demo fallback hot-aisle mapping:
+
+```text
+C01       -> HA01
+C02 / C03 -> HA02
+C04 / C05 -> HA03
+C06 / C07 -> HA04
+C08       -> HA05
+```
+
+Columns sharing a hot aisle receive the same base observed temperature for the
+same tick. Per-rack differences within one hot aisle are future work requiring
+gradients, multiple sensors, localized recirculation, or another more detailed
+thermal model. Arbitrary layouts should declare `layout.hotAisles`.
+
+Rack-level temperature-driven example:
+
+```json
+{
+  "name": "Temperature Driven Rack Example",
+  "dataInputMode": "TEMPERATURE_DRIVEN",
+  "temperatureInputGranularity": "RACK",
+  "layout": {
+    "racks": []
+  },
+  "serverModels": [],
+  "servers": []
+}
+```
+
+Hot-aisle-level temperature-driven example:
+
+```json
+{
+  "name": "Temperature Driven Hot Aisle Example",
+  "dataInputMode": "TEMPERATURE_DRIVEN",
+  "temperatureInputGranularity": "AISLE",
+  "layout": {
+    "racks": []
+  },
+  "serverModels": [],
+  "servers": []
+}
+```
+
+Rack-level inference policy:
+
+- `RackTemperatureInputSystem` considers installed online servers only.
+- The observed rack temperature is written as the current temperature of online
+  servers in that rack.
+- In aisle-level mode, the observed hot-aisle temperature is first resolved to a
+  rack temperature using `layout.hotAisles` when configured, or the
+  standard/demo fallback resolver when that configuration is absent.
+- Power is inferred from the clamped ratio between ambient temperature and a
+  maximum reference temperature.
+- The default maximum reference temperature is `85.0 C`. It is an inference
+  reference for normalizing that ratio, not a universal health threshold and not
+  a replacement for configured health hysteresis thresholds.
+- Inferred power is clamped to each server's `idlePowerWatts..maxPowerWatts`
+  range.
+- Utilization is inferred from power through the same server helper used by
+  `POWER_DRIVEN`.
+- Offline servers keep zero power and zero utilization.
+- In `TEMPERATURE_DRIVEN`, `RackTemperatureInputSystem` writes observed or
+  adapted temperature into `TemperatureSystem`. Do not register
+  `TemperatureSystem` afterward as a simulatable in the same tick, or it will
+  recalculate temperature from power and overwrite the observed input.
 
 ## layout.room
 
@@ -68,6 +285,43 @@ Rules:
 - If `layout.room` is absent, `DatacenterDefinition.layout().room()` is `null`.
 - If `layout.room` is present, it cannot be `null`.
 - `layout.room.code` and `layout.room.name` are required when the block is present.
+
+## layout.hotAisles
+
+`layout.hotAisles` is optional for compatibility. When present, each entry
+declares one hot aisle code and the rack columns that share that hot aisle. In
+`TEMPERATURE_DRIVEN/AISLE`, aisle temperature input is interpreted as observed
+hot-aisle temperature; the backend uses this mapping to adapt each rack to the
+hot-aisle observation for its column.
+
+Example:
+
+```json
+{
+  "layout": {
+    "hotAisles": [
+      { "code": "HA01", "columns": ["C01"] },
+      { "code": "HA02", "columns": ["C02", "C03"] },
+      { "code": "HA03", "columns": ["C04", "C05"] },
+      { "code": "HA04", "columns": ["C06", "C07"] },
+      { "code": "HA05", "columns": ["C08"] }
+    ],
+    "racks": []
+  }
+}
+```
+
+Rules:
+
+- If `layout.hotAisles` is absent, `DatacenterDefinition.layout().hotAisles()`
+  is `null` and `TEMPERATURE_DRIVEN/AISLE` uses the standard/demo fallback.
+- If present, the list cannot contain `null` entries.
+- Each hot aisle `code` must be non-null and non-blank.
+- Each `columns` list must be non-null and non-empty.
+- Column codes cannot be null or blank.
+- Hot aisle codes cannot be duplicated.
+- A column cannot belong to more than one hot aisle.
+- Declared columns must exist in `layout.racks`.
 
 ## layout.racks
 

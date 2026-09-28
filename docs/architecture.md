@@ -15,7 +15,12 @@ backend.
 - `com.cpz.sim.datacenter.config.definition`: objects that represent JSON (`DatacenterDefinition`, `RackDefinition`, `ServerModelDefinition`, `ServerDefinition`) plus helpers for effective rack slots.
 - `com.cpz.sim.datacenter.config.json`: JSON loading with Jackson (`JsonDatacenterConfigLoader`).
 - `com.cpz.sim.datacenter.config.validation`: validation of definitions before building the domain.
-- `com.cpz.sim.datacenter.factory`: domain construction and option/provider factories (`DatacenterFactory`, `WorkloadFactorProviderFactory`, `TemperatureSystemOptionsFactory`, `ServerHealthOptionsFactory`).
+- `com.cpz.sim.datacenter.factory`: domain construction, option/provider
+  factories, and input-pipeline assembly (`DatacenterFactory`,
+  `WorkloadFactorProviderFactory`, `TemperatureSystemOptionsFactory`,
+  `ServerHealthOptionsFactory`, `TemperatureInputSourceFactory`,
+  `DatacenterInputPipelineFactory`).
+- `com.cpz.sim.datacenter.input`: data input modes and telemetry-source contracts.
 - `com.cpz.sim.datacenter.workload`: workload strategies (`WorkloadSource` and its implementations).
 - `com.cpz.sim.datacenter.temperature`: server thermal state and temperature model contracts.
 - `com.cpz.sim.datacenter.health`: health thresholds, alert reasons, and per-server health state.
@@ -107,7 +112,8 @@ and the health system does not overwrite it.
 The systems implement `Simulatable` from `cpz-sim-foundation` and are registered in
 `SimulationEngine`.
 
-Registration order matters:
+Registration order matters. For the default utilization-driven pipeline without
+cooling, the order is:
 
 ```text
 WorkloadSystem
@@ -120,14 +126,194 @@ WorkloadSystem
 Snapshot providers are readers of state after the systems update. They are not
 simulation systems and do not advance the simulation.
 
+## Data Input Modes
+
+`DatacenterDataInputMode` names the authoritative input variable for the
+simulation pipeline.
+
+### UTILIZATION_DRIVEN
+
+`UTILIZATION_DRIVEN` is the original and default pipeline.
+
+```text
+WorkloadSystem
+-> PowerConsumptionSystem
+-> CoolingSnapshotCoordinator
+-> TemperatureSystem
+-> ServerHealthSystem
+-> EnergyConsumptionSystem
+```
+
+In this mode, server utilization is supplied by `WorkloadSource`. Server power is
+derived from utilization through `PowerConsumptionSystem`, and temperature is
+derived from power/cooling through `TemperatureSystem`.
+
+### POWER_DRIVEN
+
+`POWER_DRIVEN` uses electrical power as the authoritative input.
+
+```text
+PowerInputSystem
+-> CoolingSnapshotCoordinator
+-> TemperatureSystem
+-> ServerHealthSystem
+-> EnergyConsumptionSystem
+```
+
+In this mode, `PowerInputSystem` writes `Server.currentPowerWatts` from a
+`ServerPowerInputSource`. The backend keeps `Server.utilization` populated as an
+estimated value derived from current power:
+
+```text
+(currentPowerWatts - idlePowerWatts) / (maxPowerWatts - idlePowerWatts)
+```
+
+The estimated utilization is clamped to `[0, 1]`. It exists for health checks,
+snapshots, and UI compatibility. It should not be interpreted as a measured
+utilization signal. Temperature remains derived from power/cooling through
+`TemperatureSystem`.
+
+A simulated implementation can use `NoiseServerPowerInputSource`, optionally
+with role-based factors through `ServerRolePowerFactorProvider`.
+
+Power input can be simulated at two granularities:
+
+```text
+SERVER:
+NoiseServerPowerInputSource
+-> PowerInputSystem
+
+RACK:
+NoiseRackPowerInputSource
+-> RackPowerToServerPowerInputSource
+-> PowerInputSystem
+```
+
+`PowerInputSystem` always consumes a `ServerPowerInputSource`, so it does not
+know whether power originated per server or as aggregate rack power. With
+`PowerInputGranularity.SERVER`, power is generated directly per server. With
+`PowerInputGranularity.RACK`, rack power is generated first and then distributed
+to online servers in the rack.
+
+`NoiseRackPowerInputSource` sums idle and maximum power across installed online
+servers in each rack. It computes aggregate rack power between aggregate idle and
+aggregate maximum power. The activity range is chosen from the dominant online
+server role in the rack. `RackPowerToServerPowerInputSource` distributes rack
+power to installed online servers using server electrical capacity weights. If
+the rack-level input exceeds online server physical capacity, server-level
+maximum power clamps apply and the distributed sum may be lower than the rack
+input.
+
+### TEMPERATURE_DRIVEN
+
+`TEMPERATURE_DRIVEN` uses observed temperature as the authoritative input. The
+backend supports rack-level input and hot-aisle-level input adapted to rack
+observations.
+
+```text
+RACK:
+RackTemperatureInputSource
+-> RackTemperatureInputSystem
+-> TemperatureSystem state
+-> EnergyConsumptionSystem / snapshot providers
+
+AISLE:
+AisleTemperatureInputSource
+-> AisleTemperatureToRackTemperatureInputSource
+-> RackTemperatureInputSystem
+-> TemperatureSystem state
+-> EnergyConsumptionSystem / snapshot providers
+```
+
+`RackTemperatureInputSystem` reads one observed temperature per rack and applies
+it to installed online servers in that rack. It infers server power from a
+clamped temperature ratio:
+
+```text
+(observedRackTemperatureCelsius - ambientTemperatureCelsius)
+/ (maxReferenceTemperatureCelsius - ambientTemperatureCelsius)
+```
+
+The ratio is clamped to `[0, 1]`, then mapped onto each online server's
+`idlePowerWatts..maxPowerWatts` range. Server utilization is inferred from that
+power through the same `Server.estimateUtilizationFromCurrentPower()` path used
+by power-driven input. Offline servers keep zero power and zero utilization.
+Rack temperature input can come from fixed/manual values through
+`MapRackTemperatureInputSource` or from smooth deterministic backend simulation
+through `SimulatedRackTemperatureInputSource`.
+Hot-aisle temperature input follows the same inference policy after
+`AisleTemperatureToRackTemperatureInputSource` resolves each rack to a hot-aisle
+code. `TemperatureInputSourceFactory` wires
+`AisleTemperatureToRackTemperatureInputSource` with
+`SimulatedAisleTemperatureInputSource`; when `layout.hotAisles` is present it
+uses the configured mapping, and when it is absent it keeps
+`StandardHotAisleCodeResolver` as a standard/demo fallback:
+
+```text
+C01       -> HA01
+C02 / C03 -> HA02
+C04 / C05 -> HA03
+C06 / C07 -> HA04
+C08       -> HA05
+```
+
+`AISLE` means hot aisle, not cold aisle. Columns sharing the same hot aisle
+receive the same base observed temperature for the same tick. Per-rack
+differences within one hot aisle would require a future model for gradients,
+multiple sensors, distance to extraction, localized recirculation, or similar
+effects. `StandardHotAisleCodeResolver` is only a fallback for the demo layout;
+arbitrary layouts should configure `layout.hotAisles`.
+The default maximum reference temperature is `85.0 C`; it is only an inference
+reference for normalizing the ratio above. It is not a universal health limit
+and does not replace the server-health temperature thresholds.
+
+The current implementation intentionally does not model per-slot gradients,
+room-level input, or server-level temperature telemetry.
+
+`TemperatureInputSourceFactory` is the productive factory for temperature input
+sources by `TemperatureInputGranularity`. `DatacenterInputPipelineFactory` is
+the productive assembly point for registering input systems by
+`DatacenterDataInputMode`. UI and telemetry consumers should delegate to it
+instead of duplicating local `WorkloadSystem`, `PowerConsumptionSystem`,
+`RackTemperatureInputSystem`, or `TemperatureSystem` registration logic.
+`DatacenterDataInputModePlanner` remains useful when consumers need to inspect
+which state transitions a mode expects without registering systems. JSON
+definitions default to `UTILIZATION_DRIVEN` when `dataInputMode` is omitted.
+
 ## Causal Order
 
-1. `WorkloadSystem` computes `Server.utilization` for each operational server.
-2. `PowerConsumptionSystem` recalculates `Server.currentPowerWatts`.
-3. `TemperatureSystem` updates a representative internal server temperature from current server power.
-4. `ServerHealthSystem` evaluates current utilization and temperature, updates active alert reasons, and derives `HardwareStatus` for every non-`OFFLINE` server.
-5. `EnergyConsumptionSystem` integrates accumulated energy using total IT power and `tick.deltaSeconds()`.
-6. Snapshot providers such as `EnergyConsumptionSnapshotProvider`, `TemperatureSnapshotProvider`, and `HealthSnapshotProvider` read the resulting state and build immutable DTOs.
+The input-side systems differ by mode:
+
+```text
+UTILIZATION_DRIVEN:
+WorkloadSystem
+-> PowerConsumptionSystem
+-> TemperatureSystem
+
+POWER_DRIVEN/SERVER or POWER_DRIVEN/RACK:
+PowerInputSystem
+-> TemperatureSystem
+
+TEMPERATURE_DRIVEN/RACK or TEMPERATURE_DRIVEN/AISLE:
+RackTemperatureInputSystem
+```
+
+After the active input-side pipeline has updated utilization, power, and
+temperature state, common downstream systems can run:
+
+```text
+ServerHealthSystem
+-> EnergyConsumptionSystem
+-> snapshot providers
+```
+
+In `TEMPERATURE_DRIVEN`, `RackTemperatureInputSystem` writes the observed or
+adapted temperature directly into `TemperatureSystem` state. Do not register
+`TemperatureSystem` afterward as a simulatable in the same tick, because that
+would recalculate temperature from power and overwrite the observed input.
+Snapshot providers such as `EnergyConsumptionSnapshotProvider`,
+`TemperatureSnapshotProvider`, and `HealthSnapshotProvider` read the resulting
+state and build immutable DTOs.
 
 If this order is changed, power, temperature, health, or energy values may not
 represent the same tick.
@@ -157,8 +343,8 @@ preserved.
 
 ## Current Energy Rules
 
-The power of an operational server is calculated linearly between `idlePowerWatts`
-and `maxPowerWatts`:
+In `UTILIZATION_DRIVEN`, the power of an operational server is calculated
+linearly between `idlePowerWatts` and `maxPowerWatts`:
 
 ```text
 idlePowerWatts + utilization * (maxPowerWatts - idlePowerWatts)
@@ -166,6 +352,12 @@ idlePowerWatts + utilization * (maxPowerWatts - idlePowerWatts)
 
 If the server is `OFFLINE`, `Server.updatePowerConsumption()` leaves
 `currentPowerWatts` at `0.0f`.
+
+In `POWER_DRIVEN`, `PowerInputSystem` sets `currentPowerWatts` directly from a
+`ServerPowerInputSource`. The backend then estimates utilization from the
+current power value so existing snapshots and health checks continue to receive
+a utilization value. The `ServerPowerInputSource` may be direct server-level
+input or a rack-level adapter.
 
 `EnergyConsumptionSystem` accumulates energy in Wh:
 
@@ -177,8 +369,8 @@ consumedEnergyWh += datacenter.getTotalItPowerWatts() * (tick.deltaSeconds() / 3
 
 - Preliminary API.
 - Temperature is currently a simplified server-level internal model.
-- No cooling model yet.
-- No rack inlet, room temperature, airflow, or rack-to-rack thermal coupling.
+- Cooling is a simplified zone-level model.
+- No detailed rack-to-rack thermal coupling.
 - No advanced electrical model.
 - No UI.
 - No result persistence.

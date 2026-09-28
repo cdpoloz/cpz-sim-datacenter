@@ -11,6 +11,7 @@ import com.cpz.sim.datacenter.config.definition.CoolingSystemOptionsDefinition;
 import com.cpz.sim.datacenter.config.definition.CoolingZoneConfigDefinition;
 import com.cpz.sim.datacenter.config.definition.CoolingZoneInfluenceConfigDefinition;
 import com.cpz.sim.datacenter.config.definition.ExhaustCoolingUnitConfigDefinition;
+import com.cpz.sim.datacenter.config.definition.HotAisleDefinition;
 import com.cpz.sim.datacenter.config.definition.SupplyCoolingUnitConfigDefinition;
 import com.cpz.sim.datacenter.model.ServerRole;
 import org.junit.jupiter.api.Test;
@@ -94,6 +95,13 @@ class DatacenterConfigValidatorTest {
         return new DatacenterLayoutDefinition(racks);
     }
 
+    private static DatacenterLayoutDefinition layout(
+            List<RackDefinition> racks,
+            List<HotAisleDefinition> hotAisles
+    ) {
+        return new DatacenterLayoutDefinition(null, hotAisles, racks);
+    }
+
     @Test
     void shouldRejectNullDefinition() {
         assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(null));
@@ -163,6 +171,139 @@ class DatacenterConfigValidatorTest {
                 List.of(server("R01", "S01", 1.0f))
         );
         assertDoesNotThrow(() -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldAcceptValidHotAisleConfiguration() {
+        DatacenterDefinition definition = definition(
+                layout(
+                        List.of(
+                                new RackDefinition("R01", "C01", "R01", List.of("S01")),
+                                new RackDefinition("R02", "C02", "R01", List.of("S01")),
+                                new RackDefinition("R03", "C03", "R01", List.of("S01"))
+                        ),
+                        List.of(
+                                new HotAisleDefinition("HA01", List.of("C01")),
+                                new HotAisleDefinition("HA02", List.of("C02", "C03"))
+                        )
+                ),
+                List.of()
+        );
+
+        assertDoesNotThrow(() -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectNullHotAisleElement() {
+        List<HotAisleDefinition> hotAisles = new ArrayList<>();
+        hotAisles.add(new HotAisleDefinition("HA01", List.of("C01")));
+        hotAisles.add(null);
+        DatacenterDefinition definition = definition(
+                layout(List.of(new RackDefinition("R01", "C01", "R01", List.of("S01"))), hotAisles),
+                List.of()
+        );
+
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectHotAisleWithBlankCode() {
+        DatacenterDefinition definition = definition(
+                layout(
+                        List.of(new RackDefinition("R01", "C01", "R01", List.of("S01"))),
+                        List.of(new HotAisleDefinition(" ", List.of("C01")))
+                ),
+                List.of()
+        );
+
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectHotAisleWithNullColumns() {
+        DatacenterDefinition definition = definition(
+                layout(
+                        List.of(new RackDefinition("R01", "C01", "R01", List.of("S01"))),
+                        List.of(new HotAisleDefinition("HA01", null))
+                ),
+                List.of()
+        );
+
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectHotAisleWithEmptyColumns() {
+        DatacenterDefinition definition = definition(
+                layout(
+                        List.of(new RackDefinition("R01", "C01", "R01", List.of("S01"))),
+                        List.of(new HotAisleDefinition("HA01", List.of()))
+                ),
+                List.of()
+        );
+
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectHotAisleWithBlankColumn() {
+        DatacenterDefinition definition = definition(
+                layout(
+                        List.of(new RackDefinition("R01", "C01", "R01", List.of("S01"))),
+                        List.of(new HotAisleDefinition("HA01", List.of(" ")))
+                ),
+                List.of()
+        );
+
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectDuplicatedHotAisleCode() {
+        DatacenterDefinition definition = definition(
+                layout(
+                        List.of(
+                                new RackDefinition("R01", "C01", "R01", List.of("S01")),
+                                new RackDefinition("R02", "C02", "R01", List.of("S01"))
+                        ),
+                        List.of(
+                                new HotAisleDefinition("HA01", List.of("C01")),
+                                new HotAisleDefinition("HA01", List.of("C02"))
+                        )
+                ),
+                List.of()
+        );
+
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectColumnDuplicatedInMultipleHotAisles() {
+        DatacenterDefinition definition = definition(
+                layout(
+                        List.of(new RackDefinition("R01", "C01", "R01", List.of("S01"))),
+                        List.of(
+                                new HotAisleDefinition("HA01", List.of("C01")),
+                                new HotAisleDefinition("HA02", List.of("C01"))
+                        )
+                ),
+                List.of()
+        );
+
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
+    }
+
+    @Test
+    void shouldRejectHotAisleColumnMissingFromLayoutRacks() {
+        DatacenterDefinition definition = definition(
+                layout(
+                        List.of(new RackDefinition("R01", "C01", "R01", List.of("S01"))),
+                        List.of(new HotAisleDefinition("HA01", List.of("C02")))
+                ),
+                List.of()
+        );
+
+        assertThrows(DatacenterConfigValidationException.class, () -> validator.validate(definition));
     }
 
     @Test

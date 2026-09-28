@@ -137,6 +137,26 @@ public final class TemperatureSystem implements Simulatable {
     }
 
     /**
+     * Sets the current thermal state of an installed server directly.
+     *
+     * <p>This method is intended for temperature-driven simulations where a
+     * telemetry adapter supplies measured temperatures instead of deriving them
+     * from server power.</p>
+     *
+     * @param serverCode server code
+     * @param temperatureCelsius temperature in degrees Celsius
+     */
+    public void setTemperatureCelsius(String serverCode, double temperatureCelsius) {
+        String code = requireNonBlank(serverCode, "serverCode");
+        if (!Double.isFinite(temperatureCelsius))
+            throw new IllegalArgumentException("temperatureCelsius must be finite");
+        ServerThermalState state = thermalStates.get(code);
+        if (state == null)
+            throw new IllegalArgumentException("Unknown server code: " + code);
+        state.setTemperatureCelsius(temperatureCelsius);
+    }
+
+    /**
      * Returns the current thermal state of all installed servers.
      */
     public Collection<ServerThermalState> getThermalStates() {

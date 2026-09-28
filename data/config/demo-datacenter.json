@@ -1,6 +1,28 @@
 {
   "name": "Demo Datacenter",
   "layout": {
+    "hotAisles": [
+      {
+        "code": "HA01",
+        "columns": ["C01"]
+      },
+      {
+        "code": "HA02",
+        "columns": ["C02", "C03"]
+      },
+      {
+        "code": "HA03",
+        "columns": ["C04", "C05"]
+      },
+      {
+        "code": "HA04",
+        "columns": ["C06", "C07"]
+      },
+      {
+        "code": "HA05",
+        "columns": ["C08"]
+      }
+    ],
     "racks": [
       {
         "code": "RACK-C01-R01",
@@ -12,6 +34,48 @@
         "code": "RACK-C01-R02",
         "column": "C01",
         "row": "R02",
+        "slotCount": 42
+      },
+      {
+        "code": "RACK-C02-R01",
+        "column": "C02",
+        "row": "R01",
+        "slotCount": 42
+      },
+      {
+        "code": "RACK-C03-R01",
+        "column": "C03",
+        "row": "R01",
+        "slotCount": 42
+      },
+      {
+        "code": "RACK-C04-R01",
+        "column": "C04",
+        "row": "R01",
+        "slotCount": 42
+      },
+      {
+        "code": "RACK-C05-R01",
+        "column": "C05",
+        "row": "R01",
+        "slotCount": 42
+      },
+      {
+        "code": "RACK-C06-R01",
+        "column": "C06",
+        "row": "R01",
+        "slotCount": 42
+      },
+      {
+        "code": "RACK-C07-R01",
+        "column": "C07",
+        "row": "R01",
+        "slotCount": 42
+      },
+      {
+        "code": "RACK-C08-R01",
+        "column": "C08",
+        "row": "R01",
         "slotCount": 42
       }
     ]

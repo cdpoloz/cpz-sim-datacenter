@@ -5,6 +5,9 @@ import com.cpz.sim.datacenter.config.definition.DatacenterDefinition;
 import com.cpz.sim.datacenter.config.definition.RackDefinition;
 import com.cpz.sim.datacenter.config.validation.DatacenterConfigValidationException;
 import com.cpz.sim.datacenter.factory.DatacenterFactory;
+import com.cpz.sim.datacenter.input.DatacenterDataInputMode;
+import com.cpz.sim.datacenter.input.PowerInputGranularity;
+import com.cpz.sim.datacenter.input.TemperatureInputGranularity;
 import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.model.ServerRole;
 import com.cpz.sim.datacenter.model.ServerThermalProperties;
@@ -69,8 +72,17 @@ class JsonDatacenterConfigLoaderTest {
     }
 
     private Path writeSingleServerConfig(String thermalProperties, String roleProperty) throws IOException {
+        return writeSingleServerConfig("", thermalProperties, roleProperty);
+    }
+
+    private Path writeSingleServerConfig(
+            String rootProperties,
+            String thermalProperties,
+            String roleProperty
+    ) throws IOException {
         String json = """
                 {
+                  %s
                   "name": "Role Test Datacenter",
                   "layout": {
                     "racks": [
@@ -102,7 +114,7 @@ class JsonDatacenterConfigLoaderTest {
                     }
                   ]
                 }
-                """.formatted(thermalProperties, roleProperty);
+                """.formatted(rootProperties, thermalProperties, roleProperty);
         return Files.writeString(tempDirectory.resolve("server-role.json"), json);
     }
 
@@ -142,6 +154,158 @@ class JsonDatacenterConfigLoaderTest {
         assertNull(definition.temperature());
         assertNull(definition.health());
         assertNull(definition.cooling());
+        assertEquals(DatacenterDataInputMode.UTILIZATION_DRIVEN, definition.dataInputMode());
+        assertEquals(PowerInputGranularity.SERVER, definition.powerInputGranularity());
+        assertEquals(TemperatureInputGranularity.RACK, definition.temperatureInputGranularity());
+    }
+
+    @Test
+    void shouldDefaultDataInputModeToUtilizationDriven() throws IOException {
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(
+                writeSingleServerConfig("", "")
+        );
+
+        assertEquals(DatacenterDataInputMode.UTILIZATION_DRIVEN, definition.dataInputMode());
+    }
+
+    @Test
+    void shouldDefaultPowerInputGranularityToServer() throws IOException {
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(
+                writeSingleServerConfig("", "")
+        );
+
+        assertEquals(PowerInputGranularity.SERVER, definition.powerInputGranularity());
+    }
+
+    @Test
+    void shouldDefaultTemperatureInputGranularityToRack() throws IOException {
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(
+                writeSingleServerConfig("", "")
+        );
+
+        assertEquals(TemperatureInputGranularity.RACK, definition.temperatureInputGranularity());
+    }
+
+    @ParameterizedTest
+    @EnumSource(DatacenterDataInputMode.class)
+    void shouldLoadExplicitDataInputMode(DatacenterDataInputMode mode) throws IOException {
+        Path configPath = writeSingleServerConfig(
+                "\"dataInputMode\": \"" + mode.name() + "\",",
+                "",
+                ""
+        );
+
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(configPath);
+
+        assertEquals(mode, definition.dataInputMode());
+    }
+
+    @ParameterizedTest
+    @EnumSource(PowerInputGranularity.class)
+    void shouldLoadExplicitPowerInputGranularity(PowerInputGranularity granularity) throws IOException {
+        Path configPath = writeSingleServerConfig(
+                "\"powerInputGranularity\": \"" + granularity.name() + "\",",
+                "",
+                ""
+        );
+
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(configPath);
+
+        assertEquals(granularity, definition.powerInputGranularity());
+    }
+
+    @ParameterizedTest
+    @EnumSource(TemperatureInputGranularity.class)
+    void shouldLoadExplicitTemperatureInputGranularity(TemperatureInputGranularity granularity) throws IOException {
+        Path configPath = writeSingleServerConfig(
+                "\"temperatureInputGranularity\": \"" + granularity.name() + "\",",
+                "",
+                ""
+        );
+
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(configPath);
+
+        assertEquals(granularity, definition.temperatureInputGranularity());
+    }
+
+    @Test
+    void shouldKeepUtilizationDrivenModeWhenPowerInputGranularityIsRack() throws IOException {
+        Path configPath = writeSingleServerConfig(
+                """
+                        "dataInputMode": "UTILIZATION_DRIVEN",
+                        "powerInputGranularity": "RACK",""",
+                "",
+                ""
+        );
+
+        DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(configPath);
+
+        assertEquals(DatacenterDataInputMode.UTILIZATION_DRIVEN, definition.dataInputMode());
+        assertEquals(PowerInputGranularity.RACK, definition.powerInputGranularity());
+    }
+
+    @Test
+    void shouldRejectNullDataInputMode() throws IOException {
+        Path configPath = writeSingleServerConfig(
+                "\"dataInputMode\": null,",
+                "",
+                ""
+        );
+
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(configPath)
+        );
+
+        assertTrue(exception.getMessage().contains("dataInputMode cannot be null"));
+    }
+
+    @Test
+    void shouldRejectUnknownDataInputMode() throws IOException {
+        Path configPath = writeSingleServerConfig(
+                "\"dataInputMode\": \"UNKNOWN_MODE\",",
+                "",
+                ""
+        );
+
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(configPath)
+        );
+
+        assertTrue(exception.getMessage().contains("Unknown dataInputMode 'UNKNOWN_MODE'"));
+    }
+
+    @Test
+    void shouldRejectUnknownPowerInputGranularity() throws IOException {
+        Path configPath = writeSingleServerConfig(
+                "\"powerInputGranularity\": \"ROOM\",",
+                "",
+                ""
+        );
+
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(configPath)
+        );
+
+        assertTrue(exception.getMessage().contains("Unknown powerInputGranularity 'ROOM'"));
+    }
+
+    @Test
+    void shouldRejectUnknownTemperatureInputGranularity() throws IOException {
+        Path configPath = writeSingleServerConfig(
+                "\"temperatureInputGranularity\": \"SERVER\",",
+                "",
+                ""
+        );
+
+        DatacenterConfigException exception = assertThrows(
+                DatacenterConfigException.class,
+                () -> new JsonDatacenterConfigLoader().load(configPath)
+        );
+
+        assertTrue(exception.getMessage().contains("Unknown temperatureInputGranularity 'SERVER'"));
     }
 
     @Test
@@ -403,6 +567,33 @@ class JsonDatacenterConfigLoaderTest {
     }
 
     @Test
+    void shouldLoadDatacenterDefinitionWithLayoutHotAisles()
+            throws IOException {
+        Path path = writeConfigWithHotAisles("""
+        [
+          {
+            "code": "HA01",
+            "columns": ["A01"]
+          },
+          {
+            "code": "HA02",
+            "columns": ["A02", "A03"]
+          }
+        ]
+        """);
+
+        DatacenterDefinition definition =
+                new JsonDatacenterConfigLoader().load(path);
+
+        assertNotNull(definition.layout().hotAisles());
+        assertEquals(2, definition.layout().hotAisles().size());
+        assertEquals("HA01", definition.layout().hotAisles().getFirst().code());
+        assertEquals(List.of("A01"), definition.layout().hotAisles().getFirst().columns());
+        assertEquals("HA02", definition.layout().hotAisles().get(1).code());
+        assertEquals(List.of("A02", "A03"), definition.layout().hotAisles().get(1).columns());
+    }
+
+    @Test
     void shouldLoadDatacenterDefinitionWithExplicitSlots() {
         JsonDatacenterConfigLoader loader = new JsonDatacenterConfigLoader();
         DatacenterDefinition definition = loader.load(resourcePath("datacenter/explicit-slots-datacenter.json"));
@@ -536,6 +727,19 @@ class JsonDatacenterConfigLoaderTest {
 
     private Path writeConfigWithRoom(String roomValue)
             throws IOException {
+        return writeConfigWithLayoutProperty("room", roomValue, "datacenter-with-room.json");
+    }
+
+    private Path writeConfigWithHotAisles(String hotAislesValue)
+            throws IOException {
+        return writeConfigWithLayoutProperty("hotAisles", hotAislesValue, "datacenter-with-hot-aisles.json");
+    }
+
+    private Path writeConfigWithLayoutProperty(
+            String propertyName,
+            String propertyValue,
+            String fileName
+    ) throws IOException {
         String originalJson = Files.readString(
                 resourcePath("datacenter/valid-datacenter.json")
         );
@@ -561,13 +765,15 @@ class JsonDatacenterConfigLoaderTest {
 
         String jsonWithRoom =
                 originalJson.substring(0, insertionIndex)
-                        + "    \"room\": "
-                        + roomValue
+                        + "    \""
+                        + propertyName
+                        + "\": "
+                        + propertyValue
                         + ",\n"
                         + originalJson.substring(insertionIndex);
 
         return Files.writeString(
-                tempDirectory.resolve("datacenter-with-room.json"),
+                tempDirectory.resolve(fileName),
                 jsonWithRoom
         );
     }

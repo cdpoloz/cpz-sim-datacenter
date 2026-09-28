@@ -72,6 +72,42 @@ public class Server {
     }
 
     /**
+     * Sets the current server power directly.
+     *
+     * <p>This method is intended for power-driven simulations where server
+     * power is supplied by telemetry or another external source instead of
+     * being calculated from utilization.</p>
+     *
+     * @param currentPowerWatts current electrical power in watts
+     */
+    public void setCurrentPowerWatts(double currentPowerWatts) {
+        if (!Double.isFinite(currentPowerWatts) || currentPowerWatts < 0.0)
+            throw new IllegalArgumentException("currentPowerWatts must be finite and >= 0");
+        if (status == HardwareStatus.OFFLINE && currentPowerWatts != 0.0)
+            throw new IllegalArgumentException("currentPowerWatts must be 0.0 for OFFLINE servers");
+        if (currentPowerWatts > config.maxPowerWatts())
+            throw new IllegalArgumentException("currentPowerWatts must not exceed maxPowerWatts");
+        this.currentPowerWatts = (float) currentPowerWatts;
+    }
+
+    /**
+     * Estimates utilization from the current power value.
+     *
+     * <p>This is intended for power-driven simulations where power is the
+     * authoritative input and utilization is only an estimated value derived for
+     * snapshots, health checks, and UI compatibility.</p>
+     */
+    public void estimateUtilizationFromCurrentPower() {
+        if (status == HardwareStatus.OFFLINE) {
+            utilization = 0.0;
+            return;
+        }
+        double dynamicPowerRange = config.maxPowerWatts() - config.idlePowerWatts();
+        double estimatedUtilization = (currentPowerWatts - config.idlePowerWatts()) / dynamicPowerRange;
+        utilization = Math.clamp(estimatedUtilization, 0.0, 1.0);
+    }
+
+    /**
      * Returns the server's primary functional role.
      *
      * @return the non-null role assigned when the server was constructed

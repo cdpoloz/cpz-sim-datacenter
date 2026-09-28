@@ -25,7 +25,7 @@ The system currently evaluates only utilization and temperature. Other
 
 ## Pipeline Position
 
-Register systems in this causal order:
+For `UTILIZATION_DRIVEN`, register systems in this causal order:
 
 ```text
 WorkloadSystem
@@ -35,9 +35,11 @@ WorkloadSystem
 -> EnergyConsumptionSystem
 ```
 
-`ServerHealthSystem` must run after workload and temperature have been updated so
-that it evaluates values from the current tick. Running snapshot providers after
-the complete pipeline exposes the resulting status consistently.
+For `POWER_DRIVEN` and `TEMPERATURE_DRIVEN`, the input-side systems differ.
+Prefer `DatacenterInputPipelineFactory` for the input-side registration, then
+run `ServerHealthSystem` after utilization, power, and temperature state have
+been updated for the tick. Running snapshot providers after the complete
+pipeline exposes the resulting status consistently.
 
 ## Status Lifecycle and OFFLINE Priority
 

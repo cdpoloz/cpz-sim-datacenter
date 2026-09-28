@@ -55,6 +55,55 @@ class ServerTest {
     }
 
     @Test
+    void shouldAcceptDirectCurrentPowerForPowerDrivenMode() {
+        server.setCurrentPowerWatts(250.0);
+
+        assertEquals(250.0f, server.getCurrentPowerWatts());
+    }
+
+    @Test
+    void shouldRejectNegativeDirectCurrentPower() {
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> server.setCurrentPowerWatts(-1.0)
+        );
+
+        assertEquals("currentPowerWatts must be finite and >= 0", exception.getMessage());
+    }
+
+    @Test
+    void shouldRejectNonFiniteDirectCurrentPower() {
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> server.setCurrentPowerWatts(Double.POSITIVE_INFINITY)
+        );
+
+        assertEquals("currentPowerWatts must be finite and >= 0", exception.getMessage());
+    }
+
+    @Test
+    void shouldRejectDirectCurrentPowerAboveConfiguredMaximum() {
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> server.setCurrentPowerWatts(301.0)
+        );
+
+        assertEquals("currentPowerWatts must not exceed maxPowerWatts", exception.getMessage());
+    }
+
+    @Test
+    void shouldRejectNonZeroDirectCurrentPowerForOfflineServer() {
+        server.setStatus(HardwareStatus.OFFLINE);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> server.setCurrentPowerWatts(100.0)
+        );
+
+        assertEquals("currentPowerWatts must be 0.0 for OFFLINE servers", exception.getMessage());
+    }
+
+    @Test
     void shouldRejectUtilizationBelowZero() {
         assertThrows(IllegalArgumentException.class, () -> server.setUtilization(-0.01));
     }

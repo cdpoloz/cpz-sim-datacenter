@@ -3,6 +3,9 @@ package com.cpz.sim.datacenter.config.json;
 import com.cpz.sim.datacenter.config.DatacenterConfigException;
 import com.cpz.sim.datacenter.config.DatacenterConfigLoader;
 import com.cpz.sim.datacenter.config.definition.*;
+import com.cpz.sim.datacenter.input.DatacenterDataInputMode;
+import com.cpz.sim.datacenter.input.PowerInputGranularity;
+import com.cpz.sim.datacenter.input.TemperatureInputGranularity;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -21,6 +24,8 @@ import java.util.Objects;
 public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader {
 
     private static final TypeReference<List<RackDefinition>> RACKS_TYPE = new TypeReference<>() {
+    };
+    private static final TypeReference<List<HotAisleDefinition>> HOT_AISLES_TYPE = new TypeReference<>() {
     };
     private static final TypeReference<List<ServerModelDefinition>> SERVER_MODELS_TYPE = new TypeReference<>() {
     };
@@ -43,7 +48,10 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
                     readRequired(root, "servers", path, SERVERS_TYPE),
                     readOptionalTemperature(root, path),
                     readOptionalHealth(root, path),
-                    readOptionalCooling(root, path)
+                    readOptionalCooling(root, path),
+                    readOptionalDataInputMode(root, path),
+                    readOptionalPowerInputGranularity(root, path),
+                    readOptionalTemperatureInputGranularity(root, path)
             );
         } catch (IOException exception) {
             throw new DatacenterConfigException("Could not load datacenter config from path: " + path, exception);
@@ -57,10 +65,11 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
         if (!layoutNode.isObject())
             throw new DatacenterConfigException("Layout block must be an object in datacenter config: " + path);
 
-        rejectUnknownProperties(layoutNode, List.of("room", "racks"), "layout", path);
+        rejectUnknownProperties(layoutNode, List.of("room", "hotAisles", "racks"), "layout", path);
 
         return new DatacenterLayoutDefinition(
                 readOptionalRoom(layoutNode, path),
+                readOptionalHotAisles(layoutNode, path),
                 readRequired(layoutNode, "racks", path, RACKS_TYPE)
         );
     }
@@ -81,6 +90,14 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
         return JSON_MAPPER.readValue(roomNode.traverse(JSON_MAPPER), RoomDefinition.class);
     }
 
+    private static List<HotAisleDefinition> readOptionalHotAisles(JsonNode root, Path path) throws IOException {
+        JsonNode hotAislesNode = root.get("hotAisles");
+        if (hotAislesNode == null) return null;
+        if (hotAislesNode.isNull())
+            throw new DatacenterConfigException("layout.hotAisles cannot be null in datacenter config: " + path);
+        return JSON_MAPPER.readValue(hotAislesNode.traverse(JSON_MAPPER), HOT_AISLES_TYPE);
+    }
+
     private static HealthSystemOptionsDefinition readOptionalHealth(JsonNode root, Path path) throws IOException {
         JsonNode healthNode = root.get("health");
         if (healthNode == null) return null;
@@ -94,6 +111,57 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
         if (coolingNode == null) return null;
         if (coolingNode.isNull()) throw new DatacenterConfigException("Cooling block cannot be null in datacenter config: " + path);
         return JSON_MAPPER.readValue(coolingNode.traverse(JSON_MAPPER), CoolingConfigDefinition.class);
+    }
+
+    private static DatacenterDataInputMode readOptionalDataInputMode(JsonNode root, Path path) {
+        JsonNode modeNode = root.get("dataInputMode");
+        if (modeNode == null) return DatacenterDataInputMode.UTILIZATION_DRIVEN;
+        if (modeNode.isNull())
+            throw new DatacenterConfigException("dataInputMode cannot be null in datacenter config: " + path);
+        if (!modeNode.isTextual())
+            throw new DatacenterConfigException("dataInputMode must be a string in datacenter config: " + path);
+        try {
+            return DatacenterDataInputMode.valueOf(modeNode.textValue());
+        } catch (IllegalArgumentException exception) {
+            throw new DatacenterConfigException(
+                    "Unknown dataInputMode '" + modeNode.textValue() + "' in datacenter config: " + path,
+                    exception
+            );
+        }
+    }
+
+    private static PowerInputGranularity readOptionalPowerInputGranularity(JsonNode root, Path path) {
+        JsonNode granularityNode = root.get("powerInputGranularity");
+        if (granularityNode == null) return PowerInputGranularity.SERVER;
+        if (granularityNode.isNull())
+            throw new DatacenterConfigException("powerInputGranularity cannot be null in datacenter config: " + path);
+        if (!granularityNode.isTextual())
+            throw new DatacenterConfigException("powerInputGranularity must be a string in datacenter config: " + path);
+        try {
+            return PowerInputGranularity.valueOf(granularityNode.textValue());
+        } catch (IllegalArgumentException exception) {
+            throw new DatacenterConfigException(
+                    "Unknown powerInputGranularity '" + granularityNode.textValue() + "' in datacenter config: " + path,
+                    exception
+            );
+        }
+    }
+
+    private static TemperatureInputGranularity readOptionalTemperatureInputGranularity(JsonNode root, Path path) {
+        JsonNode granularityNode = root.get("temperatureInputGranularity");
+        if (granularityNode == null) return TemperatureInputGranularity.RACK;
+        if (granularityNode.isNull())
+            throw new DatacenterConfigException("temperatureInputGranularity cannot be null in datacenter config: " + path);
+        if (!granularityNode.isTextual())
+            throw new DatacenterConfigException("temperatureInputGranularity must be a string in datacenter config: " + path);
+        try {
+            return TemperatureInputGranularity.valueOf(granularityNode.textValue());
+        } catch (IllegalArgumentException exception) {
+            throw new DatacenterConfigException(
+                    "Unknown temperatureInputGranularity '" + granularityNode.textValue() + "' in datacenter config: " + path,
+                    exception
+            );
+        }
     }
 
     private static <T> T readRequired(JsonNode root, String propertyName, Path path, Class<T> type) throws IOException {
