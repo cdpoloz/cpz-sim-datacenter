@@ -87,7 +87,7 @@ public final class DatacenterSimulationHistoryRecorder {
 
     /**
      * Creates a history recorder without cooling snapshots that also records
-     * the bounded hot-aisle temperature history.
+     * the hot-aisle temperature history.
      *
      * @param energySnapshotProvider energy snapshot provider
      * @param temperatureSnapshotProvider temperature snapshot provider
@@ -143,7 +143,7 @@ public final class DatacenterSimulationHistoryRecorder {
     }
 
     /**
-     * Creates a history recorder that also maintains the bounded hot-aisle
+     * Creates a history recorder that also maintains the hot-aisle
      * temperature history after every captured operational snapshot.
      *
      * @param energySnapshotProvider energy snapshot provider
@@ -241,7 +241,7 @@ public final class DatacenterSimulationHistoryRecorder {
     }
 
     /**
-     * Returns the bounded hot-aisle history when this recorder was configured
+     * Returns the hot-aisle history when this recorder was configured
      * to capture it.
      *
      * @return attached hot-aisle temperature history, if any
