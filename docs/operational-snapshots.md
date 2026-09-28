@@ -5,6 +5,23 @@ health snapshots captured for the same completed tick. It exposes immutable
 aggregates for racks, columns, the complete datacenter and optional
 application-defined server groups.
 
+## Room and ambient temperatures
+
+`TemperatureSnapshot.ambientTemperatureCelsius` is the configured ambient
+reference used by the thermal model. It is not the operational room value when
+servers are online.
+
+`DatacenterOperationalSnapshot.roomTemperatureCelsius` is the dynamic,
+online-server-weighted average for the whole datacenter. It is calculated from
+each rack's `averageOnlineTemperatureCelsius` multiplied by its
+`onlineServerCount`; offline servers do not contribute. When no server is
+online, it falls back to the configured ambient temperature so the snapshot
+keeps its finite-value invariant.
+
+`RackOperationalSnapshot.representativeTemperatureCelsius` remains a separate
+visualization value: it equals the rack's online average when available and
+falls back to ambient for an empty or fully offline rack.
+
 ## Application-defined server groups
 
 The backend intentionally does not assign physical meaning to server groups.
