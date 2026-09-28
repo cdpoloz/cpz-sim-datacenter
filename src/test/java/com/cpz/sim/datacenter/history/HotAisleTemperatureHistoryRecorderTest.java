@@ -49,23 +49,28 @@ class HotAisleTemperatureHistoryRecorderTest {
                 new HotAisleTemperatureSample("HA02", 1L, 65.0),
                 new HotAisleTemperatureSample("HA02", 2L, 70.0)
         ), history.samples("HA02"));
+
+        history.clear();
+
+        assertTrue(history.samples("HA01").isEmpty());
+        assertTrue(history.samples("HA02").isEmpty());
     }
 
     @Test
-    void shouldKeepOnlyConfiguredCapacityInTickOrder() {
-        HotAisleTemperatureHistory history = new HotAisleTemperatureHistory(2);
+    void shouldRetainMoreThanSixtySamplesInTickOrder() {
+        HotAisleTemperatureHistory history = new HotAisleTemperatureHistory();
         HotAisleTemperatureHistoryRecorder recorder =
                 new HotAisleTemperatureHistoryRecorder(location -> "HA01", history);
 
-        recorder.record(snapshot(1L, rack("C01", 1, 40.0)));
-        recorder.record(snapshot(2L, rack("C01", 1, 50.0)));
-        recorder.record(snapshot(3L, rack("C01", 1, 60.0)));
+        for (long tickIndex = 1L; tickIndex <= 100L; tickIndex++)
+            recorder.record(snapshot(tickIndex, rack("C01", 1, 40.0 + tickIndex)));
 
-        assertEquals(2, history.capacity());
-        assertEquals(List.of(
-                new HotAisleTemperatureSample("HA01", 2L, 50.0),
-                new HotAisleTemperatureSample("HA01", 3L, 60.0)
-        ), history.samples("HA01"));
+        List<HotAisleTemperatureSample> samples = history.samples("HA01");
+        assertEquals(100, samples.size());
+        for (int index = 0; index < samples.size(); index++) {
+            long tickIndex = index + 1L;
+            assertEquals(new HotAisleTemperatureSample("HA01", tickIndex, 40.0 + tickIndex), samples.get(index));
+        }
     }
 
     @Test
@@ -87,6 +92,21 @@ class HotAisleTemperatureHistoryRecorderTest {
         assertThrows(
                 UnsupportedOperationException.class,
                 () -> history.samples("HA01").clear()
+        );
+    }
+
+    @Test
+    void shouldRejectNonIncreasingTicksForTheSameHotAisle() {
+        HotAisleTemperatureHistory history = new HotAisleTemperatureHistory();
+        history.record(new HotAisleTemperatureSample("HA01", 2L, 42.0));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> history.record(new HotAisleTemperatureSample("HA01", 2L, 43.0))
+        );
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> history.record(new HotAisleTemperatureSample("HA01", 1L, 41.0))
         );
     }
 
