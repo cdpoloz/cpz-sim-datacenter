@@ -58,7 +58,7 @@ This distinction matters:
 
 The current model does not represent:
 
-- datacenter room temperature as a simulated output
+- physical datacenter room-air temperature as a simulated output
 - rack inlet temperature
 - cold aisle or hot aisle behavior
 - cooling zones
@@ -68,6 +68,12 @@ The current model does not represent:
 
 `ambientTemperatureCelsius` is only an input to the simplified thermal model. It
 is not a full room or cooling simulation.
+
+`DatacenterOperationalSnapshot.roomTemperatureCelsius` is instead an
+operational aggregate for consumers: the dynamic, online-server-weighted
+average of representative internal server temperatures. It must not be
+interpreted as physical room-air temperature or as the configured ambient
+reference.
 
 ## Simplified Model
 
