@@ -8,34 +8,20 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Bounded in-memory temperature history, independently retained per hot
- * aisle.
+ * In-memory temperature history, independently retained per hot aisle.
  *
- * <p>This is a visualization-oriented rolling window, not long-term
- * persistence. Samples in every aisle series are ordered by increasing tick
- * index.</p>
+ * <p>Samples are retained for the lifetime of this history instance. This is
+ * not long-term persistence. Samples in every aisle series are ordered by
+ * increasing tick index.</p>
  *
  * @author CPZ
  */
 public final class HotAisleTemperatureHistory {
 
-    public static final int DEFAULT_CAPACITY = 60;
-
-    private final int capacity;
     private final Map<String, Deque<HotAisleTemperatureSample>> samplesByHotAisle = new HashMap<>();
 
-    public HotAisleTemperatureHistory() {
-        this(DEFAULT_CAPACITY);
-    }
-
-    public HotAisleTemperatureHistory(int capacity) {
-        if (capacity <= 0) throw new IllegalArgumentException("capacity must be > 0");
-        this.capacity = capacity;
-    }
-
     /**
-     * Records one sample, retaining only the most recent configured window
-     * for that sample's hot aisle.
+     * Records one sample for its hot aisle.
      *
      * @param sample sample to append
      * @throws IllegalArgumentException when its tick is not newer than the
@@ -49,7 +35,6 @@ public final class HotAisleTemperatureHistory {
         if (latest != null && sample.tickIndex() <= latest.tickIndex())
             throw new IllegalArgumentException("sample tickIndex must be greater than the latest recorded tickIndex for hot aisle: " + sample.hotAisleCode());
         samples.addLast(sample);
-        if (samples.size() > capacity) samples.removeFirst();
     }
 
     /**
@@ -71,9 +56,5 @@ public final class HotAisleTemperatureHistory {
      */
     public void clear() {
         samplesByHotAisle.clear();
-    }
-
-    public int capacity() {
-        return capacity;
     }
 }
