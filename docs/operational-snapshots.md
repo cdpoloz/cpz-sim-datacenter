@@ -5,6 +5,23 @@ health snapshots captured for the same completed tick. It exposes immutable
 aggregates for racks, columns, the complete datacenter and optional
 application-defined server groups.
 
+## Room and ambient temperatures
+
+`TemperatureSnapshot.ambientTemperatureCelsius` is the configured ambient
+reference used by the thermal model. It is not the operational room value when
+servers are online.
+
+`DatacenterOperationalSnapshot.roomTemperatureCelsius` is the dynamic,
+online-server-weighted average for the whole datacenter. It is calculated from
+each rack's `averageOnlineTemperatureCelsius` multiplied by its
+`onlineServerCount`; offline servers do not contribute. When no server is
+online, it falls back to the configured ambient temperature so the snapshot
+keeps its finite-value invariant.
+
+`RackOperationalSnapshot.representativeTemperatureCelsius` remains a separate
+visualization value: it equals the rack's online average when available and
+falls back to ambient for an empty or fully offline rack.
+
 ## Application-defined server groups
 
 The backend intentionally does not assign physical meaning to server groups.
@@ -64,3 +81,50 @@ servers.
 
 The one-argument provider constructor remains available and produces no group
 aggregates.
+
+## Hot-aisle temperature history
+
+`HotAisleTemperatureHistoryRecorder` records an in-memory series after
+each operational snapshot has been captured. It groups racks through the same
+`Function<RackLocation, String>` used to resolve hot-aisle codes; applications
+can therefore use `StandardHotAisleCodeResolver` or
+`ConfiguredHotAisleCodeResolver` for `layout.hotAisles`.
+
+Each `HotAisleTemperatureSample` contains the hot-aisle code, tick index, and
+average temperature. The average is weighted by the online-server count of each
+rack. Racks without online servers do not contribute, and an aisle without valid
+temperature data receives no sample. Every valid sample is retained for the
+lifetime of the history instance; there is no maximum window or FIFO eviction.
+
+Pass the recorder to the extended `DatacenterSimulationHistoryRecorder`
+constructor. Its `record(tick)` call captures the operational snapshot and then
+updates the hot-aisle series automatically:
+
+```java
+HotAisleTemperatureHistoryRecorder hotAisleHistory =
+        new HotAisleTemperatureHistoryRecorder(
+                new ConfiguredHotAisleCodeResolver(definition.layout().hotAisles())
+        );
+
+DatacenterSimulationHistoryRecorder recorder =
+        new DatacenterSimulationHistoryRecorder(
+                energySnapshots,
+                temperatureSnapshots,
+                healthSnapshots,
+                operationalSnapshots,
+                Optional::empty,
+                new DatacenterSimulationHistory(),
+                hotAisleHistory
+        );
+
+List<HotAisleTemperatureSample> series =
+        hotAisleHistory.history().samples("HA02");
+```
+
+`samples(code)` returns an immutable list in ascending tick order and returns an
+empty list for an unknown aisle or one with no samples. The history remains in
+memory for the lifetime of the simulation instance and is not long-term
+persistence. Creating a new recorder creates an empty history, and
+`DatacenterSimulationHistoryRecorder.clear()` clears its attached hot-aisle
+history as well. Consumers such as the UI should choose how many of the retained
+samples to present based on available display space.

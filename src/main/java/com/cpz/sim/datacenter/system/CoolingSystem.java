@@ -245,7 +245,15 @@ public final class CoolingSystem {
             double currentCoolingPower = 0.0;
             if (enabled && definition instanceof SupplyCoolingUnitDefinition supply)
                 currentCoolingPower = supply.ratedCoolingCapacityWatts();
-            snapshots.add(new CoolingUnitSnapshot(definition.code(), definition.type(), enabled, currentAirflow, currentElectricalPower, currentCoolingPower));
+            snapshots.add(new CoolingUnitSnapshot(
+                    definition.code(),
+                    definition.type(),
+                    enabled,
+                    currentAirflow,
+                    currentElectricalPower,
+                    currentCoolingPower,
+                    definition.ratedElectricalPowerWatts()
+            ));
         }
         return snapshots;
     }

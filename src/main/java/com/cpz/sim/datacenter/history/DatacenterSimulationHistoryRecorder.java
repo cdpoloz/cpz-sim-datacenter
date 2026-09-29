@@ -31,6 +31,7 @@ public final class DatacenterSimulationHistoryRecorder {
     private final DatacenterOperationalSnapshotProvider operationalSnapshotProvider;
     private final Supplier<Optional<CoolingSnapshot>> coolingSnapshotSupplier;
     private final DatacenterSimulationHistory history;
+    private final Optional<HotAisleTemperatureHistoryRecorder> hotAisleTemperatureHistoryRecorder;
 
     /**
      * Creates a history recorder without cooling snapshots.
@@ -52,7 +53,8 @@ public final class DatacenterSimulationHistoryRecorder {
                 healthSnapshotProvider,
                 operationalSnapshotProvider,
                 Optional::empty,
-                new DatacenterSimulationHistory()
+                new DatacenterSimulationHistory(),
+                Optional.empty()
         );
     }
 
@@ -78,7 +80,36 @@ public final class DatacenterSimulationHistoryRecorder {
                 healthSnapshotProvider,
                 operationalSnapshotProvider,
                 coolingSnapshotSupplier,
-                new DatacenterSimulationHistory()
+                new DatacenterSimulationHistory(),
+                Optional.empty()
+        );
+    }
+
+    /**
+     * Creates a history recorder without cooling snapshots that also records
+     * the hot-aisle temperature history.
+     *
+     * @param energySnapshotProvider energy snapshot provider
+     * @param temperatureSnapshotProvider temperature snapshot provider
+     * @param healthSnapshotProvider health snapshot provider
+     * @param operationalSnapshotProvider operational snapshot provider
+     * @param hotAisleTemperatureHistoryRecorder hot-aisle temperature recorder
+     */
+    public DatacenterSimulationHistoryRecorder(
+            EnergyConsumptionSnapshotProvider energySnapshotProvider,
+            TemperatureSnapshotProvider temperatureSnapshotProvider,
+            HealthSnapshotProvider healthSnapshotProvider,
+            DatacenterOperationalSnapshotProvider operationalSnapshotProvider,
+            HotAisleTemperatureHistoryRecorder hotAisleTemperatureHistoryRecorder
+    ) {
+        this(
+                energySnapshotProvider,
+                temperatureSnapshotProvider,
+                healthSnapshotProvider,
+                operationalSnapshotProvider,
+                Optional::empty,
+                new DatacenterSimulationHistory(),
+                hotAisleTemperatureHistoryRecorder
         );
     }
 
@@ -100,12 +131,65 @@ public final class DatacenterSimulationHistoryRecorder {
             Supplier<Optional<CoolingSnapshot>> coolingSnapshotSupplier,
             DatacenterSimulationHistory history
     ) {
+        this(
+                energySnapshotProvider,
+                temperatureSnapshotProvider,
+                healthSnapshotProvider,
+                operationalSnapshotProvider,
+                coolingSnapshotSupplier,
+                history,
+                Optional.empty()
+        );
+    }
+
+    /**
+     * Creates a history recorder that also maintains the hot-aisle
+     * temperature history after every captured operational snapshot.
+     *
+     * @param energySnapshotProvider energy snapshot provider
+     * @param temperatureSnapshotProvider temperature snapshot provider
+     * @param healthSnapshotProvider health snapshot provider
+     * @param operationalSnapshotProvider operational snapshot provider
+     * @param coolingSnapshotSupplier latest cooling snapshot supplier
+     * @param history destination complete-step history
+     * @param hotAisleTemperatureHistoryRecorder hot-aisle temperature recorder
+     */
+    public DatacenterSimulationHistoryRecorder(
+            EnergyConsumptionSnapshotProvider energySnapshotProvider,
+            TemperatureSnapshotProvider temperatureSnapshotProvider,
+            HealthSnapshotProvider healthSnapshotProvider,
+            DatacenterOperationalSnapshotProvider operationalSnapshotProvider,
+            Supplier<Optional<CoolingSnapshot>> coolingSnapshotSupplier,
+            DatacenterSimulationHistory history,
+            HotAisleTemperatureHistoryRecorder hotAisleTemperatureHistoryRecorder
+    ) {
+        this(
+                energySnapshotProvider,
+                temperatureSnapshotProvider,
+                healthSnapshotProvider,
+                operationalSnapshotProvider,
+                coolingSnapshotSupplier,
+                history,
+                Optional.of(Objects.requireNonNull(hotAisleTemperatureHistoryRecorder, "hotAisleTemperatureHistoryRecorder must not be null"))
+        );
+    }
+
+    private DatacenterSimulationHistoryRecorder(
+            EnergyConsumptionSnapshotProvider energySnapshotProvider,
+            TemperatureSnapshotProvider temperatureSnapshotProvider,
+            HealthSnapshotProvider healthSnapshotProvider,
+            DatacenterOperationalSnapshotProvider operationalSnapshotProvider,
+            Supplier<Optional<CoolingSnapshot>> coolingSnapshotSupplier,
+            DatacenterSimulationHistory history,
+            Optional<HotAisleTemperatureHistoryRecorder> hotAisleTemperatureHistoryRecorder
+    ) {
         this.energySnapshotProvider = Objects.requireNonNull(energySnapshotProvider, "energySnapshotProvider must not be null");
         this.temperatureSnapshotProvider = Objects.requireNonNull(temperatureSnapshotProvider, "temperatureSnapshotProvider must not be null");
         this.healthSnapshotProvider = Objects.requireNonNull(healthSnapshotProvider, "healthSnapshotProvider must not be null");
         this.operationalSnapshotProvider = Objects.requireNonNull(operationalSnapshotProvider, "operationalSnapshotProvider must not be null");
         this.coolingSnapshotSupplier = Objects.requireNonNull(coolingSnapshotSupplier, "coolingSnapshotSupplier must not be null");
         this.history = Objects.requireNonNull(history, "history must not be null");
+        this.hotAisleTemperatureHistoryRecorder = Objects.requireNonNull(hotAisleTemperatureHistoryRecorder, "hotAisleTemperatureHistoryRecorder must not be null");
     }
 
     /**
@@ -142,6 +226,7 @@ public final class DatacenterSimulationHistoryRecorder {
                         coolingSnapshot,
                         operationalSnapshot
                 );
+        hotAisleTemperatureHistoryRecorder.ifPresent(recorder -> recorder.record(operationalSnapshot));
         history.record(stepSnapshot);
         return stepSnapshot;
     }
@@ -156,9 +241,20 @@ public final class DatacenterSimulationHistoryRecorder {
     }
 
     /**
+     * Returns the hot-aisle history when this recorder was configured
+     * to capture it.
+     *
+     * @return attached hot-aisle temperature history, if any
+     */
+    public Optional<HotAisleTemperatureHistory> hotAisleTemperatureHistory() {
+        return hotAisleTemperatureHistoryRecorder.map(HotAisleTemperatureHistoryRecorder::history);
+    }
+
+    /**
      * Clears the destination history.
      */
     public void clear() {
         history.clear();
+        hotAisleTemperatureHistoryRecorder.ifPresent(HotAisleTemperatureHistoryRecorder::clear);
     }
 }

@@ -18,6 +18,7 @@ import java.util.Objects;
  * @param currentAirflowCubicMetersPerSecond current airflow
  * @param currentElectricalPowerWatts current electrical power
  * @param currentCoolingPowerWatts current cooling power
+ * @param ratedElectricalPowerWatts nominal electrical power when enabled
  *
  * @author CPZ
  */
@@ -27,7 +28,8 @@ public record CoolingUnitSnapshot(
         boolean enabled,
         double currentAirflowCubicMetersPerSecond,
         double currentElectricalPowerWatts,
-        double currentCoolingPowerWatts
+        double currentCoolingPowerWatts,
+        double ratedElectricalPowerWatts
 ) {
 
     /**
@@ -46,6 +48,7 @@ public record CoolingUnitSnapshot(
         validateNonNegativeFinite(currentAirflowCubicMetersPerSecond, "currentAirflowCubicMetersPerSecond");
         validateNonNegativeFinite(currentElectricalPowerWatts, "currentElectricalPowerWatts");
         validateNonNegativeFinite(currentCoolingPowerWatts, "currentCoolingPowerWatts");
+        validateNonNegativeFinite(ratedElectricalPowerWatts, "ratedElectricalPowerWatts");
         if (!enabled && (currentAirflowCubicMetersPerSecond != 0.0 || currentElectricalPowerWatts != 0.0 || currentCoolingPowerWatts != 0.0))
             throw new IllegalArgumentException("disabled cooling unit must report zero airflow, zero electrical power and zero cooling power");
         if (type == CoolingUnitType.EXHAUST && currentCoolingPowerWatts != 0.0)
@@ -65,7 +68,31 @@ public record CoolingUnitSnapshot(
                 enabled,
                 currentAirflowCubicMetersPerSecond,
                 0.0,
-                currentCoolingPowerWatts
+                currentCoolingPowerWatts,
+                0.0
+        );
+    }
+
+    /**
+     * Preserves the constructor used before nominal electrical power was
+     * exposed in operational snapshots.
+     */
+    public CoolingUnitSnapshot(
+            String unitCode,
+            CoolingUnitType type,
+            boolean enabled,
+            double currentAirflowCubicMetersPerSecond,
+            double currentElectricalPowerWatts,
+            double currentCoolingPowerWatts
+    ) {
+        this(
+                unitCode,
+                type,
+                enabled,
+                currentAirflowCubicMetersPerSecond,
+                currentElectricalPowerWatts,
+                currentCoolingPowerWatts,
+                0.0
         );
     }
 

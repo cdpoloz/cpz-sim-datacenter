@@ -7,7 +7,13 @@ import com.cpz.sim.datacenter.config.definition.RackDefinition;
 import com.cpz.sim.datacenter.config.definition.ServerDefinition;
 import com.cpz.sim.datacenter.config.definition.ServerModelDefinition;
 import com.cpz.sim.datacenter.health.ServerHealthOptions;
+import com.cpz.sim.datacenter.history.DatacenterSimulationHistory;
+import com.cpz.sim.datacenter.history.DatacenterSimulationHistoryRecorder;
+import com.cpz.sim.datacenter.history.HotAisleTemperatureHistory;
+import com.cpz.sim.datacenter.history.HotAisleTemperatureHistoryRecorder;
+import com.cpz.sim.datacenter.history.HotAisleTemperatureSample;
 import com.cpz.sim.datacenter.input.DatacenterDataInputMode;
+import com.cpz.sim.datacenter.input.ConfiguredHotAisleCodeResolver;
 import com.cpz.sim.datacenter.input.SimulatedAisleTemperatureInputSource;
 import com.cpz.sim.datacenter.input.TemperatureInputGranularity;
 import com.cpz.sim.datacenter.model.Datacenter;
@@ -34,6 +40,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -114,6 +121,48 @@ class DatacenterInputPipelineFactoryTest {
                 operationalSnapshot.racks().get(rackLocation("C05")).representativeTemperatureCelsius(),
                 EPSILON
         );
+    }
+
+    @Test
+    void shouldRecordConfiguredHotAisleHistoryWhenCapturingOperationalSnapshots() {
+        DatacenterDefinition definition = standardDefinition(TemperatureInputGranularity.AISLE);
+        Datacenter datacenter = new DatacenterFactory().create(definition);
+        TemperatureSystem temperatureSystem = temperatureSystem(datacenter);
+        EnergyConsumptionSystem energySystem = new EnergyConsumptionSystem(datacenter);
+        ServerHealthSystem healthSystem =
+                new ServerHealthSystem(datacenter, temperatureSystem, ServerHealthOptions.defaults());
+        SimulationEngine engine = new SimulationEngine(new SimulationClock(Duration.ofMinutes(1)));
+        new DatacenterInputPipelineFactory()
+                .registerInputSystems(engine, definition, datacenter, temperatureSystem, OPTIONS, null, null);
+        engine.register(healthSystem);
+        engine.register(energySystem);
+        HotAisleTemperatureHistory hotAisleHistory = new HotAisleTemperatureHistory();
+        DatacenterSimulationHistoryRecorder recorder = new DatacenterSimulationHistoryRecorder(
+                new EnergyConsumptionSnapshotProvider(datacenter, energySystem),
+                new TemperatureSnapshotProvider(datacenter, temperatureSystem, OPTIONS),
+                new HealthSnapshotProvider(datacenter, healthSystem, temperatureSystem),
+                new DatacenterOperationalSnapshotProvider(datacenter),
+                Optional::empty,
+                new DatacenterSimulationHistory(),
+                new HotAisleTemperatureHistoryRecorder(
+                        new ConfiguredHotAisleCodeResolver(definition.layout().hotAisles()),
+                        hotAisleHistory
+                )
+        );
+
+        SimulationTick tick = engine.step();
+        recorder.record(tick);
+
+        double expectedHa03Temperature =
+                new SimulatedAisleTemperatureInputSource().temperatureCelsius("HA03", tick);
+        assertEquals(List.of(
+                new HotAisleTemperatureSample("HA03", tick.index(), expectedHa03Temperature)
+        ), hotAisleHistory.samples("HA03"));
+        assertEquals(hotAisleHistory, recorder.hotAisleTemperatureHistory().orElseThrow());
+
+        recorder.clear();
+
+        assertEquals(List.of(), hotAisleHistory.samples("HA03"));
     }
 
     @Test

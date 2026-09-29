@@ -153,6 +153,17 @@ public final class DatacenterOperationalSnapshotProvider {
         Optional<RackLocation> hottestRackLocation = findHottestRackLocation(rackSnapshots);
         double hottestRackAverageTemperatureCelsius = hottestRackLocation.map(rackSnapshots::get).map(RackOperationalSnapshot::averageOnlineTemperatureCelsius).orElse(Double.NaN);
         int totalOnlineServerCount = rackSnapshots.values().stream().mapToInt(RackOperationalSnapshot::onlineServerCount).sum();
+        double totalOnlineTemperatureSumCelsius =
+                rackSnapshots
+                        .values()
+                        .stream()
+                        .filter(RackOperationalSnapshot::hasOnlineServers)
+                        .mapToDouble(rackSnapshot -> rackSnapshot.averageOnlineTemperatureCelsius() * rackSnapshot.onlineServerCount())
+                        .sum();
+        double roomTemperatureCelsius =
+                totalOnlineServerCount == 0
+                        ? temperatureSnapshot.ambientTemperatureCelsius()
+                        : totalOnlineTemperatureSumCelsius / totalOnlineServerCount;
         double totalOnlineUtilizationSum =
                 rackSnapshots
                         .values()
@@ -182,7 +193,7 @@ public final class DatacenterOperationalSnapshotProvider {
                 rackSnapshots,
                 columnSnapshots,
                 serverGroupSnapshots,
-                temperatureSnapshot.ambientTemperatureCelsius(),
+                roomTemperatureCelsius,
                 hottestRackLocation,
                 hottestRackAverageTemperatureCelsius,
                 totalItUtilization,
