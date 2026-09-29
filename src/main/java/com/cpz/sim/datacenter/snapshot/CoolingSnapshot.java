@@ -103,6 +103,15 @@ public record CoolingSnapshot(long tickIndex, List<CoolingUnitSnapshot> units, L
         return units.stream().mapToDouble(CoolingUnitSnapshot::currentElectricalPowerWatts).sum();
     }
 
+    /**
+     * Returns the nominal electrical capacity of all configured cooling units.
+     *
+     * @return nominal electrical power in watts
+     */
+    public double ratedElectricalPowerWatts() {
+        return units.stream().mapToDouble(CoolingUnitSnapshot::ratedElectricalPowerWatts).sum();
+    }
+
     private static void validateUniqueUnitCodes(List<CoolingUnitSnapshot> units) {
         Set<String> unitCodes = new HashSet<>();
         for (CoolingUnitSnapshot unit : units) {
