@@ -697,7 +697,10 @@ Current shape:
       "airDensityKilogramsPerCubicMeter": 1.204,
       "airSpecificHeatJoulesPerKilogramKelvin": 1005.0,
       "initialInletAirTemperatureCelsius": 24.0,
-      "maximumRecirculationFraction": 0.95
+      "maximumRecirculationFraction": 0.95,
+      "residualRecirculationFraction": 0.1,
+      "effectiveZoneAirVolumeCubicMeters": 1000.0,
+      "recirculationResponseTimeSeconds": 300.0
     }
   }
 }
@@ -825,19 +828,24 @@ Rules:
   "airSpecificHeatJoulesPerKilogramKelvin": 1005.0,
   "initialInletAirTemperatureCelsius": 24.0,
   "maximumRecirculationFraction": 0.95,
-  "effectiveZoneAirVolumeCubicMeters": 1000.0
+  "residualRecirculationFraction": 0.1,
+  "effectiveZoneAirVolumeCubicMeters": 1000.0,
+  "recirculationResponseTimeSeconds": 300.0
 }
 ```
 
 Rules:
 
 - `options` cannot be null
-- all four fields are currently required when the block is present
+- all seven fields are currently required when the block is present
 - `airDensityKilogramsPerCubicMeter` must be finite and `> 0`
 - `airSpecificHeatJoulesPerKilogramKelvin` must be finite and `> 0`
 - `initialInletAirTemperatureCelsius` must be finite
 - `maximumRecirculationFraction` must be finite and within `[0.0, 1.0]`
+- `residualRecirculationFraction` must be finite and within
+  `[0.0, maximumRecirculationFraction]`
 - `effectiveZoneAirVolumeCubicMeters` must be finite and `> 0`
+- `recirculationResponseTimeSeconds` must be finite and `> 0`
 
 This block becomes `CoolingSystemOptions` at runtime. The backend does not add
 JSON defaults during loading; values are taken from the configuration exactly as
