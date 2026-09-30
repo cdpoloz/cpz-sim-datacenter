@@ -192,7 +192,9 @@ At JSON-validation level, the cooling block currently requires:
 - finite positive air density and specific heat
 - finite initial inlet-air temperature
 - `maximumRecirculationFraction` within `[0.0, 1.0]`
+- `residualRecirculationFraction` within `[0.0, maximumRecirculationFraction]`
 - finite positive effective zone air volume
+- finite positive `recirculationResponseTimeSeconds`
 - references only to known columns, racks, and zone codes
 - no server location belonging to more than one zone
 - at least one installed server in every valid zone
@@ -203,7 +205,9 @@ At JSON-validation level, the cooling block currently requires:
 - air specific heat: `1,005 J/(kg·K)`
 - initial inlet-air temperature: `24.0 °C`
 - maximum recirculation fraction: `0.95`
+- residual recirculation fraction: `0.10`
 - effective zone air volume: `1,000.0 m³`
+- recirculation response time: `300.0 s`
 
 The volumetric heat capacity used by the model is:
 
@@ -320,23 +324,45 @@ changes when uncovered heat remains in the zone.
 
 ### Recirculation
 
-Recirculation is derived from the imbalance between supply and extraction
-airflow:
+The current implementation calculates a target recirculation fraction from
+the absolute imbalance between supply and extraction airflow. If either airflow
+is zero, the target is the configured maximum. When both are positive, the
+imbalance is normalized by their sum, then mapped between the configured
+residual and maximum fractions:
 
 ```text
-if supplyAirflow == 0:
-    recirculationFraction = maximumRecirculationFraction
+if supplyAirflow == 0 or exhaustAirflow == 0:
+    targetRecirculationFraction = maximumRecirculationFraction
 otherwise:
     airflowImbalanceFraction =
-        max(0, (supplyAirflow - exhaustAirflow) / supplyAirflow)
+        abs(supplyAirflow - exhaustAirflow)
+        / (supplyAirflow + exhaustAirflow)
 
-    recirculationFraction =
-        min(airflowImbalanceFraction, maximumRecirculationFraction)
+    targetRecirculationFraction =
+        residualRecirculationFraction
+        + airflowImbalanceFraction
+        * (maximumRecirculationFraction - residualRecirculationFraction)
 ```
 
-Equal or greater extraction airflow produces no recirculation in this simplified
-calculation. Insufficient extraction increases recirculation up to the configured
-maximum.
+The target is then smoothed over time for each zone. Let `r_previous` be the
+fraction retained from the previous cooling tick, `r_target` the newly
+calculated target, `deltaSeconds` the tick duration, and `tau` the configured
+`recirculationResponseTimeSeconds`:
+
+```text
+smoothingFactor = 1 - exp(-deltaSeconds / tau)
+
+recirculationFraction =
+    r_previous
+    + (r_target - r_previous) * smoothingFactor
+```
+
+Balanced supply and extraction airflow therefore tends toward the residual
+fraction, not necessarily zero. Greater imbalance tends toward the configured
+maximum. A larger response time makes the fraction adjust more slowly; a smaller
+response time makes it follow the target more quickly. The smoothing operates
+on the fraction used in the inlet-air mixture; it does not ramp unit airflow or
+cooling capacity.
 
 ### Air Temperatures
 
@@ -537,7 +563,9 @@ thermal inertia of each logical zone:
   "airSpecificHeatJoulesPerKilogramKelvin": 1005.0,
   "initialInletAirTemperatureCelsius": 24.0,
   "maximumRecirculationFraction": 0.95,
-  "effectiveZoneAirVolumeCubicMeters": 1000.0
+  "residualRecirculationFraction": 0.1,
+  "effectiveZoneAirVolumeCubicMeters": 1000.0,
+  "recirculationResponseTimeSeconds": 300.0
 }
 ```
 
