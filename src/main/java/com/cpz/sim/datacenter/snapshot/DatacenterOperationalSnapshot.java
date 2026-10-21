@@ -138,6 +138,18 @@ public record DatacenterOperationalSnapshot(
         );
     }
 
+    /**
+     * Returns the mean representative internal temperature of online servers.
+     *
+     * <p>This is not room-air or rack-inlet temperature. For compatibility with
+     * the existing aggregate, returns the ambient reference when no servers
+     * are online. {@code roomTemperatureCelsius()} remains the legacy accessor
+     * for the same value.</p>
+     */
+    public double averageOnlineServerTemperatureCelsius() {
+        return roomTemperatureCelsius;
+    }
+
     public Optional<RackOperationalSnapshot> findRack(RackLocation location) {
         Objects.requireNonNull(location, "location must not be null");
         return Optional.ofNullable(racks.get(location));
