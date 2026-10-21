@@ -86,9 +86,29 @@ Optional<RoomAirThermalState> roomAirState =
 ```
 
 At this stage the pipeline does not construct or advance this state automatically.
-It is not exposed as a calculated room-air snapshot and does not change server
-temperatures, cooling, health, input modes, or the UI. The next stage will add an
-energy balance and explicit coupling to the existing systems.
+The standalone `RoomAirTemperatureSystem` can advance it explicitly:
+
+```java
+RoomAirTemperatureSystem roomAirSystem = new RoomAirTemperatureSystem(
+        new RoomAirTemperatureOptionsFactory().create(definition).orElseThrow());
+RoomAirTemperatureSnapshot airSnapshot = roomAirSystem.tick(
+        tick,
+        new RoomAirThermalInput(averageServerHeatTransferWatts, averageRemovedHeatWatts)
+);
+```
+
+The two thermal powers are step-average transfers in watts, supplied explicitly
+by the caller. Server-to-air transfer is signed; removed heat is non-negative.
+Do not substitute server electrical consumption, HVAC electrical power or rated
+cooling capacity without a consistent thermal coupling model. The system uses
+the tick duration in seconds and the exact constant-input room energy balance.
+It exposes its latest immutable snapshot separately and supports `reset()`.
+See [Temperature model](temperature.md#explicit-room-air-energy-balance).
+
+No automatic server/cooling coupling, operational/history snapshot migration or
+UI wiring is included yet. Existing simulation results remain unchanged until
+a caller explicitly uses the new system. Subsequent coupling must preserve
+server energy storage and avoid duplicating existing cooling-zone air dynamics.
 
 ## dataInputMode
 

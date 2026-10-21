@@ -47,12 +47,53 @@ temperature, effective room thermal capacity, environment temperature and the
 linear heat-transfer coefficient to that environment. The runtime factory
 returns no options when this block is omitted; no room physics is guessed.
 
-This is preparation only: no room-air energy-balance system is registered yet,
-the state is not connected to servers or cooling, and snapshots and UI retain
-their existing server-temperature semantics in all input modes. Consumers may
-explicitly initialize a state from the factory's options. Its temperature stays
-at the initialized value unless explicitly changed. See
+`RoomAirTemperatureSystem` can now advance this state from explicitly supplied
+thermal transfers and return a separate `RoomAirTemperatureSnapshot`. It is not
+automatically registered or connected to servers or cooling. Existing operational
+snapshots and UI retain their server-temperature semantics in all input modes. See
 [JSON configuration](configuration.md#room-air-state-preparation) for the contract.
+
+### Explicit room-air energy balance
+
+The independent, well-mixed room node follows:
+
+```text
+C * dT/dt = Q_server_to_air - Q_removed - UA * (T - T_environment)
+```
+
+- `C`: configured effective room capacity, in J/°C.
+- `Q_server_to_air`: signed heat actually transferred from servers to air, in W.
+  A negative value means heat flows from air into colder servers.
+- `Q_removed`: non-negative heat actually removed by cooling/ventilation, in W.
+  It may exceed simultaneous server heat while removing stored room energy.
+- `UA`: configured heat-transfer coefficient to the environment, in W/°C.
+
+`SimpleRoomAirTemperatureModel` integrates this equation analytically while
+thermal inputs and options are constant over a tick. For `UA = 0`,
+`T_next = T + (Q_server_to_air - Q_removed) * deltaSeconds / C`.
+For positive `UA`, the solution relaxes exponentially toward
+`T_environment + (Q_server_to_air - Q_removed) / UA` with time constant `C / UA`.
+The implementation uses `expm1` and a small-coefficient limit to avoid cancellation.
+It applies no temperature clamp. Invalid/non-finite inputs or results are rejected.
+
+For constant inputs, subdividing a tick produces the same solution up to rounding;
+time-varying heat transfers still require appropriately sampled inputs. This exact
+room integrator does not change the existing per-server Euler integrator.
+
+`RoomAirTemperatureSystem.tick(tick, input)` advances once and returns an immutable
+snapshot with tick index, elapsed seconds and room-air temperature. Call it once
+per tick, in chronological order. `reset()` restores the configured initial air
+temperature and clears the last snapshot. Rejected steps preserve the state.
+
+This stage deliberately supplies no automatic adapter from IT power or existing
+cooling snapshots. `CoolingSystem` already advances zone-air state, and its
+`ServerHeatLoadProvider` uses electrical server power as thermal load. Connecting
+both models directly would create competing air states and could double-count
+energy. A future coupling step must define one owner for each thermal state and
+use the same server-to-air energy transfer on both sides of the balance, accounting
+for energy stored in servers. Rated cooling capacity and HVAC electrical power
+are not interchangeable with heat actually removed. Temperature-driven telemetry
+must remain authoritative and needs explicit inference assumptions for coupling.
 
 ## What `temperatureCelsius` Represents
 
@@ -73,7 +114,7 @@ This distinction matters:
 
 The current model does not represent:
 
-- physical datacenter room-air temperature as a simulated output
+- physical datacenter room-air temperature (the separate room-air system handles that approximation)
 - rack inlet temperature
 - cold aisle or hot aisle behavior
 - cooling zones
@@ -281,7 +322,7 @@ The exact numeric output depends on workload evolution and tick duration.
 ## Current Limitations
 
 - simplified internal server temperature only
-- no room temperature simulation output
+- room-air output is available only from the separate, explicitly invoked system
 - no rack inlet temperature
 - no cooling model
 - no airflow model
@@ -293,7 +334,7 @@ The exact numeric output depends on workload evolution and tick duration.
 Possible future extensions, not implemented in this milestone:
 
 - rack inlet temperature modeling
-- room or zone temperature modeling
+- coupling the independent room-air balance to the server and cooling pipeline
 - cooling equipment integration
 - airflow and thermal coupling between racks
 - more advanced per-server thermal models
