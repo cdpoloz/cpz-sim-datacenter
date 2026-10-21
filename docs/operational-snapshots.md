@@ -1,5 +1,21 @@
 # Operational snapshots
 
+## Independent room-air snapshots
+
+`DatacenterOperationalSnapshot.roomAirSnapshot()` is optional and distinct from
+the online-server temperature aggregate. `roomAirTemperatureCelsius()` returns
+the simulated air value or NaN when unavailable. `roomTemperatureCelsius()` and
+`averageOnlineServerTemperatureCelsius()` retain their legacy server-average meaning.
+All original constructors remain available without an air snapshot.
+
+The operational provider overload accepts optional cooling and room-air snapshots;
+the air capture must match the energy/temperature/health tick and elapsed seconds.
+The history recorder's extended constructor accepts an additional coupled thermal
+supplier. Complete step snapshots retain its immutable energy ledger through
+`coupledThermalSnapshot()`, as well as air in the operational snapshot. Missing air
+is never substituted with ambient input or server temperature. Clearing history
+and resetting the engine before replay removes old thermal and cooling captures.
+
 `DatacenterOperationalSnapshotProvider` combines energy, temperature and
 health snapshots captured for the same completed tick. It exposes immutable
 aggregates for racks, columns, the complete datacenter and optional

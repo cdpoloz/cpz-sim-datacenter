@@ -34,12 +34,18 @@ public record DatacenterOperationalSnapshot(
         double currentItPowerWatts,
         double coolingPowerWatts,
         double totalFacilityPowerWatts,
-        double pue
+        double pue,
+        Optional<RoomAirTemperatureSnapshot> roomAirSnapshot
 ) {
 
     private static final double POWER_EPSILON = 1.0e-9;
 
     public DatacenterOperationalSnapshot {
+        Objects.requireNonNull(roomAirSnapshot, "roomAirSnapshot must not be null");
+        roomAirSnapshot.ifPresent(air -> {
+            if (air.tickIndex() != tickIndex || Double.compare(air.elapsedSeconds(), elapsedSeconds) != 0)
+                throw new IllegalArgumentException("room air must represent the same tick and elapsed time");
+        });
         if (tickIndex < 0L) throw new IllegalArgumentException("tickIndex must be >= 0");
         if (!Double.isFinite(elapsedSeconds) || elapsedSeconds < 0.0)
             throw new IllegalArgumentException("elapsedSeconds must be finite and >= 0");
@@ -101,6 +107,28 @@ public record DatacenterOperationalSnapshot(
                 totalFacilityPowerWatts,
                 pue
         );
+    }
+
+    /** Preserves the constructor used before independent room-air snapshots. */
+    public DatacenterOperationalSnapshot(
+            long tickIndex, double elapsedSeconds,
+            Map<RackLocation, RackOperationalSnapshot> racks,
+            Map<String, ColumnOperationalSnapshot> columns,
+            Map<String, ServerGroupOperationalSnapshot> serverGroups,
+            double roomTemperatureCelsius, Optional<RackLocation> hottestRackLocation,
+            double hottestRackAverageTemperatureCelsius, double totalItUtilization,
+            double idleItPowerWatts, double maxItPowerWatts, double currentItPowerWatts,
+            double coolingPowerWatts, double totalFacilityPowerWatts, double pue
+    ) {
+        this(tickIndex, elapsedSeconds, racks, columns, serverGroups, roomTemperatureCelsius,
+                hottestRackLocation, hottestRackAverageTemperatureCelsius, totalItUtilization,
+                idleItPowerWatts, maxItPowerWatts, currentItPowerWatts, coolingPowerWatts,
+                totalFacilityPowerWatts, pue, Optional.empty());
+    }
+
+    /** Simulated mixed-room air temperature, or NaN when no air model participates. */
+    public double roomAirTemperatureCelsius() {
+        return roomAirSnapshot.map(RoomAirTemperatureSnapshot::temperatureCelsius).orElse(Double.NaN);
     }
 
     public DatacenterOperationalSnapshot(

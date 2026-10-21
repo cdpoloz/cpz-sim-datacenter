@@ -1,6 +1,7 @@
 package com.cpz.sim.datacenter.history;
 
 import com.cpz.sim.datacenter.snapshot.CoolingSnapshot;
+import com.cpz.sim.datacenter.snapshot.CoupledRoomThermalSnapshot;
 import com.cpz.sim.datacenter.snapshot.DatacenterOperationalSnapshot;
 import com.cpz.sim.datacenter.snapshot.EnergyConsumptionSnapshot;
 import com.cpz.sim.datacenter.snapshot.HealthSnapshot;
@@ -30,10 +31,20 @@ public record DatacenterSimulationStepSnapshot(
         TemperatureSnapshot temperatureSnapshot,
         HealthSnapshot healthSnapshot,
         Optional<CoolingSnapshot> coolingSnapshot,
-        DatacenterOperationalSnapshot operationalSnapshot
+        DatacenterOperationalSnapshot operationalSnapshot,
+        Optional<CoupledRoomThermalSnapshot> coupledThermalSnapshot
 ) {
 
+    public DatacenterSimulationStepSnapshot(
+            EnergyConsumptionSnapshot energySnapshot, TemperatureSnapshot temperatureSnapshot,
+            HealthSnapshot healthSnapshot, Optional<CoolingSnapshot> coolingSnapshot,
+            DatacenterOperationalSnapshot operationalSnapshot
+    ) {
+        this(energySnapshot, temperatureSnapshot, healthSnapshot, coolingSnapshot, operationalSnapshot, Optional.empty());
+    }
+
     public DatacenterSimulationStepSnapshot {
+        Objects.requireNonNull(coupledThermalSnapshot, "coupledThermalSnapshot must not be null");
         Objects.requireNonNull(energySnapshot, "energySnapshot must not be null");
         Objects.requireNonNull(temperatureSnapshot, "temperatureSnapshot must not be null");
         Objects.requireNonNull(healthSnapshot, "healthSnapshot must not be null");
@@ -42,6 +53,10 @@ public record DatacenterSimulationStepSnapshot(
         coolingSnapshot.ifPresent(snapshot -> Objects.requireNonNull(snapshot, "coolingSnapshot must not contain null"));
         validateSameTickIndex(energySnapshot, temperatureSnapshot, healthSnapshot, coolingSnapshot, operationalSnapshot);
         validateSameElapsedSeconds(energySnapshot, temperatureSnapshot, healthSnapshot, operationalSnapshot);
+        coupledThermalSnapshot.ifPresent(thermal -> {
+            if (!operationalSnapshot.roomAirSnapshot().equals(Optional.of(thermal.roomAir())))
+                throw new IllegalArgumentException("coupled ledger and operational room air must match");
+        });
     }
 
     /**

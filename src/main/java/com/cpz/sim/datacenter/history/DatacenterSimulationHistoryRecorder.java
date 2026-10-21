@@ -1,6 +1,7 @@
 package com.cpz.sim.datacenter.history;
 
 import com.cpz.sim.datacenter.snapshot.CoolingSnapshot;
+import com.cpz.sim.datacenter.snapshot.CoupledRoomThermalSnapshot;
 import com.cpz.sim.datacenter.snapshot.DatacenterOperationalSnapshot;
 import com.cpz.sim.datacenter.snapshot.DatacenterOperationalSnapshotProvider;
 import com.cpz.sim.datacenter.snapshot.EnergyConsumptionSnapshot;
@@ -32,6 +33,7 @@ public final class DatacenterSimulationHistoryRecorder {
     private final Supplier<Optional<CoolingSnapshot>> coolingSnapshotSupplier;
     private final DatacenterSimulationHistory history;
     private final Optional<HotAisleTemperatureHistoryRecorder> hotAisleTemperatureHistoryRecorder;
+    private final Supplier<Optional<CoupledRoomThermalSnapshot>> coupledThermalSnapshotSupplier;
 
     /**
      * Creates a history recorder without cooling snapshots.
@@ -183,6 +185,22 @@ public final class DatacenterSimulationHistoryRecorder {
             DatacenterSimulationHistory history,
             Optional<HotAisleTemperatureHistoryRecorder> hotAisleTemperatureHistoryRecorder
     ) {
+        this(energySnapshotProvider, temperatureSnapshotProvider, healthSnapshotProvider, operationalSnapshotProvider,
+                coolingSnapshotSupplier, history, hotAisleTemperatureHistoryRecorder, Optional::empty);
+    }
+
+    public DatacenterSimulationHistoryRecorder(
+            EnergyConsumptionSnapshotProvider energySnapshotProvider,
+            TemperatureSnapshotProvider temperatureSnapshotProvider,
+            HealthSnapshotProvider healthSnapshotProvider,
+            DatacenterOperationalSnapshotProvider operationalSnapshotProvider,
+            Supplier<Optional<CoolingSnapshot>> coolingSnapshotSupplier,
+            DatacenterSimulationHistory history,
+            Optional<HotAisleTemperatureHistoryRecorder> hotAisleTemperatureHistoryRecorder,
+            Supplier<Optional<CoupledRoomThermalSnapshot>> coupledThermalSnapshotSupplier
+    ) {
+        this.coupledThermalSnapshotSupplier = Objects.requireNonNull(coupledThermalSnapshotSupplier,
+                "coupledThermalSnapshotSupplier must not be null");
         this.energySnapshotProvider = Objects.requireNonNull(energySnapshotProvider, "energySnapshotProvider must not be null");
         this.temperatureSnapshotProvider = Objects.requireNonNull(temperatureSnapshotProvider, "temperatureSnapshotProvider must not be null");
         this.healthSnapshotProvider = Objects.requireNonNull(healthSnapshotProvider, "healthSnapshotProvider must not be null");
@@ -205,26 +223,19 @@ public final class DatacenterSimulationHistoryRecorder {
         HealthSnapshot healthSnapshot = healthSnapshotProvider.snapshot(tick);
         Optional<CoolingSnapshot> coolingSnapshot =
                 Objects.requireNonNull(coolingSnapshotSupplier.get(), "coolingSnapshotSupplier must not return null");
-        DatacenterOperationalSnapshot operationalSnapshot =
-                coolingSnapshot
-                        .map(snapshot -> operationalSnapshotProvider.snapshot(
-                                energySnapshot,
-                                temperatureSnapshot,
-                                healthSnapshot,
-                                snapshot
-                        ))
-                        .orElseGet(() -> operationalSnapshotProvider.snapshot(
-                                energySnapshot,
-                                temperatureSnapshot,
-                                healthSnapshot
-                        ));
+        Optional<CoupledRoomThermalSnapshot> thermal = Objects.requireNonNull(coupledThermalSnapshotSupplier.get(),
+                "coupledThermalSnapshotSupplier must not return null");
+        DatacenterOperationalSnapshot operationalSnapshot = operationalSnapshotProvider.snapshot(
+                energySnapshot, temperatureSnapshot, healthSnapshot, coolingSnapshot,
+                thermal.map(CoupledRoomThermalSnapshot::roomAir));
         DatacenterSimulationStepSnapshot stepSnapshot =
                 new DatacenterSimulationStepSnapshot(
                         energySnapshot,
                         temperatureSnapshot,
                         healthSnapshot,
                         coolingSnapshot,
-                        operationalSnapshot
+                        operationalSnapshot,
+                        thermal
                 );
         hotAisleTemperatureHistoryRecorder.ifPresent(recorder -> recorder.record(operationalSnapshot));
         history.record(stepSnapshot);

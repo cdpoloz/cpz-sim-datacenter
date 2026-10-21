@@ -134,11 +134,17 @@ also register a legacy cooling thermal adapter, `TemperatureSystem.update`, or
 the standalone room-air system. The coupled solver owns thermal evolution;
 `TemperatureSystem` is its server-state store. Cooling controls remain usable.
 `coupled.lastSnapshot()` exposes room air and the energy ledger;
-`coolingSystem.currentUnitSnapshots()` exposes electrical unit activity. Existing
-`CoolingSnapshot` zone-air results are not produced by this mode.
+`coolingSystem.currentUnitSnapshots()` exposes electrical unit activity.
+`coupled.lastCoolingSnapshot()` provides the end-of-tick mixed-room projection
+without running the legacy cooling thermal update. Its zone inlet/exhaust fields
+both contain the same global air temperature; they do not describe a spatial rise.
 
-Operational/history snapshot migration and UI wiring are not included yet.
-The current UI remains on its legacy assembly until migrated. See the
+The history recorder overload accepts `coupled::lastSnapshot` as its final
+supplier and the coupled cooling snapshot supplier. It stores the ledger on
+`DatacenterSimulationStepSnapshot.coupledThermalSnapshot()` and the independent
+air snapshot on `operationalSnapshot().roomAirSnapshot()`. Tick indices and elapsed
+times must match. Numeric `roomAirTemperatureCelsius()` is NaN when air is absent;
+the legacy server-temperature accessors retain their meaning. See the
 [coupled model](temperature.md#coupled-server-room-and-cooling-model) for equations,
 integration and boundary assumptions.
 

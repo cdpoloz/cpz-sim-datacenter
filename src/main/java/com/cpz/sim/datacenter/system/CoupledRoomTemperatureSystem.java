@@ -4,6 +4,9 @@ import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.model.Server;
 import com.cpz.sim.datacenter.model.ServerThermalProperties;
 import com.cpz.sim.datacenter.snapshot.CoupledRoomThermalSnapshot;
+import com.cpz.sim.datacenter.snapshot.CoolingSnapshot;
+import com.cpz.sim.datacenter.cooling.CoolingTickInput;
+import com.cpz.sim.datacenter.cooling.ServerHeatLoad;
 import com.cpz.sim.datacenter.snapshot.RoomAirTemperatureSnapshot;
 import com.cpz.sim.datacenter.temperature.RoomAirCoolingPath;
 import com.cpz.sim.datacenter.temperature.RoomAirTemperatureOptions;
@@ -35,6 +38,7 @@ public final class CoupledRoomTemperatureSystem implements Simulatable {
     private final Optional<CoolingSystem> coolingSystem;
     private double roomTemperatureCelsius;
     private CoupledRoomThermalSnapshot lastSnapshot;
+    private CoolingSnapshot lastCoolingSnapshot;
 
     public CoupledRoomTemperatureSystem(
             Datacenter datacenter,
@@ -133,10 +137,16 @@ public final class CoupledRoomTemperatureSystem implements Simulatable {
                 new RoomAirTemperatureSnapshot(tick.index(), tick.elapsedSeconds(), room),
                 totalPower * duration, serverEnergyChange, airCapacity * (room - roomTemperatureCelsius),
                 transferredEnergy, removedEnergy, environmentEnergy);
+        final double finalRoom = room;
+        CoolingSnapshot coolingSnapshot = coolingSystem.map(system -> system.snapshotForMixedRoom(
+                new CoolingTickInput(tick.index(), duration, servers.stream()
+                        .map(server -> new ServerHeatLoad(server.getLocation(), server.getCurrentPowerWatts())).toList()),
+                finalRoom)).orElse(null);
         // Publish only after every calculation and snapshot validation succeeds.
         for (int i = 0; i < count; i++) serverTemperatures.setTemperatureCelsius(servers.get(i).getCode(), temperatures[i]);
         roomTemperatureCelsius = room;
         lastSnapshot = snapshot;
+        lastCoolingSnapshot = coolingSnapshot;
     }
 
     private static double solveRoom(double coefficient, double uncooledTemperature, List<RoomAirCoolingPath> paths) {
@@ -171,12 +181,17 @@ public final class CoupledRoomTemperatureSystem implements Simulatable {
         return Optional.ofNullable(lastSnapshot);
     }
 
+    public Optional<CoolingSnapshot> lastCoolingSnapshot() {
+        return Optional.ofNullable(lastCoolingSnapshot);
+    }
+
     @Override
     public void reset() {
         for (Server server : datacenter.getServers())
             serverTemperatures.setTemperatureCelsius(server.getCode(), serverOptions.defaultInitialTemperatureCelsius());
         roomTemperatureCelsius = roomOptions.initialTemperatureCelsius();
         lastSnapshot = null;
+        lastCoolingSnapshot = null;
         coolingSystem.ifPresent(CoolingSystem::reset);
     }
 }

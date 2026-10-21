@@ -273,6 +273,38 @@ public final class CoolingSystem {
         return List.copyOf(createUnitSnapshots());
     }
 
+    /**
+     * Read-only instantaneous projection for a single mixed-room air node.
+     * Inlet/exhaust temperatures both represent that same mixed air, not a
+     * spatial zone gradient. Used capacity is removal at the final temperature;
+     * the coupled ledger separately records energy integrated over the tick.
+     */
+    public CoolingSnapshot snapshotForMixedRoom(CoolingTickInput input, double temperatureCelsius) {
+        Objects.requireNonNull(input, "input must not be null");
+        if (!Double.isFinite(temperatureCelsius))
+            throw new IllegalArgumentException("mixed-room temperature must be finite");
+        Map<String, Double> loads = aggregateGeneratedHeatByZone(input.serverHeatLoads());
+        List<CoolingZoneSnapshot> zones = new ArrayList<>();
+        for (CoolingZoneDefinition zone : configuration.zones()) {
+            ZoneCoolingResources resources = calculateZoneCoolingResources(zone.code());
+            double recirculation = calculateTargetRecirculationFraction(
+                    resources.supplyAirflowCubicMetersPerSecond(), resources.exhaustAirflowCubicMetersPerSecond());
+            double removal = 0.0;
+            for (CoolingUnitDefinition unit : configuration.units()) {
+                if (!(unit instanceof SupplyCoolingUnitDefinition supply) || !isEnabled(unit.code())) continue;
+                double weight = influenceWeightFor(unit, zone.code());
+                double conductance = configuration.options().airVolumetricHeatCapacityJoulesPerCubicMeterKelvin()
+                        * supply.ratedAirflowCubicMetersPerSecond() * weight * (1.0 - recirculation);
+                removal += new RoomAirCoolingPath(conductance, supply.supplyAirTemperatureCelsius(),
+                        supply.ratedCoolingCapacityWatts() * weight).removedHeatWatts(temperatureCelsius);
+            }
+            zones.add(new CoolingZoneSnapshot(zone.code(), loads.get(zone.code()), resources.availableCoolingCapacityWatts(),
+                    removal, Math.max(0.0, loads.get(zone.code()) - removal), resources.supplyAirflowCubicMetersPerSecond(),
+                    resources.exhaustAirflowCubicMetersPerSecond(), temperatureCelsius, temperatureCelsius, recirculation));
+        }
+        return new CoolingSnapshot(input.tickIndex(), currentUnitSnapshots(), zones);
+    }
+
     private List<CoolingUnitSnapshot> createUnitSnapshots() {
         List<CoolingUnitSnapshot> snapshots = new ArrayList<>();
         for (CoolingUnitDefinition definition : configuration.units()) {

@@ -168,6 +168,12 @@ public final class TemperatureSystem implements Simulatable {
         return Collections.unmodifiableCollection(thermalStates.values());
     }
 
+    @Override
+    public void reset() {
+        thermalStates.clear();
+        initializeThermalStates();
+    }
+
     private static String requireNonBlank(String value, String name) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be null or blank.");
         return value;

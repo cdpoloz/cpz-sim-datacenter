@@ -49,8 +49,8 @@ returns no options when this block is omitted; no room physics is guessed.
 
 `RoomAirTemperatureSystem` can now advance this state from explicitly supplied
 thermal transfers and return a separate `RoomAirTemperatureSnapshot`. It is not
-automatically registered or connected to servers or cooling. Existing operational
-snapshots and UI retain their server-temperature semantics in all input modes. See
+automatically registered or connected to servers or cooling. The optional coupled
+pipeline below also captures room air into operational/history snapshots. See
 [JSON configuration](configuration.md#room-air-state-preparation) for the contract.
 
 ### Explicit room-air energy balance
@@ -157,8 +157,18 @@ excludes HVAC/fan motor heat; it is not added to room air.
 `CoupledRoomThermalSnapshot` exposes a room-air snapshot and integrated energies:
 IT input, server storage change, room storage change, signed server-to-air heat,
 removed heat and signed environment loss. Its `energyBalanceResidualJoules()`
-should be zero within rounding tolerance. Existing operational/history snapshots
-still hold server-temperature aggregates; air history/UI wiring is a later step.
+should be zero within rounding tolerance. Operational/history snapshots retain
+the server aggregate and independently expose optional room-air data and the ledger.
+An absent air model produces no air snapshot and a NaN numeric air accessor; it
+never falls back to server or configured ambient temperature.
+
+`lastCoolingSnapshot()` returns a read-only instantaneous projection captured at
+the end of the coupled tick. Electrical unit activity is real enabled-unit power;
+zone inlet/exhaust values both represent the same mixed room air, with no spatial
+temperature rise. Used cooling capacity is instantaneous removal at that final
+temperature, whereas `removedHeatJoules` integrates the full tick. Zone generated
+heat/deficit remain electrical IT load diagnostics and must not replace the
+conservative ledger or be treated as stored room energy.
 
 Do not run legacy `CoolingSystem.tick`, `CoolingSnapshotCoordinator`,
 `CoolingSimulationSystem`, `TemperatureSystem.update` or the standalone
@@ -405,7 +415,7 @@ The exact numeric output depends on workload evolution and tick duration.
 Possible future extensions, not implemented in this milestone:
 
 - rack inlet temperature modeling
-- exposing coupled room-air snapshots through operational history and UI
+- calibrating room parameters and separating spatial air zones/inlets
 - temperature-driven air inference and calibrated cooling equipment behavior
 - airflow and thermal coupling between racks
 - more advanced per-server thermal models

@@ -128,6 +128,18 @@ public final class DatacenterOperationalSnapshotProvider {
             HealthSnapshot healthSnapshot,
             Optional<CoolingSnapshot> coolingSnapshot
     ) {
+        return snapshot(energySnapshot, temperatureSnapshot, healthSnapshot, coolingSnapshot, Optional.empty());
+    }
+
+    /** Captures independent room air without changing the legacy server aggregate. */
+    public DatacenterOperationalSnapshot snapshot(
+            EnergyConsumptionSnapshot energySnapshot,
+            TemperatureSnapshot temperatureSnapshot,
+            HealthSnapshot healthSnapshot,
+            Optional<CoolingSnapshot> coolingSnapshot,
+            Optional<RoomAirTemperatureSnapshot> roomAirSnapshot
+    ) {
+        Objects.requireNonNull(roomAirSnapshot, "roomAirSnapshot must not be null");
         Objects.requireNonNull(energySnapshot, "energySnapshot must not be null");
         Objects.requireNonNull(temperatureSnapshot, "temperatureSnapshot must not be null");
         Objects.requireNonNull(healthSnapshot, "healthSnapshot must not be null");
@@ -202,7 +214,8 @@ public final class DatacenterOperationalSnapshotProvider {
                 currentItPowerWatts,
                 coolingPowerWatts,
                 totalFacilityPowerWatts,
-                pue
+                pue,
+                roomAirSnapshot
         );
     }
 

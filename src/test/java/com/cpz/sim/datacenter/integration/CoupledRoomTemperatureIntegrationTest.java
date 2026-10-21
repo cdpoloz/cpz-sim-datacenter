@@ -9,6 +9,9 @@ import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.model.HardwareStatus;
 import com.cpz.sim.datacenter.model.ServerRole;
 import com.cpz.sim.datacenter.snapshot.CoupledRoomThermalSnapshot;
+import com.cpz.sim.datacenter.snapshot.*;
+import com.cpz.sim.datacenter.history.*;
+import com.cpz.sim.datacenter.health.ServerHealthOptions;
 import com.cpz.sim.datacenter.system.*;
 import com.cpz.sim.datacenter.temperature.SimpleServerTemperatureModel;
 import com.cpz.sim.datacenter.temperature.TemperatureSystemOptions;
@@ -293,5 +296,70 @@ class CoupledRoomTemperatureIntegrationTest {
         assertEquals(31.0, f.temperatures.getThermalState(secondCode).getTemperatureCelsius());
         assertEquals(previous.roomAir().temperatureCelsius(), f.coupled.roomAirTemperatureCelsius());
         assertSame(previous, f.coupled.lastSnapshot().orElseThrow());
+    }
+
+    @Test
+    void historyCapturesIndependentAirServerAggregateAndElectricalCooling() {
+        var f = fixture(24.0, 24.0, 0.0, true, 1000.0);
+        var energy = new EnergyConsumptionSystem(f.datacenter);
+        var health = new ServerHealthSystem(f.datacenter, f.temperatures, ServerHealthOptions.defaults());
+        var history = new DatacenterSimulationHistory();
+        var recorder = new DatacenterSimulationHistoryRecorder(
+                new EnergyConsumptionSnapshotProvider(f.datacenter, energy),
+                new TemperatureSnapshotProvider(f.datacenter, f.temperatures, f.options),
+                new HealthSnapshotProvider(f.datacenter, health, f.temperatures),
+                new DatacenterOperationalSnapshotProvider(f.datacenter),
+                f.coupled::lastCoolingSnapshot, history, Optional.empty(), f.coupled::lastSnapshot);
+        f.datacenter.getServers().forEach(s -> s.setCurrentPowerWatts(200.0));
+        advance(f, 1, 60);
+        health.update(tick(1, 60));
+        energy.update(tick(1, 60));
+        var first = recorder.record(tick(1, 60));
+        var operational = first.operationalSnapshot();
+        assertTrue(first.coupledThermalSnapshot().isPresent());
+        assertEquals(f.coupled.roomAirTemperatureCelsius(), operational.roomAirTemperatureCelsius());
+        assertNotEquals(operational.averageOnlineServerTemperatureCelsius(), operational.roomAirTemperatureCelsius());
+        assertEquals(operational.roomTemperatureCelsius(), operational.averageOnlineServerTemperatureCelsius());
+        assertEquals(400.0, operational.totalFacilityPowerWatts());
+        assertEquals(1.0, operational.pue());
+        f.cooling.orElseThrow().enable("SUP");
+        f.cooling.orElseThrow().enable("EXH");
+        advance(f, 2, 60);
+        health.update(tick(2, 60));
+        energy.update(tick(2, 60));
+        var second = recorder.record(tick(2, 60));
+        assertEquals(600.0, second.operationalSnapshot().coolingPowerWatts());
+        assertEquals(1000.0, second.operationalSnapshot().totalFacilityPowerWatts());
+        assertEquals(2.5, second.operationalSnapshot().pue());
+        assertEquals(0.0, first.operationalSnapshot().coolingPowerWatts());
+        assertEquals(2, history.snapshots().size());
+        assertEquals(first, history.snapshots().getFirst());
+        assertEquals(second.operationalSnapshot().roomAirTemperatureCelsius(),
+                second.coolingSnapshot().orElseThrow().zones().getFirst().inletAirTemperatureCelsius());
+        assertEquals(0.0, second.coolingSnapshot().orElseThrow().zones().getFirst().airTemperatureRiseCelsius());
+        f.coupled.reset();
+        recorder.clear();
+        assertTrue(history.snapshots().isEmpty());
+        assertTrue(f.coupled.lastCoolingSnapshot().isEmpty());
+        assertTrue(f.coupled.lastSnapshot().isEmpty());
+    }
+
+    @Test
+    void historyRejectsStaleAirSnapshotsBeforeRecording() {
+        var f = fixture(24.0, 24.0, 0.0, false, 1000.0);
+        advance(f, 2, 60);
+        var energy = new EnergyConsumptionSystem(f.datacenter);
+        var health = new ServerHealthSystem(f.datacenter, f.temperatures, ServerHealthOptions.defaults());
+        health.update(tick(1, 60));
+        energy.update(tick(1, 60));
+        var history = new DatacenterSimulationHistory();
+        var recorder = new DatacenterSimulationHistoryRecorder(
+                new EnergyConsumptionSnapshotProvider(f.datacenter, energy),
+                new TemperatureSnapshotProvider(f.datacenter, f.temperatures, f.options),
+                new HealthSnapshotProvider(f.datacenter, health, f.temperatures),
+                new DatacenterOperationalSnapshotProvider(f.datacenter), Optional::empty,
+                history, Optional.empty(), f.coupled::lastSnapshot);
+        assertThrows(IllegalArgumentException.class, () -> recorder.record(tick(1, 60)));
+        assertTrue(history.snapshots().isEmpty());
     }
 }
