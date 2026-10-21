@@ -39,6 +39,21 @@ Each `serverModels` entry may additionally declare
 definitions that omit both fields continue to use the global values and preserve
 the previous behavior.
 
+## Room-air state preparation
+
+An optional top-level `roomAirTemperature` configuration now prepares a separate
+`RoomAirTemperatureOptions` and `RoomAirThermalState`. It specifies initial air
+temperature, effective room thermal capacity, environment temperature and the
+linear heat-transfer coefficient to that environment. The runtime factory
+returns no options when this block is omitted; no room physics is guessed.
+
+This is preparation only: no room-air energy-balance system is registered yet,
+the state is not connected to servers or cooling, and snapshots and UI retain
+their existing server-temperature semantics in all input modes. Consumers may
+explicitly initialize a state from the factory's options. Its temperature stays
+at the initialized value unless explicitly changed. See
+[JSON configuration](configuration.md#room-air-state-preparation) for the contract.
+
 ## What `temperatureCelsius` Represents
 
 `ServerTemperatureSnapshot.temperatureCelsius()` is a simplified representative

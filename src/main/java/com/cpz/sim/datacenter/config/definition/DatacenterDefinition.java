@@ -20,6 +20,7 @@ import java.util.Objects;
  * @param dataInputMode authoritative input variable for the simulation pipeline
  * @param powerInputGranularity telemetry granularity for power-driven input
  * @param temperatureInputGranularity telemetry granularity for temperature-driven input
+ * @param roomAirTemperature optional independent room-air thermal configuration
  *
  * @author CPZ
  */
@@ -33,7 +34,8 @@ public record DatacenterDefinition(
         CoolingConfigDefinition cooling,
         DatacenterDataInputMode dataInputMode,
         PowerInputGranularity powerInputGranularity,
-        TemperatureInputGranularity temperatureInputGranularity
+        TemperatureInputGranularity temperatureInputGranularity,
+        RoomAirTemperatureOptionsDefinition roomAirTemperature
 ) {
 
     public DatacenterDefinition {
@@ -41,6 +43,23 @@ public record DatacenterDefinition(
         powerInputGranularity = Objects.requireNonNullElse(powerInputGranularity, PowerInputGranularity.SERVER);
         temperatureInputGranularity =
                 Objects.requireNonNullElse(temperatureInputGranularity, TemperatureInputGranularity.RACK);
+    }
+
+    /** Preserves the constructor introduced with temperature input granularity. */
+    public DatacenterDefinition(
+            String name,
+            DatacenterLayoutDefinition layout,
+            List<ServerModelDefinition> serverModels,
+            List<ServerDefinition> servers,
+            TemperatureSystemOptionsDefinition temperature,
+            HealthSystemOptionsDefinition health,
+            CoolingConfigDefinition cooling,
+            DatacenterDataInputMode dataInputMode,
+            PowerInputGranularity powerInputGranularity,
+            TemperatureInputGranularity temperatureInputGranularity
+    ) {
+        this(name, layout, serverModels, servers, temperature, health, cooling,
+                dataInputMode, powerInputGranularity, temperatureInputGranularity, null);
     }
 
     /**

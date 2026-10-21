@@ -51,7 +51,8 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
                     readOptionalCooling(root, path),
                     readOptionalDataInputMode(root, path),
                     readOptionalPowerInputGranularity(root, path),
-                    readOptionalTemperatureInputGranularity(root, path)
+                    readOptionalTemperatureInputGranularity(root, path),
+                    readOptionalRoomAirTemperature(root, path)
             );
         } catch (IOException exception) {
             throw new DatacenterConfigException("Could not load datacenter config from path: " + path, exception);
@@ -71,6 +72,32 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
                 readOptionalRoom(layoutNode, path),
                 readOptionalHotAisles(layoutNode, path),
                 readRequired(layoutNode, "racks", path, RACKS_TYPE)
+        );
+    }
+
+    private static RoomAirTemperatureOptionsDefinition readOptionalRoomAirTemperature(JsonNode root, Path path) {
+        JsonNode node = root.get("roomAirTemperature");
+        if (node == null) return null;
+        if (!node.isObject())
+            throw new DatacenterConfigException("roomAirTemperature must be a non-null object in datacenter config: " + path);
+        List<String> fields = List.of(
+                "initialTemperatureCelsius",
+                "effectiveThermalCapacityJoulesPerCelsius",
+                "environmentTemperatureCelsius",
+                "environmentHeatTransferWattsPerCelsius"
+        );
+        rejectUnknownProperties(node, fields, "roomAirTemperature", path);
+        for (String field : fields) {
+            JsonNode value = requireProperty(node, field, path);
+            if (!value.isNumber() || !Double.isFinite(value.doubleValue()))
+                throw new DatacenterConfigException("roomAirTemperature." + field
+                        + " must be a finite number in datacenter config: " + path);
+        }
+        return new RoomAirTemperatureOptionsDefinition(
+                node.get(fields.get(0)).doubleValue(),
+                node.get(fields.get(1)).doubleValue(),
+                node.get(fields.get(2)).doubleValue(),
+                node.get(fields.get(3)).doubleValue()
         );
     }
 

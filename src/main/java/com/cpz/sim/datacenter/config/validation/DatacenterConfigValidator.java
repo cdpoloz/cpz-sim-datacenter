@@ -370,6 +370,24 @@ public final class DatacenterConfigValidator {
             errors.add(context + " must have finite heatDissipationWattsPerCelsius >= 0");
     }
 
+    private static void validateRoomAirTemperature(
+            RoomAirTemperatureOptionsDefinition options,
+            List<String> errors
+    ) {
+        if (options == null) return;
+        String context = "roomAirTemperature";
+        if (!Double.isFinite(options.initialTemperatureCelsius()))
+            errors.add(context + " must have finite initialTemperatureCelsius");
+        if (!Double.isFinite(options.environmentTemperatureCelsius()))
+            errors.add(context + " must have finite environmentTemperatureCelsius");
+        if (!Double.isFinite(options.effectiveThermalCapacityJoulesPerCelsius())
+                || options.effectiveThermalCapacityJoulesPerCelsius() <= 0.0)
+            errors.add(context + " must have finite effectiveThermalCapacityJoulesPerCelsius > 0");
+        if (!Double.isFinite(options.environmentHeatTransferWattsPerCelsius())
+                || options.environmentHeatTransferWattsPerCelsius() < 0.0)
+            errors.add(context + " must have finite environmentHeatTransferWattsPerCelsius >= 0");
+    }
+
     public void validate(DatacenterDefinition definition) {
         List<String> errors = new ArrayList<>();
         if (definition == null) throw new DatacenterConfigValidationException("Datacenter definition cannot be null");
@@ -378,6 +396,7 @@ public final class DatacenterConfigValidator {
         validateServerModels(definition.serverModels(), errors);
         validateServers(definition.servers(), definition.serverModels(), layout, errors);
         validateTemperature(definition.temperature(), errors);
+        validateRoomAirTemperature(definition.roomAirTemperature(), errors);
         validateHealth(definition.health(), errors);
         validateCoolingStructure(definition.cooling(), errors);
         validateCoolingOptions(definition.cooling(), errors);

@@ -39,6 +39,8 @@ Main fields:
 - `serverModels`: server model catalog.
 - `servers`: servers installed in specific racks and slots.
 - `temperature`: optional thermal model configuration.
+- `roomAirTemperature`: optional independent room-air thermal configuration;
+  see [Room-air state preparation](#room-air-state-preparation).
 - `health`: optional server health threshold configuration.
 - `cooling`: optional cooling-system configuration.
 - `dataInputMode`: optional authoritative input mode. Defaults to
@@ -47,6 +49,46 @@ Main fields:
   `POWER_DRIVEN`. Defaults to `SERVER`.
 - `temperatureInputGranularity`: optional temperature input granularity for
   `TEMPERATURE_DRIVEN`. Defaults to `RACK`.
+
+## Room-air state preparation
+
+The optional top-level `roomAirTemperature` block prepares parameters and an
+independent room-air state. It is separate from `layout.room` metadata and the
+per-server `temperature` options.
+
+```json
+"roomAirTemperature": {
+  "initialTemperatureCelsius": 24.0,
+  "effectiveThermalCapacityJoulesPerCelsius": 2000000.0,
+  "environmentTemperatureCelsius": 20.0,
+  "environmentHeatTransferWattsPerCelsius": 0.0
+}
+```
+
+These numbers illustrate the contract only; they are not calibrated defaults
+or a recommendation for a real room. All four numeric fields are required when
+the block is present. Temperatures must be finite, effective thermal capacity
+must be finite and strictly positive, and environment heat transfer must be
+finite and non-negative. Zero heat transfer represents an insulated boundary.
+Unknown fields, explicit nulls, numeric strings and incomplete blocks are rejected.
+The loader validates structure and finite numbers; `DatacenterConfigValidator`
+validates physical ranges before runtime options are created.
+
+Omitting the block preserves existing behavior and produces no room-air options.
+`RoomAirTemperatureOptionsFactory.create(definition)` returns an `Optional`.
+Consumers can initialize the separate state explicitly:
+
+```java
+Optional<RoomAirThermalState> roomAirState =
+        new RoomAirTemperatureOptionsFactory()
+                .create(definition)
+                .map(RoomAirThermalState::new);
+```
+
+At this stage the pipeline does not construct or advance this state automatically.
+It is not exposed as a calculated room-air snapshot and does not change server
+temperatures, cooling, health, input modes, or the UI. The next stage will add an
+energy balance and explicit coupling to the existing systems.
 
 ## dataInputMode
 
