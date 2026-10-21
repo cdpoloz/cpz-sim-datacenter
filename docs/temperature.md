@@ -85,15 +85,87 @@ snapshot with tick index, elapsed seconds and room-air temperature. Call it once
 per tick, in chronological order. `reset()` restores the configured initial air
 temperature and clears the last snapshot. Rejected steps preserve the state.
 
-This stage deliberately supplies no automatic adapter from IT power or existing
-cooling snapshots. `CoolingSystem` already advances zone-air state, and its
-`ServerHeatLoadProvider` uses electrical server power as thermal load. Connecting
-both models directly would create competing air states and could double-count
-energy. A future coupling step must define one owner for each thermal state and
-use the same server-to-air energy transfer on both sides of the balance, accounting
-for energy stored in servers. Rated cooling capacity and HVAC electrical power
-are not interchangeable with heat actually removed. Temperature-driven telemetry
-must remain authoritative and needs explicit inference assumptions for coupling.
+The standalone system is not an automatic adapter from IT power or legacy
+cooling snapshots. Use the coupled system below when server and room temperatures
+must evolve together.
+
+### Coupled server, room and cooling model
+
+`CoupledRoomTemperatureSystem` implements `Simulatable` and owns both thermal
+updates in `UTILIZATION_DRIVEN` and `POWER_DRIVEN`. It writes per-server results
+into the existing `TemperatureSystem` state store, preserving health and server
+snapshot consumers. Its equations are:
+
+```text
+C_i * dT_i/dt = P_i - H_i * (T_i - T_air)
+C_air * dT_air/dt = sum(H_i * (T_i - T_air))
+                    - Q_cooling(T_air) - UA * (T_air - T_environment)
+```
+
+All installed servers participate, including offline servers releasing stored
+heat at zero electrical power. Per-model capacity and conductance take precedence
+over global server options. Signed heat exchange is used on both sides of each
+server/air connection; electrical IT input is never added directly to the air.
+
+The solver uses simultaneous backward Euler substeps of at most one second,
+rather than combining two independent explicit updates. This is a conservative
+numerical approximation, not the exact standalone constant-input solution.
+IT power and enabled unit states are constant within each external tick. Tick
+duration must be in `(0, 86400]` seconds to bound work. Repeated or backward
+tick indices/times are rejected; reset before replaying a run.
+
+For a substep of length `dt`, elimination of server states gives:
+
+```text
+gamma_i = H_i / (1 + dt * H_i / C_i)
+base_i  = T_i_old + dt * P_i / C_i
+A       = C_air / dt + UA + sum(gamma_i)
+B       = C_air / dt * T_air_old + UA * T_environment + sum(gamma_i * base_i)
+A * T_air_new + Q_cooling(T_air_new) = B
+q_i = gamma_i * (base_i - T_air_new)
+T_i_new = T_i_old + dt * (P_i - q_i) / C_i
+```
+
+The scalar room equation is monotone and solved by bracketed bisection. The same
+transfers update server energy, room energy and the joule ledger. Failed steps
+publish no partial server/air state. `reset()` restores initial server/air
+temperatures, clears the ledger and resets cooling units; power/workload reset
+remains with those systems.
+
+`CoolingSystem.roomAirCoolingPaths()` reads unit controls without advancing legacy
+zone air. Each enabled SUPPLY contributes paths weighted by its zone influences:
+
+```text
+K = air_density * air_specific_heat * supply_flow * influence * (1 - recirculation)
+Q_path(T_air) = max(0, min(rated_capacity * influence, K * (T_air - T_supply)))
+Q_cooling(T_air) = sum(Q_path(T_air))
+```
+
+Recirculation uses the existing zone flow-balance target and configured residual
+and maximum fractions, instantaneously in this mixed-room approximation. Balanced
+EXHAUST improves return flow; it is not outdoor ventilation or a second cooling
+source. Exhaust alone provides no cooling here. A SUPPLY hotter than room air
+does not provide heating in this cooling-only approximation. Influence weights
+must sum to one. Zone air volume and recirculation response time remain legacy
+parameters and do not add another air capacity or lag in coupled mode.
+
+Removal can exceed IT input when cooling stored energy, but is limited by supply
+capacity and vanishes below supply temperature. HVAC electrical power is separate
+through `CoolingSystem.currentUnitSnapshots()`. This first thermal boundary
+excludes HVAC/fan motor heat; it is not added to room air.
+
+`CoupledRoomThermalSnapshot` exposes a room-air snapshot and integrated energies:
+IT input, server storage change, room storage change, signed server-to-air heat,
+removed heat and signed environment loss. Its `energyBalanceResidualJoules()`
+should be zero within rounding tolerance. Existing operational/history snapshots
+still hold server-temperature aggregates; air history/UI wiring is a later step.
+
+Do not run legacy `CoolingSystem.tick`, `CoolingSnapshotCoordinator`,
+`CoolingSimulationSystem`, `TemperatureSystem.update` or the standalone
+`RoomAirTemperatureSystem` alongside this coupled pipeline. They would evolve
+competing states. `CoupledRoomTemperatureSystemFactory` returns empty without
+`roomAirTemperature` and rejects `TEMPERATURE_DRIVEN` coupling: observed
+temperatures need a separate inference model and must not be overwritten.
 
 ## What `temperatureCelsius` Represents
 
@@ -112,7 +184,7 @@ This distinction matters:
 
 ## What It Does Not Represent
 
-The current model does not represent:
+The legacy per-server temperature value does not represent:
 
 - physical datacenter room-air temperature (the separate room-air system handles that approximation)
 - rack inlet temperature
@@ -321,11 +393,10 @@ The exact numeric output depends on workload evolution and tick duration.
 
 ## Current Limitations
 
-- simplified internal server temperature only
-- room-air output is available only from the separate, explicitly invoked system
+- internal server temperature remains a representative device proxy
+- room-air output requires the opt-in standalone or coupled system
 - no rack inlet temperature
-- no cooling model
-- no airflow model
+- coupled cooling uses a well-mixed room and simplified effective airflow
 - no rack-to-rack thermal coupling
 - no claim of calibration against real server hardware
 
@@ -334,7 +405,7 @@ The exact numeric output depends on workload evolution and tick duration.
 Possible future extensions, not implemented in this milestone:
 
 - rack inlet temperature modeling
-- coupling the independent room-air balance to the server and cooling pipeline
-- cooling equipment integration
+- exposing coupled room-air snapshots through operational history and UI
+- temperature-driven air inference and calibrated cooling equipment behavior
 - airflow and thermal coupling between racks
 - more advanced per-server thermal models

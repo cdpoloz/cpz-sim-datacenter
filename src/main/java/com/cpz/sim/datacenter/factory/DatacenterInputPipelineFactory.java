@@ -6,6 +6,7 @@ import com.cpz.sim.datacenter.input.RackTemperatureInputSource;
 import com.cpz.sim.datacenter.input.ServerPowerInputSource;
 import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.system.PowerConsumptionSystem;
+import com.cpz.sim.datacenter.system.CoupledRoomTemperatureSystem;
 import com.cpz.sim.datacenter.system.PowerInputSystem;
 import com.cpz.sim.datacenter.system.RackTemperatureInputSystem;
 import com.cpz.sim.datacenter.system.TemperatureSystem;
@@ -51,22 +52,47 @@ public final class DatacenterInputPipelineFactory {
             WorkloadSource workloadSource,
             ServerPowerInputSource serverPowerInputSource
     ) {
+        return createInputSystems(definition, datacenter, temperatureSystem, temperatureSystemOptions,
+                workloadSource, serverPowerInputSource, null);
+    }
+
+    /**
+     * Uses a supplied coupled system in place of the legacy temperature update.
+     * Callers must not additionally register cooling thermal adapters, the
+     * legacy TemperatureSystem, or the independent RoomAirTemperatureSystem.
+     */
+    public List<Simulatable> createInputSystems(
+            DatacenterDefinition definition,
+            Datacenter datacenter,
+            TemperatureSystem temperatureSystem,
+            TemperatureSystemOptions temperatureSystemOptions,
+            WorkloadSource workloadSource,
+            ServerPowerInputSource serverPowerInputSource,
+            CoupledRoomTemperatureSystem coupledRoomSystem
+    ) {
         validator.validate(definition);
         Objects.requireNonNull(datacenter, "datacenter must not be null");
         Objects.requireNonNull(temperatureSystem, "temperatureSystem must not be null");
         Objects.requireNonNull(temperatureSystemOptions, "temperatureSystemOptions must not be null");
+        if ((definition.roomAirTemperature() != null) != (coupledRoomSystem != null))
+            throw new IllegalArgumentException("roomAirTemperature configuration requires the coupled pipeline overload and matching system");
+        if (coupledRoomSystem != null && (!coupledRoomSystem.uses(datacenter, temperatureSystem, temperatureSystemOptions,
+                new RoomAirTemperatureOptionsFactory().create(definition).orElseThrow())
+                || definition.dataInputMode() == com.cpz.sim.datacenter.input.DatacenterDataInputMode.TEMPERATURE_DRIVEN))
+            throw new IllegalArgumentException("coupled room system must match the power-derived pipeline");
+        Simulatable thermalSystem = coupledRoomSystem == null ? temperatureSystem : coupledRoomSystem;
         List<Simulatable> systems = new ArrayList<>();
         switch (definition.dataInputMode()) {
             case UTILIZATION_DRIVEN -> {
                 Objects.requireNonNull(workloadSource, "workloadSource must not be null for UTILIZATION_DRIVEN");
                 systems.add(new WorkloadSystem(datacenter, workloadSource));
                 systems.add(new PowerConsumptionSystem(datacenter));
-                systems.add(temperatureSystem);
+                systems.add(thermalSystem);
             }
             case POWER_DRIVEN -> {
                 Objects.requireNonNull(serverPowerInputSource, "serverPowerInputSource must not be null for POWER_DRIVEN");
                 systems.add(new PowerInputSystem(datacenter, serverPowerInputSource));
-                systems.add(temperatureSystem);
+                systems.add(thermalSystem);
             }
             case TEMPERATURE_DRIVEN -> {
                 RackTemperatureInputSource rackTemperatureInputSource =
@@ -91,6 +117,20 @@ public final class DatacenterInputPipelineFactory {
             WorkloadSource workloadSource,
             ServerPowerInputSource serverPowerInputSource
     ) {
+        registerInputSystems(engine, definition, datacenter, temperatureSystem, temperatureSystemOptions,
+                workloadSource, serverPowerInputSource, null);
+    }
+
+    public void registerInputSystems(
+            SimulationEngine engine,
+            DatacenterDefinition definition,
+            Datacenter datacenter,
+            TemperatureSystem temperatureSystem,
+            TemperatureSystemOptions temperatureSystemOptions,
+            WorkloadSource workloadSource,
+            ServerPowerInputSource serverPowerInputSource,
+            CoupledRoomTemperatureSystem coupledRoomSystem
+    ) {
         Objects.requireNonNull(engine, "engine must not be null");
         for (Simulatable system : createInputSystems(
                 definition,
@@ -98,7 +138,8 @@ public final class DatacenterInputPipelineFactory {
                 temperatureSystem,
                 temperatureSystemOptions,
                 workloadSource,
-                serverPowerInputSource
+                serverPowerInputSource,
+                coupledRoomSystem
         )) {
             engine.register(system);
         }

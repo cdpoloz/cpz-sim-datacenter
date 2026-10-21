@@ -132,6 +132,11 @@ public final class TemperatureSystem implements Simulatable {
         );
     }
 
+    /** Identifies the state store and options used by an optional coupled thermal pipeline. */
+    public boolean uses(Datacenter datacenter, TemperatureSystemOptions options) {
+        return this.datacenter == datacenter && this.options.equals(options);
+    }
+
     public ServerThermalState getThermalState(String serverCode) {
         return thermalStates.get(requireNonBlank(serverCode, "serverCode"));
     }

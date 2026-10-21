@@ -13,6 +13,7 @@ import com.cpz.sim.datacenter.model.ServerLocation;
 import com.cpz.sim.datacenter.snapshot.CoolingSnapshot;
 import com.cpz.sim.datacenter.snapshot.CoolingUnitSnapshot;
 import com.cpz.sim.datacenter.snapshot.CoolingZoneSnapshot;
+import com.cpz.sim.datacenter.temperature.RoomAirCoolingPath;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -234,6 +235,42 @@ public final class CoolingSystem {
             result.merge(zoneCode, heatLoad.generatedHeatWatts(), Double::sum);
         }
         return result;
+    }
+
+    /**
+     * Read-only cold-air paths for the separate coupled room model. This does
+     * not advance zone-air temperatures or recirculation state. The existing
+     * balance-based recirculation target reduces supply flow; extraction assists
+     * return flow and does not remove heat a second time. Influence weights
+     * partition each supply unit's flow and capacity across the room.
+     */
+    public List<RoomAirCoolingPath> roomAirCoolingPaths() {
+        List<RoomAirCoolingPath> paths = new ArrayList<>();
+        double volumetricCapacity = configuration.options().airVolumetricHeatCapacityJoulesPerCubicMeterKelvin();
+        for (CoolingUnitDefinition unit : configuration.units()) {
+            double totalWeight = unit.influences().stream().mapToDouble(CoolingZoneInfluence::weight).sum();
+            if (Math.abs(totalWeight - 1.0) > 1e-9)
+                throw new IllegalArgumentException("coupled room model requires cooling influence weights to sum to 1: " + unit.code());
+        }
+        for (CoolingZoneDefinition zone : configuration.zones()) {
+            ZoneCoolingResources resources = calculateZoneCoolingResources(zone.code());
+            double recirculation = calculateTargetRecirculationFraction(
+                    resources.supplyAirflowCubicMetersPerSecond(), resources.exhaustAirflowCubicMetersPerSecond());
+            for (CoolingUnitDefinition unit : configuration.units()) {
+                if (!(unit instanceof SupplyCoolingUnitDefinition supply) || !isEnabled(unit.code())) continue;
+                double weight = influenceWeightFor(unit, zone.code());
+                if (weight == 0.0) continue;
+                paths.add(new RoomAirCoolingPath(
+                        volumetricCapacity * supply.ratedAirflowCubicMetersPerSecond() * weight * (1.0 - recirculation),
+                        supply.supplyAirTemperatureCelsius(), supply.ratedCoolingCapacityWatts() * weight));
+            }
+        }
+        return List.copyOf(paths);
+    }
+
+    /** Reads unit state without advancing any thermal state. */
+    public List<CoolingUnitSnapshot> currentUnitSnapshots() {
+        return List.copyOf(createUnitSnapshots());
     }
 
     private List<CoolingUnitSnapshot> createUnitSnapshots() {

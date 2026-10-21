@@ -105,10 +105,42 @@ the tick duration in seconds and the exact constant-input room energy balance.
 It exposes its latest immutable snapshot separately and supports `reset()`.
 See [Temperature model](temperature.md#explicit-room-air-energy-balance).
 
-No automatic server/cooling coupling, operational/history snapshot migration or
-UI wiring is included yet. Existing simulation results remain unchanged until
-a caller explicitly uses the new system. Subsequent coupling must preserve
-server energy storage and avoid duplicating existing cooling-zone air dynamics.
+### Coupled input pipeline
+
+For utilization- or power-driven simulations, construct the coupled system using
+the configured room parameters and the same cooling system that receives unit
+enable/disable commands:
+
+```java
+Optional<CoolingSystem> coolingSystem = new CoolingConfigurationFactory()
+        .create(definition, datacenter).map(CoolingSystem::new);
+Optional<CoupledRoomTemperatureSystem> coupled = new CoupledRoomTemperatureSystemFactory()
+        .create(definition, datacenter, temperatureSystem, coolingSystem);
+
+new DatacenterInputPipelineFactory().registerInputSystems(
+        engine, definition, datacenter, temperatureSystem, temperatureOptions,
+        workloadSource, serverPowerInputSource, coupled.orElse(null));
+```
+
+The new overload replaces the legacy temperature update when configured.
+Omitting `roomAirTemperature` returns an empty optional and preserves the original
+pipeline. The older pipeline overload rejects an enabled room configuration
+rather than silently ignoring it. Configured cooling must match the supplied
+runtime cooling system. `TEMPERATURE_DRIVEN` coupling is unsupported for now;
+its existing unconfigured pipeline is unchanged.
+
+With coupling enabled, register health and energy consumers afterward, but do not
+also register a legacy cooling thermal adapter, `TemperatureSystem.update`, or
+the standalone room-air system. The coupled solver owns thermal evolution;
+`TemperatureSystem` is its server-state store. Cooling controls remain usable.
+`coupled.lastSnapshot()` exposes room air and the energy ledger;
+`coolingSystem.currentUnitSnapshots()` exposes electrical unit activity. Existing
+`CoolingSnapshot` zone-air results are not produced by this mode.
+
+Operational/history snapshot migration and UI wiring are not included yet.
+The current UI remains on its legacy assembly until migrated. See the
+[coupled model](temperature.md#coupled-server-room-and-cooling-model) for equations,
+integration and boundary assumptions.
 
 ## dataInputMode
 
