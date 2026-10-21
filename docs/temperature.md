@@ -69,7 +69,13 @@ The current model does not represent:
 `ambientTemperatureCelsius` is only an input to the simplified thermal model. It
 is not a full room or cooling simulation.
 
-`DatacenterOperationalSnapshot.roomTemperatureCelsius` is instead an
+`DatacenterOperationalSnapshot.averageOnlineServerTemperatureCelsius()` is the
+explicit accessor for the internal server-temperature aggregate.
+`roomTemperatureCelsius()` remains a legacy accessor for the same value; its
+meaning has not changed. When no servers are online, both return the configured
+ambient reference as a compatibility fallback, not a simulated air temperature.
+
+This value is an
 operational aggregate for consumers: the dynamic, online-server-weighted
 average of representative internal server temperatures. It must not be
 interpreted as physical room-air temperature or as the configured ambient
