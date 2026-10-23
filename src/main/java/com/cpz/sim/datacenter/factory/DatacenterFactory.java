@@ -100,11 +100,6 @@ public final class DatacenterFactory {
     public Datacenter create(DatacenterDefinition definition) {
         if (definition == null) throw new IllegalArgumentException("definition cannot be null");
         validator.validate(definition);
-        // Stage 2 accepts and validates the contract, but must not silently run
-        // rack-cooling scenarios with a runtime that ignores their local nodes.
-        if (definition.rackCooling() != null)
-            throw new UnsupportedOperationException(
-                    "rackCooling configuration is valid but rack cooling runtime is not implemented yet");
         try {
             Map<String, ServerConfig> serverConfigsByModelCode = createServerConfigMap(definition.serverModels());
             List<Rack> racks = createRacks(definition.layout().racks());

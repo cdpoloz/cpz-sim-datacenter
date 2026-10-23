@@ -12,7 +12,8 @@ state belongs to `CoolingSystem`.
 
 Dedicated rack equipment is documented in
 [rack cooling equipment controls](#rack-cooling-equipment-controls-stage-3).
-Its local thermal simulation is not yet implemented.
+Its local thermal simulation is implemented in the coupled pipeline; see
+[stage 4 thermal integration](temperature.md#rack-air-thermal-integration-stage-4).
 
 ## Current Scope
 
@@ -712,8 +713,8 @@ if (configuration.isPresent()) {
 Use a code actually declared in the loaded configuration. `RackCoolingSystem`
 provides `enable`, `disable`, `setEnabled`, `toggle`, `isEnabled`, `stateOf`,
 `definitionOf`, `findUnitForRack` and `reset`. It reuses immutable
-`CoolingUnitState`. A reset restores initial enabled states; the later thermal
-owner will restore local-air temperatures. Commands for unknown/null identities
+`CoolingUnitState`. A reset restores initial enabled states. `CoupledRoomTemperatureSystem.reset()`
+restores local-air temperatures and also resets the installed rack controls. Commands for unknown/null identities
 fail without changing existing equipment. Control calls belong on the simulation
 owner thread, like existing room cooling controls.
 
@@ -742,7 +743,10 @@ in the room cooling paths. `CoolingSystem` remains the authoritative controller
 for room units; `RackCoolingSystem` owns rack unit controls. This separation
 prevents counting local cooling capacity again as a room refrigeration sink.
 
-Full scenario construction remains blocked by `DatacenterFactory` and
-`CoupledRoomTemperatureSystemFactory` while rack air physics is pending, even
-when all rack units start disabled. Equipment-only inspection does not remove
-that guard. Existing configurations without rack cooling retain their behavior.
+Stage 4 connects these controls to `CoupledRoomTemperatureSystem`. Its factory
+creates the controls automatically or accepts an explicitly supplied instance,
+validated against the definition. Full scenario construction is now supported
+through the coupled pipeline; local-air parameters require it even when the
+unit is disabled. Existing configurations without rack cooling retain their
+behavior. See [thermal integration](temperature.md#rack-air-thermal-integration-stage-4)
+for local temperature access and energy accounting.

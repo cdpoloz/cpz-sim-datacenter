@@ -1010,15 +1010,22 @@ An optional top-level `rackCooling` block defines dedicated rack units and their
 local air nodes. It is independent of the legacy `cooling` block: a scenario may
 have rack units without room cooling zones or room SUPPLY/EXHAUST units.
 
-**Current availability:** the loader and validator accept the contract below.
-`DatacenterFactory.create` and `CoupledRoomTemperatureSystemFactory.create`
-deliberately throw `UnsupportedOperationException`
-when `rackCooling` is declared, including when units are initially disabled.
-Stage 3 provides standalone equipment definitions, controls and electrical power
-through `RackCoolingConfigurationFactory` and `RackCoolingSystem`. Coupled thermal
-evolution and thermal/history snapshots arrive in later stages; running a full
-scenario now must not silently ignore the new cooling configuration.
-Existing scenarios without `rackCooling` continue to build normally.
+**Current availability (stage 4):** JSON validation, equipment controls and
+coupled rack thermal evolution are implemented. `DatacenterFactory` builds the
+physical layout; `CoupledRoomTemperatureSystemFactory` builds the matching
+server/rack/room thermal system. Use the coupled overload of the input pipeline.
+The earlier temporary execution guards have been removed. A mismatched or omitted
+rack equipment system is rejected by the coupled factory/pipeline.
+
+The coupled factory's original overload creates rack controls automatically.
+Its additional overload accepts `Optional<RackCoolingSystem>` for applications
+that already own the controls. Read the installed controls through
+`coupled.rackCoolingSystem()`; do not create a second authoritative instance.
+
+Local air temperatures and per-tick thermal energies are available directly from
+the coupled system. Rack-specific operational/history presentation and facility
+power/energy/PUE aggregation remain later integration work. Current room-only
+cooling snapshots do not include rack unit electricity.
 
 The following is a fragment to add to an otherwise complete datacenter definition.
 The referenced `C01/R01` rack must already exist in `layout.racks`. All numeric

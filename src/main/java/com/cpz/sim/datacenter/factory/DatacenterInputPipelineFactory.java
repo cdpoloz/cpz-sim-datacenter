@@ -80,6 +80,9 @@ public final class DatacenterInputPipelineFactory {
                 new RoomAirTemperatureOptionsFactory().create(definition).orElseThrow())
                 || definition.dataInputMode() == com.cpz.sim.datacenter.input.DatacenterDataInputMode.TEMPERATURE_DRIVEN))
             throw new IllegalArgumentException("coupled room system must match the power-derived pipeline");
+        if (coupledRoomSystem != null && !coupledRoomSystem.usesRackCooling(
+                new RackCoolingConfigurationFactory().create(definition)))
+            throw new IllegalArgumentException("coupled rack cooling must match the pipeline configuration");
         Simulatable thermalSystem = coupledRoomSystem == null ? temperatureSystem : coupledRoomSystem;
         List<Simulatable> systems = new ArrayList<>();
         switch (definition.dataInputMode()) {

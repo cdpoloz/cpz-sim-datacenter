@@ -82,20 +82,21 @@ class RackCoolingConfigurationTest {
         assertEquals(HeatRejectionDestination.valueOf(destination),
                 definition.rackCooling().units().getFirst().heatRejectionDestination());
         assertEquals(0, definition.rackCooling().units().getFirst().roomHeatTransferWattsPerCelsius());
-        assertThrows(UnsupportedOperationException.class, () -> new DatacenterFactory().create(definition));
+        assertDoesNotThrow(() -> new DatacenterFactory().create(definition));
     }
 
     @Test
-    void directCoupledFactoryCannotSilentlyIgnoreRackCooling() throws Exception {
+    void directCoupledFactoryInstallsConfiguredRackCooling() throws Exception {
         var configured = load(root());
         var legacyRoot = root();
         legacyRoot.remove("rackCooling");
         var datacenter = new DatacenterFactory().create(load(legacyRoot));
         var temperatures = new TemperatureSystem(datacenter, TemperatureSystemOptions.defaults(),
                 new SimpleServerTemperatureModel());
-        assertThrows(UnsupportedOperationException.class,
-                () -> new CoupledRoomTemperatureSystemFactory().create(configured, datacenter,
-                        temperatures, Optional.empty()));
+        var coupled = new CoupledRoomTemperatureSystemFactory().create(configured, datacenter,
+                temperatures, Optional.empty()).orElseThrow();
+        assertTrue(coupled.rackCoolingSystem().isPresent());
+        assertEquals(24, coupled.rackAirTemperaturesCelsius().values().iterator().next());
     }
 
     @Test

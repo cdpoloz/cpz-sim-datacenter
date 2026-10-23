@@ -1,11 +1,10 @@
 # Temperature Model
 
-`cpz-sim-datacenter` contains two distinct temperature quantities: a simplified
-representative internal temperature for each server, and an optional well-mixed
-room-air temperature. The server value remains independent from the room node;
-the coupled pipeline connects them through heat transfer rather than treating
-electrical power as room heat directly. Both can be consumed without coupling
-the backend to a UI framework.
+`cpz-sim-datacenter` distinguishes representative internal server temperatures,
+optional common room-air temperature and optional local rack-air temperatures.
+These are independent thermal states. The coupled pipeline connects servers and
+air through heat transfer rather than treating electrical power as room heat
+directly. All are backend quantities independent of a UI framework.
 
 ## Current Scope
 
@@ -407,17 +406,18 @@ The exact numeric output depends on workload evolution and tick duration.
 
 - internal server temperature remains a representative device proxy
 - room-air output requires the opt-in standalone or coupled system
-- no rack inlet temperature
+- local rack air is well mixed; no separate physical rack inlet/outlet sensors
 - coupled cooling uses a well-mixed room and simplified effective airflow
-- no rack-to-rack thermal coupling
+- no direct rack-to-rack airflow; local rack nodes interact indirectly through common room air
 - no claim of calibration against real server hardware
 
 ## Future Work
 
 The staged rack-contained cooling extension is specified in the
 [stage 1 design contract](#rack-contained-cooling-implementation-contract-stage-1)
-below. Configuration and equipment controls are implemented; coupled rack
-thermal evolution is pending.
+below. Configuration, equipment controls and coupled rack thermal evolution
+are implemented. Broader validation and operational/history/energy integration
+remain subsequent stages.
 
 Possible future extensions, not implemented in this milestone:
 
@@ -430,13 +430,11 @@ Possible future extensions, not implemented in this milestone:
 
 ## Rack-contained cooling: implementation contract (stage 1)
 
-**Status: stage 3 supports JSON validation, immutable equipment definitions and
-operational controls.** Coupled rack thermal evolution and thermal/history
-snapshots are not implemented yet. `DatacenterFactory` and the coupled thermal
-factory explicitly reject execution of scenarios declaring `rackCooling` until
-the local-air thermal solver exists. Standalone equipment controls are available
-through `RackCoolingConfigurationFactory` and `RackCoolingSystem`.
-This section specifies the extension without changing existing thermal behavior.
+**Status: stage 4 implements the coupled rack-air solver and removes the
+temporary execution guards.** JSON validation and equipment controls are also
+available. Rack-specific operational/history integration and facility electrical
+aggregates remain subsequent stages. The existing behavior is preserved when
+`rackCooling` is absent.
 The parameters remain uncalibrated until independent measurements are available.
 
 ### Scope and identity
@@ -579,12 +577,11 @@ The heat rejected by a `ROOM` unit is an internal transfer plus its electrical
 input; it is not heat removed from the combined system. A `ROOM` unit can cool
 its rack while increasing the thermal load handled by room cooling.
 
-The implementation must advance servers, local rack nodes and room air together.
-The current scalar room solver cannot simply be reused as independent sequential
-rack updates: the added temperatures and destination-dependent rejection terms
-form a coupled problem. Preserve the existing bounded substep policy, atomic
-publication on successful updates, chronological tick validation and reset
-semantics. Select the numerical solver in the thermal implementation stage.
+The implementation advances servers, local rack nodes and room air together.
+Stage 4 uses analytical elimination of piecewise-linear rack air equations and
+a monotone scalar room solve, preserving the bounded backward-Euler substep
+policy, atomic publication, chronological tick validation and reset semantics.
+See the numerical details in the stage 4 section below.
 
 ### Energy ledger and facility power
 
@@ -616,10 +613,11 @@ once as cooling power/energy, regardless of heat destination. It is not IT power
 Preserve existing PUE behavior for a zero IT denominator. Cooling capacity,
 actual heat removal and electrical power remain distinct quantities.
 
-The current `CoupledRoomThermalSnapshot` does not contain these additional
-quantities. A later stage must extend or complement its contract while preserving
-existing accessor meanings; local rack cooling must not silently redefine the
-existing `removedHeatJoules` as removal from the combined system.
+Stage 4 extends `CoupledRoomThermalSnapshot` with explicit rack energies and
+preserves its seven-argument compatibility constructor. `removedHeatJoules`
+retains existing room cooling removal only. Local refrigeration is recorded
+separately and is not itself removal from the combined rack-room system when
+rejected back to the room.
 
 ### Integration and compatibility requirements
 
@@ -663,3 +661,98 @@ existing `removedHeatJoules` as removal from the combined system.
    reset and replay are deterministic.
 
 These checks establish implementation consistency, not physical calibration.
+
+
+## Rack air thermal integration (stage 4)
+
+`CoupledRoomTemperatureSystem` now optionally owns a local air temperature for
+each configured rack. Only the servers installed in that exact column/rack pair
+exchange heat with that local node. All remaining servers keep the original
+connection directly to room air. Offline servers still exchange stored heat at
+zero electrical input; empty racks retain their air capacity and cooling path.
+
+The factory's original call installs configured rack controls automatically:
+
+```java
+CoupledRoomTemperatureSystem coupled = new CoupledRoomTemperatureSystemFactory()
+        .create(definition, datacenter, temperatureSystem, roomCoolingSystem)
+        .orElseThrow();
+
+Optional<RackCoolingSystem> rackControls = coupled.rackCoolingSystem();
+Map<RackLocation, Double> localAir = coupled.rackAirTemperaturesCelsius();
+OptionalDouble rackAir = coupled.rackAirTemperatureCelsius(new RackLocation("C01", "R01"));
+```
+
+`roomCoolingSystem` is `Optional<CoolingSystem>` and may be empty. To share
+controls with another application layer, use the factory overload accepting
+`Optional<RackCoolingSystem>` as its final argument. The configuration must match
+the definition. The input pipeline also checks rack configuration identity and
+requires the coupled overload. `TEMPERATURE_DRIVEN` remains unsupported for
+this feature.
+
+The returned local temperature map is immutable and replaced only after a
+successful tick. A missing rack returns an empty `OptionalDouble`, never a
+server or common-room fallback. These are well-mixed local air temperatures,
+not separate measured inlet/outlet temperatures. `reset()` restores initial
+server, rack and room temperatures, both room and rack enabled states, and
+clears last thermal/cooling captures. It does not reset IT workload/power systems.
+
+### Numerical method
+
+Keep the existing backward-Euler substeps of at most one second. For each
+substep, eliminate server states with the existing `gamma_i` and `base_i`.
+For a rack with conductance `G_r`, its reduced equation is:
+
+```text
+a_r = C_r / dt + G_r + sum(gamma_i for servers in rack r)
+b_r = C_r / dt * T_r_old + sum(gamma_i * base_i for those servers)
+a_r * T_r + Q_r(T_r) = b_r + G_r * T_room
+```
+
+`CoupledRackAirSolver` solves that capped piecewise-linear equation analytically
+for each candidate room temperature. It substitutes the result into the room
+energy balance, including `Q_r + P_r` for ROOM rejection, and solves the strictly
+increasing residual by bracket expansion and bisection. Elimination is an
+algebraic reduction of the simultaneous equations, not a sequential thermal
+update. Local cooling and room cooling are evaluated at the new substep
+temperatures and used consistently in both state changes and energy transfers.
+
+Without rack nodes the original room solver path is retained. Rack enabled
+states, IT power and airflow parameters are held constant during an external
+tick. Extreme inputs that overflow or cannot satisfy the energy balance within
+`1e-6 J + 1e-9 * energyScale` are rejected without publishing partial thermal
+state. `energyScale` is the sum of absolute global input, storage-change and
+boundary-output energies. This is an implementation tolerance, not calibration.
+
+### Per-tick thermal ledger
+
+`lastSnapshot()` retains the existing server/room ledger and adds:
+
+| Accessor | Meaning, in joules over the tick |
+| --- | --- |
+| `rackAirEnergyChangeJoules()` | Signed aggregate local-air storage change |
+| `rackCoolingElectricalEnergyJoules()` | Electricity consumed by enabled rack units |
+| `rackRemovedHeatJoules()` | Heat extracted from local rack air, before selecting a rejection destination |
+| `rackHeatRejectedToRoomJoules()` | Heat delivered to common room air: local cooling plus corresponding unit electricity |
+| `rackHeatRejectedExternalJoules()` | Heat exported across the modeled boundary: local cooling plus corresponding unit electricity |
+| `rackHeatTransferredToRoomJoules()` | Signed passive local-air-to-room exchange |
+
+`inputElectricalEnergyJoules()` remains IT electricity only.
+`heatTransferredToAirJoules()` remains signed server-to-air exchange, now summed
+over both local rack air and direct room air. `removedHeatJoules()` remains
+existing room cooling removal. The extended `energyBalanceResidualJoules()`
+includes rack electricity, local air storage and external rack rejection; room
+rejection and passive exchange are internal transfers and cancel globally.
+
+Room SUPPLY/EXHAUST projections from `lastCoolingSnapshot()` retain their
+existing room-only semantics. They do not include rack units. In particular,
+room-only power/PUE aggregates must not be described as complete facility
+metrics for new rack-cooling scenarios until the later electrical aggregation
+stage. The thermal ledger already includes rack electricity independently.
+
+Stage 4 integration tests cover both destinations, isolated analytical cases,
+capacity- and airflow-limited cooling, disabled units, below-supply operation,
+offline servers, signed passive exchange, mixed rack/direct-room servers,
+combined room cooling and environment exchange, reset/replay, tick subdivision
+and atomic rejection. This verifies implementation behavior, not measured
+physical calibration.

@@ -7,6 +7,7 @@ import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.system.CoolingSystem;
 import com.cpz.sim.datacenter.system.CoupledRoomTemperatureSystem;
 import com.cpz.sim.datacenter.system.TemperatureSystem;
+import com.cpz.sim.datacenter.system.RackCoolingSystem;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -20,12 +21,24 @@ public final class CoupledRoomTemperatureSystemFactory {
             TemperatureSystem temperatureSystem,
             Optional<CoolingSystem> coolingSystem
     ) {
+        return create(definition, datacenter, temperatureSystem, coolingSystem,
+                new RackCoolingConfigurationFactory().create(definition).map(RackCoolingSystem::new));
+    }
+
+    /** Uses the caller's authoritative rack equipment controls. */
+    public Optional<CoupledRoomTemperatureSystem> create(
+            DatacenterDefinition definition, Datacenter datacenter,
+            TemperatureSystem temperatureSystem, Optional<CoolingSystem> coolingSystem,
+            Optional<RackCoolingSystem> rackCoolingSystem
+    ) {
         Objects.requireNonNull(datacenter, "datacenter must not be null");
         Objects.requireNonNull(temperatureSystem, "temperatureSystem must not be null");
         Objects.requireNonNull(coolingSystem, "coolingSystem must not be null");
         new DatacenterConfigValidator().validate(definition);
-        if (definition.rackCooling() != null)
-            throw new UnsupportedOperationException("rackCooling thermal runtime is not implemented yet");
+        Objects.requireNonNull(rackCoolingSystem, "rackCoolingSystem must not be null");
+        var configuredRackCooling = new RackCoolingConfigurationFactory().create(definition);
+        if (!configuredRackCooling.equals(rackCoolingSystem.map(RackCoolingSystem::configuration)))
+            throw new IllegalArgumentException("rack cooling system must match the datacenter definition");
         var roomOptions = new RoomAirTemperatureOptionsFactory().create(definition);
         if (roomOptions.isEmpty()) return Optional.empty();
         if (definition.dataInputMode() == DatacenterDataInputMode.TEMPERATURE_DRIVEN)
@@ -34,6 +47,6 @@ public final class CoupledRoomTemperatureSystemFactory {
         if (!configuredCooling.equals(coolingSystem.map(CoolingSystem::configuration)))
             throw new IllegalArgumentException("coupled cooling system must match the datacenter definition");
         return Optional.of(new CoupledRoomTemperatureSystem(datacenter, temperatureSystem,
-                new TemperatureSystemOptionsFactory().create(definition), roomOptions.orElseThrow(), coolingSystem));
+                new TemperatureSystemOptionsFactory().create(definition), roomOptions.orElseThrow(), coolingSystem, rackCoolingSystem));
     }
 }

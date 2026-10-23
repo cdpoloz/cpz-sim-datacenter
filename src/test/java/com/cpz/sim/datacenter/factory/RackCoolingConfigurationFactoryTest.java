@@ -79,6 +79,6 @@ class RackCoolingConfigurationFactoryTest {
         assertEquals(0, system.currentElectricalPowerWatts());
         system.enable("RC01");
         assertEquals(600, system.currentElectricalPowerWatts());
-        assertThrows(UnsupportedOperationException.class, () -> new DatacenterFactory().create(definition));
+        assertDoesNotThrow(() -> new DatacenterFactory().create(definition));
     }
 }
