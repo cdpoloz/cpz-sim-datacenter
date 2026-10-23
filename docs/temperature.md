@@ -414,6 +414,10 @@ The exact numeric output depends on workload evolution and tick duration.
 
 ## Future Work
 
+The staged rack-contained cooling extension is specified in the
+[stage 1 design contract](#rack-contained-cooling-implementation-contract-stage-1)
+below. It is not implemented yet.
+
 Possible future extensions, not implemented in this milestone:
 
 - rack inlet temperature modeling
@@ -421,3 +425,236 @@ Possible future extensions, not implemented in this milestone:
 - temperature-driven air inference and calibrated cooling equipment behavior
 - airflow and thermal coupling between racks
 - more advanced per-server thermal models
+
+
+## Rack-contained cooling: implementation contract (stage 1)
+
+**Status: design contract for the next implementation stages; not supported by
+the current JSON loader, runtime or snapshots.** This section specifies the
+initial extension without changing the current behavior described above.
+The parameters remain uncalibrated until independent measurements are available.
+
+### Scope and identity
+
+A rack-contained cooling unit serves exactly one physical rack, identified by
+the pair `column + rackCode`. A rack code alone is insufficient because rack
+codes may repeat across columns. Its unit code must be globally unique across
+room SUPPLY, EXHAUST and rack-contained units.
+
+For the first version, allow at most one rack-contained cooling unit per rack.
+Each rack served by such a unit has one explicit, well-mixed local air node.
+All its installed servers, including offline servers, exchange heat with that
+node instead of exchanging heat directly with room air. Other racks retain the
+current direct server-to-room connection. An empty configured rack can retain
+its local air node and cooling unit; installing servers is not a thermal
+prerequisite.
+
+A dedicated rack connection is not a legacy cooling-zone influence weight.
+The unit must never also contribute a room-air cooling path. Existing logical
+zone membership can remain for diagnostics, but must not create a second
+server-to-air heat transfer or a second refrigeration sink.
+
+This is a simplified recirculating local-air model, not a detailed reproduction
+of every rack-mounted air conditioner. It does not model separate hot/cold rack
+compartments, condenser air mass flow, stratification, humidity, pressure or
+ducted ventilation. Mounting at the bottom does not by itself change the
+equations. Physical slot reservation and rendering belong to later equipment
+placement/UI work; this contract does not treat the unit as a server.
+
+### Required physical quantities
+
+The configuration stage must provide explicit values for these quantities.
+Names below describe the contract; the final JSON structure is defined in
+stage 2 and is not accepted by the current loader.
+
+| Quantity | Unit | Constraint / meaning |
+| --- | --- | --- |
+| Rack identity | — | Existing column and rack code pair |
+| Initial local air temperature | °C | Finite; independent of server internal temperature |
+| Effective local air thermal capacity `C_r` | J/°C | Finite and strictly positive |
+| Rack-to-room conductance `G_r` | W/°C | Finite and non-negative; zero represents ideal thermal isolation |
+| Unit code | — | Non-blank and globally unique |
+| Rated cooling capacity `Q_max` | W | Finite and strictly positive |
+| Internal recirculating airflow `F` | m³/s | Finite and strictly positive |
+| Supply-air temperature `T_supply` | °C | Finite; lower reference for this cooling-only approximation |
+| Rated electrical power `P_rated` | W | Finite and strictly positive |
+| Heat rejection destination | — | Explicitly `ROOM` or `EXTERNAL`; no implicit default |
+| Initially enabled | boolean | Explicit initial operational state |
+
+Effective local air capacity represents the local node only. It must not include
+server thermal capacities already modeled separately. Room effective capacity
+must likewise exclude any capacity assigned to local rack nodes. The backend
+cannot infer this partition from rack dimensions; example configurations must
+state their assumptions.
+
+The conductance is an effective approximation of enclosure heat exchange and
+air mixing. It is not inferred from the cooling unit's internal airflow.
+Use the configured cooling air density and specific heat to convert internal
+airflow to thermal conductance. No external EXHAUST unit is required for this
+local recirculation path, and the legacy supply/exhaust imbalance penalty does
+not apply to it.
+
+### Cooling and operational behavior
+
+For enabled units, use the initial fixed-power approximation:
+
+```text
+K_r = air_density * air_specific_heat * F
+Q_r(T_r) = max(0, min(Q_max, K_r * (T_r - T_supply)))
+P_r = P_rated
+Q_rejected_r = Q_r + P_r
+```
+
+For disabled units, `Q_r = P_r = Q_rejected_r = 0`. Disabling a unit does not
+remove its local air node or disable passive rack-to-room heat exchange.
+Cooling can remove stored heat even when server electrical load is zero.
+It vanishes when local air is at or below supply temperature; it does not
+actively heat that air. This is not a global temperature clamp.
+
+Enabled units consume rated electrical power even when actual cooling is zero.
+Their electrical consumption is not inferred from rated cooling capacity or
+from IT load. Thermostat cycling, COP curves and partial-load control are
+outside the first version.
+
+Reset restores configured initial local-air temperature and unit enabled state,
+together with the existing server/room reset behavior.
+
+### Heat rejection boundary
+
+| Destination | Thermal meaning |
+| --- | --- |
+| `ROOM` | Deliver `Q_r + P_r` to the common room air node |
+| `EXTERNAL` | Export `Q_r + P_r` across the modeled rack–room boundary; do not add it to room air |
+
+For this first approximation, **all electrical dissipation of the new unit is
+assigned to its rejection destination**. Internal fan motor heat is not assigned
+separately to rack air. This assumption must remain visible in documentation;
+it can later be refined into separate electrical heat fractions without
+changing the meaning of the two destinations.
+
+`EXTERNAL` specifies a boundary condition, not an assertion that the unit has
+zero electrical consumption. It can approximate an external condenser or an
+external water cooling service. It does not simulate those services or add
+unconfigured chiller/pump electricity to facility totals.
+
+A return-air duct is not automatically `EXTERNAL`: use that boundary only when
+the selected scenario explicitly treats the captured heat as leaving the
+modeled room. A separate duct/return node is deferred.
+
+### Conservative thermal equations
+
+For a server `i` inside a local-air rack `r`:
+
+```text
+q_i = H_i * (T_i - T_r)
+C_i * dT_i/dt = P_i - q_i
+
+q_r_room = G_r * (T_r - T_room)
+C_r * dT_r/dt = sum(q_i in rack r) - q_r_room - Q_r(T_r)
+```
+
+For servers without a local-air rack, keep the existing
+`q_i = H_i * (T_i - T_room)`. The room equation becomes:
+
+```text
+C_room * dT_room/dt =
+    sum(q_i from servers without local rack air)
+  + sum(q_r_room from all local rack nodes)
+  + sum(Q_r + P_r for units rejecting to ROOM)
+  - Q_existing_room_cooling(T_room)
+  - UA * (T_room - T_environment)
+```
+
+All server/air and rack/room exchanges are signed: colder servers can absorb
+heat, and colder rack air can absorb heat from the room. Each internal transfer
+appears once with opposite signs at its two endpoints.
+
+Electrical IT load must not also be injected directly into rack or room air.
+The heat rejected by a `ROOM` unit is an internal transfer plus its electrical
+input; it is not heat removed from the combined system. A `ROOM` unit can cool
+its rack while increasing the thermal load handled by room cooling.
+
+The implementation must advance servers, local rack nodes and room air together.
+The current scalar room solver cannot simply be reused as independent sequential
+rack updates: the added temperatures and destination-dependent rejection terms
+form a coupled problem. Preserve the existing bounded substep policy, atomic
+publication on successful updates, chronological tick validation and reset
+semantics. Select the numerical solver in the thermal implementation stage.
+
+### Energy ledger and facility power
+
+Over each tick, the extended thermal balance must satisfy:
+
+```text
+E_IT + E_new_rack_cooling_electric
+  = delta_E_servers + delta_E_local_rack_air + delta_E_room_air
+  + E_existing_room_cooling_removed
+  + E_new_rack_rejected_external
+  + E_environment_loss
+```
+
+Here `E_new_rack_rejected_external` integrates `Q_r + P_r` only for
+`EXTERNAL` units. Electrical energy for all new units is included on the input
+side; for external rejection its electrical part also leaves on the output
+side. Internal server-to-rack, rack-to-room and rack-rejection-to-room transfers
+must be separately inspectable but cancel from the global balance.
+Storage changes and environment loss are signed.
+
+The existing room HVAC electrical heat exclusion remains unchanged. Its
+electrical consumption continues to be reported separately, so the extended
+thermal ledger must state that boundary explicitly rather than silently adding
+legacy fan/compressor heat. Without local rack nodes or new units, the extended
+balance must reduce to the existing balance.
+
+For facility electrical metrics, count each new unit's electrical consumption
+once as cooling power/energy, regardless of heat destination. It is not IT power.
+Preserve existing PUE behavior for a zero IT denominator. Cooling capacity,
+actual heat removal and electrical power remain distinct quantities.
+
+The current `CoupledRoomThermalSnapshot` does not contain these additional
+quantities. A later stage must extend or complement its contract while preserving
+existing accessor meanings; local rack cooling must not silently redefine the
+existing `removedHeatJoules` as removal from the combined system.
+
+### Integration and compatibility requirements
+
+- The extension is opt-in. Existing configurations retain their thermal results
+  and do not acquire guessed local air nodes or physical parameters.
+- Initial support is limited to the coupled `UTILIZATION_DRIVEN` and
+  `POWER_DRIVEN` pipeline, with explicit `roomAirTemperature` configuration.
+- Reject a configuration declaring this feature with the legacy thermal
+  pipeline or `TEMPERATURE_DRIVEN`; do not silently ignore it or overwrite
+  observed temperatures.
+- A dedicated rack unit has one authoritative control state. Unit electricity
+  must participate in existing cooling/facility metrics without duplicate
+  registration as a room SUPPLY or EXHAUST.
+- Expose local rack air separately from representative internal server
+  temperature and common room air. Existing rack server averages keep their
+  current meaning.
+- Later snapshots must identify rack and unit, publish local air temperature,
+  actual cooling, electrical power, destination, signed rack-to-room exchange
+  and integrated energies needed to audit the balance.
+- The backend owns all numerical calculations. The UI issues commands and
+  displays backend output.
+
+### Acceptance scenarios for implementation
+
+1. With the feature absent, existing configurations and thermal regressions
+   retain their current behavior.
+2. Two otherwise equal local-air racks with different cooling states show a
+   local thermal difference; any effect on other racks occurs through room air.
+3. With no existing room cooling or environment exchange, a `ROOM` unit
+   conserves combined energy with input `E_IT + E_new_rack_cooling_electric`.
+4. Under the same boundary, an `EXTERNAL` unit exports `Q_r + P_r` without
+   directly adding rejection heat to room air.
+5. Disabled units draw no electricity and remove no heat, while local air,
+   offline-server heat release and passive room exchange continue evolving.
+6. Cooling respects capacity/airflow limits and becomes zero below supply
+   temperature; enabled zero-cooling electricity still reaches its destination.
+7. Opposite rack/room temperature gradients produce correctly signed exchange.
+   Empty racks and mixed local-air/direct-to-room layouts remain valid.
+8. Integrated energy residuals remain within stated numerical tolerances across
+   supported tick sizes. Rejected updates leave all thermal states unchanged;
+   reset and replay are deterministic.
+
+These checks establish implementation consistency, not physical calibration.
