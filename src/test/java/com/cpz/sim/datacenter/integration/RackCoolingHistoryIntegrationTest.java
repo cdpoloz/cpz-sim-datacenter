@@ -223,4 +223,19 @@ class RackCoolingHistoryIntegrationTest {
         assertThrows(IllegalArgumentException.class, () -> f.recorder.record(tick));
         assertTrue(f.recorder.history().isEmpty());
     }
+
+    @Test
+    void fractionalServerPowersKeepItMeterAndFacilityLedgerCoherent() {
+        var f = fixture(true, false, HeatRejectionDestination.ROOM);
+        var servers = List.copyOf(f.dc.getServers());
+        servers.get(0).setCurrentPowerWatts(200.01f);
+        servers.get(1).setCurrentPowerWatts(201.02f);
+        double expectedPower = (double) 200.01f + (double) 201.02f;
+        var step = f.recorder.record(f.advance(1));
+        assertEquals(expectedPower, step.energySnapshot().totalItPowerWatts(), 1e-10);
+        assertEquals(expectedPower, step.operationalSnapshot().currentItPowerWatts(), 1e-10);
+        assertEquals(expectedPower / 60, step.energySnapshot().consumedEnergyWh(), 1e-10);
+        assertEquals(step.energySnapshot().consumedEnergyWh(),
+                step.facilityEnergySnapshot().orElseThrow().consumedItEnergyWh(), 1e-10);
+    }
 }

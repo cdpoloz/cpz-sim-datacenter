@@ -94,4 +94,21 @@ class EnergyConsumptionSystemTest {
         assertThrows(NullPointerException.class, () -> new EnergyConsumptionSystem(null));
     }
 
+
+    @Test
+    void accumulatesManyFractionalServerPowersWithoutFloatSumRounding() {
+        var config = new ServerConfig("fractional", "CPZ", "Fractional test", 100.0f, 300.0f);
+        var rack = new Rack(new RackCode("RACK-A01-R01"), new RackLocation("A01", "R01"), 1000);
+        var servers = rack.getSlotCodes().stream().map(slot -> createServer(config, rack.getCode(), slot)).toList();
+        var dc = new Datacenter(List.of(rack), servers);
+        servers.forEach(server -> server.setCurrentPowerWatts(200.01f));
+        var meter = new EnergyConsumptionSystem(dc);
+        var tick = new com.cpz.sim.foundation.time.SimulationTick(1, Duration.ofHours(1), Duration.ofHours(1));
+        meter.update(tick);
+        double expectedWh = 1000 * (double) 200.01f;
+        assertEquals(expectedWh, meter.getConsumedEnergyWh(), 1e-9);
+        var snapshot = new com.cpz.sim.datacenter.snapshot.EnergyConsumptionSnapshotProvider(dc, meter).snapshot(tick);
+        assertEquals(expectedWh, snapshot.totalItPowerWatts(), 1e-9);
+        assertEquals(expectedWh, snapshot.consumedEnergyWh(), 1e-9);
+    }
 }

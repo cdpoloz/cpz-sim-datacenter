@@ -164,3 +164,8 @@ Snapshots are read-only. Reset the coupled owner and IT energy system together.
 Recording fewer ticks or clearing history does not reset electrical counters.
 See [stage 6](temperature.md#rack-snapshots-and-facility-electricity-stage-6)
 for usage and boundaries.
+
+IT power and accumulated energy sum individual server measurements in double precision.
+This avoids float accumulation drift and keeps the independent IT meter coherent
+with the coupled facility ledger for fractional powers and large server populations.
+The legacy float-valued model aggregate remains available for compatibility.

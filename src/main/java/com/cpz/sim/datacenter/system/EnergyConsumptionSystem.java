@@ -1,6 +1,7 @@
 package com.cpz.sim.datacenter.system;
 
 import com.cpz.sim.datacenter.model.Datacenter;
+import com.cpz.sim.datacenter.model.Server;
 import com.cpz.sim.foundation.engine.Simulatable;
 import com.cpz.sim.foundation.time.SimulationTick;
 
@@ -22,7 +23,9 @@ public class EnergyConsumptionSystem implements Simulatable {
     public void update(SimulationTick tick) {
         Objects.requireNonNull(tick, "tick cannot be null");
         double elapsedHours = tick.deltaSeconds() / 3600.0;
-        consumedEnergyWh += datacenter.getTotalItPowerWatts() * elapsedHours;
+        // Accumulate measured float powers in double precision, as the coupled energy ledger does.
+        double totalPowerWatts = datacenter.getServers().stream().mapToDouble(Server::getCurrentPowerWatts).sum();
+        consumedEnergyWh += totalPowerWatts * elapsedHours;
     }
 
     @Override

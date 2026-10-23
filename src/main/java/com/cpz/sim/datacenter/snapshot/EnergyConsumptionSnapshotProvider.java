@@ -30,7 +30,7 @@ public final class EnergyConsumptionSnapshotProvider {
         return new EnergyConsumptionSnapshot(
                 tick.index(),
                 tick.elapsedSeconds(),
-                datacenter.getTotalItPowerWatts(),
+                serverSnapshots.stream().mapToDouble(ServerEnergySnapshot::currentPowerWatts).sum(),
                 energyConsumptionSystem.getConsumedEnergyWh(),
                 serverSnapshots
         );
