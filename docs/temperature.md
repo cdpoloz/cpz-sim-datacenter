@@ -416,8 +416,9 @@ The exact numeric output depends on workload evolution and tick duration.
 The staged rack-contained cooling extension is specified in the
 [stage 1 design contract](#rack-contained-cooling-implementation-contract-stage-1)
 below. Configuration, equipment controls and coupled rack thermal evolution
-are implemented. Broader validation and operational/history/energy integration
-remain subsequent stages.
+are implemented. Independent numerical validation is documented in
+[stage 5 verification](rack-cooling-validation.md). Operational/history/energy
+integration remains the next stage.
 
 Possible future extensions, not implemented in this milestone:
 
@@ -430,10 +431,11 @@ Possible future extensions, not implemented in this milestone:
 
 ## Rack-contained cooling: implementation contract (stage 1)
 
-**Status: stage 4 implements the coupled rack-air solver and removes the
-temporary execution guards.** JSON validation and equipment controls are also
-available. Rack-specific operational/history integration and facility electrical
-aggregates remain subsequent stages. The existing behavior is preserved when
+**Status: stage 5 verifies the implemented coupled rack-air solver against an
+independent full-node matrix and continuous analytical cases.** JSON validation,
+equipment controls and thermal evolution are available. Rack-specific
+operational/history integration and facility electrical aggregates remain
+subsequent stages. The existing behavior is preserved when
 `rackCooling` is absent.
 The parameters remain uncalibrated until independent measurements are available.
 
@@ -756,3 +758,13 @@ offline servers, signed passive exchange, mixed rack/direct-room servers,
 combined room cooling and environment exchange, reset/replay, tick subdivision
 and atomic rejection. This verifies implementation behavior, not measured
 physical calibration.
+
+
+## Independent rack thermal verification (stage 5)
+
+See [rack cooling numerical validation](rack-cooling-validation.md) for the
+reference method, operating matrix, tolerances and reproducible test command.
+Stage 5 adds 37 automated verification cases, including 32 parameterized
+full-matrix comparisons and five operating/analytical checks. The verification
+requires no change to production equations and does not substitute for
+calibration with measured physical data.
