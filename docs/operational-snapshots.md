@@ -144,3 +144,30 @@ persistence. Creating a new recorder creates an empty history, and
 `DatacenterSimulationHistoryRecorder.clear()` clears its attached hot-aisle
 history as well. Consumers such as the UI should choose how many of the retained
 samples to present based on available display space.
+
+
+## Dedicated rack cooling and facility energy (stage 6)
+
+`DatacenterOperationalSnapshot` has optional `rackCoolingSnapshot` and
+`facilityEnergySnapshot` captures. Local rack air is independent of representative
+internal server averages: existing rack/column/server-group averages retain their
+meaning. Query the rack capture by exact `RackLocation` to read local air and
+actual refrigeration rates.
+
+The extended provider overload accepts room cooling, room air, rack cooling and
+facility electricity captures. It verifies capture time and topology, rejects
+room/rack duplicate unit codes, and calculates combined cooling electrical power,
+facility power and PUE. Legacy overloads and constructors remain available.
+
+`DatacenterSimulationHistoryRecorder` passes both new captures automatically when
+configured with the coupled thermal snapshot supplier. Each historical step has
+`rackCoolingSnapshot()` and `facilityEnergySnapshot()` convenience accessors.
+Old steps and captures are immutable after unit commands or simulation updates.
+`hasCoolingSnapshot()` retains its room-only meaning; use `hasRackCoolingSnapshot()`
+or `hasAnyCoolingSnapshot()` when checking the new rack data.
+
+Facility cumulative Wh and energy PUE come from the coupled simulation owner,
+not by summing history rows. History may skip ticks or be cleared without losing
+or changing those counters. Reset the coupled thermal owner and separate IT
+energy system together; incoherent IT cumulative energy is rejected. For details
+see [stage 6](temperature.md#rack-snapshots-and-facility-electricity-stage-6).

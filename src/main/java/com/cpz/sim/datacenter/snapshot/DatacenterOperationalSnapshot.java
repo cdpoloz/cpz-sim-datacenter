@@ -35,13 +35,29 @@ public record DatacenterOperationalSnapshot(
         double coolingPowerWatts,
         double totalFacilityPowerWatts,
         double pue,
-        Optional<RoomAirTemperatureSnapshot> roomAirSnapshot
+        Optional<RoomAirTemperatureSnapshot> roomAirSnapshot,
+        Optional<RackCoolingSnapshot> rackCoolingSnapshot,
+        Optional<FacilityEnergySnapshot> facilityEnergySnapshot
 ) {
 
     private static final double POWER_EPSILON = 1.0e-9;
 
     public DatacenterOperationalSnapshot {
         Objects.requireNonNull(roomAirSnapshot, "roomAirSnapshot must not be null");
+        Objects.requireNonNull(rackCoolingSnapshot, "rackCoolingSnapshot must not be null");
+        Objects.requireNonNull(facilityEnergySnapshot, "facilityEnergySnapshot must not be null");
+        rackCoolingSnapshot.ifPresent(rack -> {
+            if (rack.tickIndex() != tickIndex || Double.compare(rack.elapsedSeconds(), elapsedSeconds) != 0)
+                throw new IllegalArgumentException("rack cooling must represent the same tick and elapsed time");
+            if (roomAirSnapshot.isEmpty()) throw new IllegalArgumentException("local rack air requires room air capture");
+        });
+        facilityEnergySnapshot.ifPresent(energy -> {
+            if (energy.tickIndex() != tickIndex || Double.compare(energy.elapsedSeconds(), elapsedSeconds) != 0)
+                throw new IllegalArgumentException("facility energy must represent the same tick and elapsed time");
+            if (!nearlyEqual(energy.currentItPowerWatts(), currentItPowerWatts)
+                    || !nearlyEqual(energy.coolingPowerWatts(), coolingPowerWatts))
+                throw new IllegalArgumentException("facility energy power must match operational power");
+        });
         roomAirSnapshot.ifPresent(air -> {
             if (air.tickIndex() != tickIndex || Double.compare(air.elapsedSeconds(), elapsedSeconds) != 0)
                 throw new IllegalArgumentException("room air must represent the same tick and elapsed time");
@@ -56,6 +72,10 @@ public record DatacenterOperationalSnapshot(
             if (!location.equals(rackSnapshot.location()))
                 throw new IllegalArgumentException("Rack map key does not match snapshot location: " + location);
         }
+        if (rackCoolingSnapshot.isPresent())
+            for (var unit : rackCoolingSnapshot.orElseThrow().units())
+                if (!racks.containsKey(unit.rackLocation()))
+                    throw new IllegalArgumentException("rack cooling location is missing from operational racks");
         racks = Map.copyOf(racks);
         Objects.requireNonNull(columns, "columns must not be null");
         for (Map.Entry<String, ColumnOperationalSnapshot> entry : columns.entrySet()) {
@@ -107,6 +127,27 @@ public record DatacenterOperationalSnapshot(
                 totalFacilityPowerWatts,
                 pue
         );
+    }
+
+    /** Preserves the constructor introduced with independent room-air snapshots. */
+    public DatacenterOperationalSnapshot(long tickIndex, double elapsedSeconds,
+            Map<RackLocation, RackOperationalSnapshot> racks, Map<String, ColumnOperationalSnapshot> columns,
+            Map<String, ServerGroupOperationalSnapshot> serverGroups, double averageOnlineServerTemperatureCelsius,
+            Optional<RackLocation> hottestRackLocation, double hottestRackAverageTemperatureCelsius,
+            double totalItUtilization, double idleItPowerWatts, double maxItPowerWatts, double currentItPowerWatts,
+            double coolingPowerWatts, double totalFacilityPowerWatts, double pue,
+            Optional<RoomAirTemperatureSnapshot> roomAirSnapshot) {
+        this(tickIndex, elapsedSeconds, racks, columns, serverGroups, averageOnlineServerTemperatureCelsius,
+                hottestRackLocation, hottestRackAverageTemperatureCelsius, totalItUtilization, idleItPowerWatts,
+                maxItPowerWatts, currentItPowerWatts, coolingPowerWatts, totalFacilityPowerWatts, pue,
+                roomAirSnapshot, Optional.empty(), Optional.empty());
+    }
+
+    public double consumedCoolingEnergyWh() {
+        return facilityEnergySnapshot.map(FacilityEnergySnapshot::consumedCoolingEnergyWh).orElse(Double.NaN);
+    }
+    public double consumedFacilityEnergyWh() {
+        return facilityEnergySnapshot.map(FacilityEnergySnapshot::consumedFacilityEnergyWh).orElse(Double.NaN);
     }
 
     /** Preserves the constructor used before independent room-air snapshots. */

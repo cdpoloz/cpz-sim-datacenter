@@ -7,7 +7,7 @@ import java.util.Objects;
 
 /**
  * Immutable dedicated rack equipment and local-air parameters. The local air
- * state and actual heat removal are owned by the future coupled thermal solver.
+ * state and actual heat removal are owned by the coupled thermal solver.
  * A rack unit has no legacy room-zone influences.
  *
  * @author CPZ

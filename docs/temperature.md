@@ -418,7 +418,7 @@ The staged rack-contained cooling extension is specified in the
 below. Configuration, equipment controls and coupled rack thermal evolution
 are implemented. Independent numerical validation is documented in
 [stage 5 verification](rack-cooling-validation.md). Operational/history/energy
-integration remains the next stage.
+integration is implemented in stage 6 below; UI integration remains next.
 
 Possible future extensions, not implemented in this milestone:
 
@@ -431,11 +431,10 @@ Possible future extensions, not implemented in this milestone:
 
 ## Rack-contained cooling: implementation contract (stage 1)
 
-**Status: stage 5 verifies the implemented coupled rack-air solver against an
-independent full-node matrix and continuous analytical cases.** JSON validation,
-equipment controls and thermal evolution are available. Rack-specific
-operational/history integration and facility electrical aggregates remain
-subsequent stages. The existing behavior is preserved when
+**Status: stage 6 includes local rack thermal snapshots, historical captures and
+facility electrical power/energy aggregation.** Stage 5 independently verifies
+the numerical solver. JSON validation, equipment controls and thermal evolution
+are available. UI integration remains a subsequent stage. The existing behavior is preserved when
 `rackCooling` is absent.
 The parameters remain uncalibrated until independent measurements are available.
 
@@ -747,10 +746,10 @@ includes rack electricity, local air storage and external rack rejection; room
 rejection and passive exchange are internal transfers and cancel globally.
 
 Room SUPPLY/EXHAUST projections from `lastCoolingSnapshot()` retain their
-existing room-only semantics. They do not include rack units. In particular,
-room-only power/PUE aggregates must not be described as complete facility
-metrics for new rack-cooling scenarios until the later electrical aggregation
-stage. The thermal ledger already includes rack electricity independently.
+room-only semantics and do not include rack units. Stage 6 combines this capture
+with `lastRackCoolingSnapshot()` in the operational provider and history recorder.
+Facility totals and PUE include both electrical components there; room-only
+cooling snapshots must not be used alone as facility aggregates.
 
 Stage 4 integration tests cover both destinations, isolated analytical cases,
 capacity- and airflow-limited cooling, disabled units, below-supply operation,
@@ -768,3 +767,65 @@ Stage 5 adds 37 automated verification cases, including 32 parameterized
 full-matrix comparisons and five operating/analytical checks. The verification
 requires no change to production equations and does not substitute for
 calibration with measured physical data.
+
+
+## Rack snapshots and facility electricity (stage 6)
+
+The coupled owner publishes immutable completed-tick captures through
+`lastRackCoolingSnapshot()` and `lastFacilityEnergySnapshot()`. They are also
+attached to `lastSnapshot()` so existing history recorders supplied with
+`coupled::lastSnapshot` automatically receive both captures.
+
+`RackCoolingSnapshot` identifies the tick and elapsed time. Its unit list contains
+`RackCoolingUnitThermalSnapshot` records with exact rack identity, destination,
+local air temperature, equipment state, actual final cooling rate, passive room
+exchange rate and integrated electrical/thermal transfers. The embedded
+`equipment.currentCoolingPowerWatts()` remains nominal enabled capacity;
+`actualCoolingPowerWatts()` is actual instantaneous removal at the final local
+air temperature, while `removedHeatJoules()` integrates the whole tick. These
+quantities must not be interchanged.
+
+`FacilityEnergySnapshot` accumulates IT electricity, room cooling electricity and
+rack cooling electricity separately in Wh since the coupled owner's reset.
+It exposes modeled cooling/facility totals and both instantaneous `pue()` and
+energy-ratio `energyPue()`. Both destinations consume electricity. Legacy room
+HVAC electrical heat remains outside the thermal boundary, but its electricity
+is included in facility electrical metrics. Unconfigured UPS, lighting, pumps
+or external chiller loads are not inferred.
+
+Energy advances only when a thermal tick commits successfully. It does not
+advance on snapshot reads, history recording, failed thermal steps or history
+clears. The electrical captures are constructed before state publication and
+committed with the temperatures and ledger. `reset()` clears the cumulative
+coupled electrical counters and last captures; reset the separate IT
+`EnergyConsumptionSystem` as part of the same simulation reset.
+
+The history recorder combines completed room cooling, rack cooling and facility
+energy with the specialized IT/temperature/health snapshots. Rack and facility
+data must match tick and elapsed time; duplicate room/rack unit codes and
+mismatched IT energy reset/integration intervals are rejected. Controls changed
+after a completed tick cannot rewrite that tick's rack/electrical capture.
+
+`DatacenterOperationalSnapshot.coolingPowerWatts()` now includes room and rack
+unit electricity when both captures are supplied. `totalFacilityPowerWatts()`
+is IT plus that combined electricity. Rack-only scenarios are supported: the
+room cooling snapshot may be absent. Existing configurations without cooling
+retain unavailable power/PUE aggregates. Configured but disabled equipment
+reports zero consumption. Instantaneous PUE remains NaN for zero IT power;
+energy PUE is NaN for zero accumulated IT energy.
+
+Read the same captured data from history:
+
+```java
+DatacenterSimulationStepSnapshot step = recorder.record(tick);
+Optional<RackCoolingSnapshot> racks = step.rackCoolingSnapshot();
+Optional<FacilityEnergySnapshot> electricity = step.facilityEnergySnapshot();
+double coolingWatts = step.operationalSnapshot().coolingPowerWatts();
+double totalWh = step.operationalSnapshot().consumedFacilityEnergyWh();
+```
+
+The legacy `EnergyConsumptionSnapshot.consumedEnergyWh()` remains **IT only**.
+Existing operational and thermal snapshot constructors remain available; their
+new optional captures default to absent. Low-level callers can use the extended
+operational provider overload to supply room, rack and facility captures directly.
+The UI does not need to calculate any of these numerical aggregates.

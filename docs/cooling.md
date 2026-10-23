@@ -734,9 +734,10 @@ For an enabled unit:
 Disabled units report zero current airflow, electricity and capacity; rated
 values remain in their definitions and rated electrical power stays in snapshots.
 The system's `currentElectricalPowerWatts()` sums enabled rack unit electricity
-only. Facility totals, accumulated energy and PUE integration remain for the
-snapshot/energy integration stage; these units are not yet registered in those
-aggregates automatically.
+only. Stage 6 publishes completed rack captures and integrates room/rack electricity
+in the coupled owner; the operational/history views combine both sources for
+facility totals, accumulated energy and PUE. Read those completed views instead
+of summing live controls in the UI.
 
 `CoolingConfiguration` rejects rack units, preventing accidental registration
 in the room cooling paths. `CoolingSystem` remains the authoritative controller
@@ -750,3 +751,21 @@ through the coupled pipeline; local-air parameters require it even when the
 unit is disabled. Existing configurations without rack cooling retain their
 behavior. See [thermal integration](temperature.md#rack-air-thermal-integration-stage-4)
 for local temperature access and energy accounting.
+
+
+## Completed rack and facility captures (stage 6)
+
+Equipment-only `RackCoolingSystem.currentUnitSnapshots()` remains a live read.
+For historical or combined electrical/thermal data, use the coupled owner's
+`lastRackCoolingSnapshot()` and `lastFacilityEnergySnapshot()`. Both are captured
+at successful tick completion and retained in the coupled thermal ledger.
+They are not changed by subsequent unit commands. The history recorder accepts
+them through its existing coupled thermal supplier and stores them in each
+step's operational snapshot.
+
+The operational provider rejects duplicate unit codes across room and rack
+captures rather than counting a unit twice. Its cooling power is electrical
+room plus rack consumption, independently of ROOM/EXTERNAL rejection. The
+specialized room `CoolingSnapshot` remains room-only for zone diagnostics.
+See [stage 6 thermal/electrical documentation](temperature.md#rack-snapshots-and-facility-electricity-stage-6)
+for energy units, reset requirements and unavailable-data behavior.

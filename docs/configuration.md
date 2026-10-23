@@ -1022,10 +1022,11 @@ Its additional overload accepts `Optional<RackCoolingSystem>` for applications
 that already own the controls. Read the installed controls through
 `coupled.rackCoolingSystem()`; do not create a second authoritative instance.
 
-Local air temperatures and per-tick thermal energies are available directly from
-the coupled system. Rack-specific operational/history presentation and facility
-power/energy/PUE aggregation remain later integration work. Current room-only
-cooling snapshots do not include rack unit electricity.
+Stage 6 publishes local rack thermal snapshots and cumulative facility electrical
+energy, and combines room/rack consumption in operational/history aggregates and
+PUE. Room-only cooling snapshots remain separate; use the combined operational
+view for facility totals. See [stage 6 captures](temperature.md#rack-snapshots-and-facility-electricity-stage-6).
+UI presentation remains later work.
 
 The following is a fragment to add to an otherwise complete datacenter definition.
 The referenced `C01/R01` rack must already exist in `layout.racks`. All numeric

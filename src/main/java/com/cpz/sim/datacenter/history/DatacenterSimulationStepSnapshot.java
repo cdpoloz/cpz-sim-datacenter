@@ -1,6 +1,8 @@
 package com.cpz.sim.datacenter.history;
 
 import com.cpz.sim.datacenter.snapshot.CoolingSnapshot;
+import com.cpz.sim.datacenter.snapshot.RackCoolingSnapshot;
+import com.cpz.sim.datacenter.snapshot.FacilityEnergySnapshot;
 import com.cpz.sim.datacenter.snapshot.CoupledRoomThermalSnapshot;
 import com.cpz.sim.datacenter.snapshot.DatacenterOperationalSnapshot;
 import com.cpz.sim.datacenter.snapshot.EnergyConsumptionSnapshot;
@@ -56,6 +58,9 @@ public record DatacenterSimulationStepSnapshot(
         coupledThermalSnapshot.ifPresent(thermal -> {
             if (!operationalSnapshot.roomAirSnapshot().equals(Optional.of(thermal.roomAir())))
                 throw new IllegalArgumentException("coupled ledger and operational room air must match");
+            if (!operationalSnapshot.rackCoolingSnapshot().equals(thermal.rackCoolingSnapshot())
+                    || !operationalSnapshot.facilityEnergySnapshot().equals(thermal.facilityEnergySnapshot()))
+                throw new IllegalArgumentException("coupled and operational rack/electrical captures must match");
         });
     }
 
@@ -78,10 +83,19 @@ public record DatacenterSimulationStepSnapshot(
     }
 
     /**
-     * Returns whether this step includes cooling data.
+     * Returns whether this step includes the legacy room cooling capture.
+     * Use hasAnyCoolingSnapshot for room and/or dedicated rack equipment.
      *
      * @return {@code true} when a cooling snapshot is present
      */
+    public Optional<RackCoolingSnapshot> rackCoolingSnapshot() { return operationalSnapshot.rackCoolingSnapshot(); }
+
+    public Optional<FacilityEnergySnapshot> facilityEnergySnapshot() { return operationalSnapshot.facilityEnergySnapshot(); }
+
+    public boolean hasRackCoolingSnapshot() { return rackCoolingSnapshot().isPresent(); }
+
+    public boolean hasAnyCoolingSnapshot() { return hasCoolingSnapshot() || hasRackCoolingSnapshot(); }
+
     public boolean hasCoolingSnapshot() {
         return coolingSnapshot.isPresent();
     }

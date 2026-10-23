@@ -5,6 +5,9 @@ import com.cpz.sim.datacenter.model.Server;
 import com.cpz.sim.datacenter.model.ServerThermalProperties;
 import com.cpz.sim.datacenter.snapshot.CoupledRoomThermalSnapshot;
 import com.cpz.sim.datacenter.snapshot.CoolingSnapshot;
+import com.cpz.sim.datacenter.snapshot.RackCoolingSnapshot;
+import com.cpz.sim.datacenter.snapshot.RackCoolingUnitThermalSnapshot;
+import com.cpz.sim.datacenter.snapshot.FacilityEnergySnapshot;
 import com.cpz.sim.datacenter.cooling.CoolingTickInput;
 import com.cpz.sim.datacenter.cooling.ServerHeatLoad;
 import com.cpz.sim.datacenter.snapshot.RoomAirTemperatureSnapshot;
@@ -50,6 +53,9 @@ public final class CoupledRoomTemperatureSystem implements Simulatable {
     private final Optional<RackCoolingSystem> rackCoolingSystem;
     private Map<RackLocation, Double> rackAirTemperatures = Map.of();
     private double roomTemperatureCelsius;
+    private double consumedItEnergyWh;
+    private double consumedRoomCoolingEnergyWh;
+    private double consumedRackCoolingEnergyWh;
     private CoupledRoomThermalSnapshot lastSnapshot;
     private CoolingSnapshot lastCoolingSnapshot;
 
@@ -140,19 +146,26 @@ public final class CoupledRoomTemperatureSystem implements Simulatable {
                 throw new IllegalArgumentException("server power must be finite and >= 0");
             totalPower += power[i];
         }
+        double roomElectricalPower = coolingSystem.map(system -> system.currentUnitSnapshots().stream()
+                .mapToDouble(unit -> unit.currentElectricalPowerWatts()).sum()).orElse(0.0);
+        requireFinite(roomElectricalPower);
         List<RoomAirCoolingPath> paths = coolingSystem.map(CoolingSystem::roomAirCoolingPaths).orElse(List.of());
         List<RackCoolingUnitDefinition> rackUnits = rackCoolingSystem.map(system -> system.configuration().units()).orElse(List.of());
         int rackCount = rackUnits.size();
         double[] rackAir = new double[rackCount];
         double[] rackInitial = new double[rackCount];
         double[] rackPower = new double[rackCount];
+        double[] rackRemovedByUnit = new double[rackCount];
+        double[] rackExchangedByUnit = new double[rackCount];
+        double[] serverHeatByRack = new double[rackCount];
+        var rackEquipment = rackCoolingSystem.map(RackCoolingSystem::currentUnitSnapshots).orElse(List.of());
         List<RoomAirCoolingPath> rackPaths = new ArrayList<>();
         Map<RackLocation, Integer> rackIndex = new LinkedHashMap<>();
         for (int j = 0; j < rackCount; j++) {
             var unit = rackUnits.get(j);
             rackIndex.put(unit.rackLocation(), j);
             rackAir[j] = rackInitial[j] = rackAirTemperatures.get(unit.rackLocation());
-            boolean enabled = rackCoolingSystem.orElseThrow().isEnabled(unit.code());
+            boolean enabled = rackEquipment.get(j).enabled();
             rackPower[j] = enabled ? unit.ratedElectricalPowerWatts() : 0.0;
             var config = rackCoolingSystem.orElseThrow().configuration();
             rackPaths.add(new RoomAirCoolingPath(enabled ? config.airDensityKilogramsPerCubicMeter()
@@ -215,10 +228,13 @@ public final class CoupledRoomTemperatureSystem implements Simulatable {
                 rackAir[j] = equation.temperatureAt(nextRoom);
                 double removed = rackPaths.get(j).removedHeatWatts(rackAir[j]);
                 rackRemovedEnergy += removed * dt;
+                rackRemovedByUnit[j] += removed * dt;
                 double rejected = (removed + rackPower[j]) * dt;
                 if (equation.rejectsToRoom()) rackRejectedToRoom += rejected;
                 else rackRejectedExternal += rejected;
-                rackTransferredToRoom += equation.roomConductance() * (rackAir[j] - nextRoom) * dt;
+                double exchanged = equation.roomConductance() * (rackAir[j] - nextRoom) * dt;
+                rackTransferredToRoom += exchanged;
+                rackExchangedByUnit[j] += exchanged;
             }
             for (int i = 0; i < count; i++) {
                 double reference = serverRack[i] < 0 ? nextRoom : rackAir[serverRack[i]];
@@ -226,6 +242,7 @@ public final class CoupledRoomTemperatureSystem implements Simulatable {
                 temperatures[i] += dt * (power[i] - transfer) / capacity[i];
                 requireFinite(temperatures[i]);
                 transferredEnergy += transfer * dt;
+                if (serverRack[i] >= 0) serverHeatByRack[serverRack[i]] += transfer * dt;
             }
             removedEnergy += paths.stream().mapToDouble(path -> path.removedHeatWatts(nextRoom)).sum() * dt;
             environmentEnergy += environmentConductance
@@ -242,11 +259,35 @@ public final class CoupledRoomTemperatureSystem implements Simulatable {
             nextRackAir.put(unit.rackLocation(), rackAir[j]);
         }
         Map<RackLocation, Double> nextRackAirSnapshot = Map.copyOf(nextRackAir);
+        List<RackCoolingUnitThermalSnapshot> rackUnitCaptures = new ArrayList<>();
+        for (int j = 0; j < rackCount; j++) {
+            var unit = rackUnits.get(j);
+            double electricity = rackPower[j] * duration;
+            rackUnitCaptures.add(new RackCoolingUnitThermalSnapshot(rackEquipment.get(j), unit.rackLocation(),
+                    unit.heatRejectionDestination(), rackAir[j], rackPaths.get(j).removedHeatWatts(rackAir[j]),
+                    unit.roomHeatTransferWattsPerCelsius() * (rackAir[j] - room), electricity,
+                    rackRemovedByUnit[j], rackRemovedByUnit[j] + electricity,
+                    unit.effectiveAirThermalCapacityJoulesPerCelsius() * (rackAir[j] - rackInitial[j]),
+                    serverHeatByRack[j], rackExchangedByUnit[j]));
+        }
+        Optional<RackCoolingSnapshot> rackCapture = rackCount == 0 ? Optional.empty()
+                : Optional.of(new RackCoolingSnapshot(tick.index(), tick.elapsedSeconds(), rackUnitCaptures));
+        double nextItEnergyWh = consumedItEnergyWh + totalPower * duration / 3600;
+        double nextRoomEnergyWh = consumedRoomCoolingEnergyWh + roomElectricalPower * duration / 3600;
+        double nextRackEnergyWh = consumedRackCoolingEnergyWh + rackElectricalEnergy / 3600;
+        requireFinite(nextItEnergyWh);
+        requireFinite(nextRoomEnergyWh);
+        requireFinite(nextRackEnergyWh);
+        Optional<FacilityEnergySnapshot> facilityCapture = coolingSystem.isEmpty() && rackCoolingSystem.isEmpty()
+                ? Optional.empty() : Optional.of(new FacilityEnergySnapshot(tick.index(), tick.elapsedSeconds(),
+                nextItEnergyWh, nextRoomEnergyWh, nextRackEnergyWh, totalPower, roomElectricalPower,
+                Arrays.stream(rackPower).sum()));
         CoupledRoomThermalSnapshot snapshot = new CoupledRoomThermalSnapshot(
                 new RoomAirTemperatureSnapshot(tick.index(), tick.elapsedSeconds(), room),
                 totalPower * duration, serverEnergyChange, airCapacity * (room - roomTemperatureCelsius),
                 transferredEnergy, removedEnergy, environmentEnergy, rackAirEnergyChange,
-                rackElectricalEnergy, rackRemovedEnergy, rackRejectedToRoom, rackRejectedExternal, rackTransferredToRoom);
+                rackElectricalEnergy, rackRemovedEnergy, rackRejectedToRoom, rackRejectedExternal, rackTransferredToRoom,
+                rackCapture, facilityCapture);
         if (rackCount > 0) {
             double energyScale = Math.abs(snapshot.inputElectricalEnergyJoules())
                     + Math.abs(snapshot.rackCoolingElectricalEnergyJoules())
@@ -266,6 +307,9 @@ public final class CoupledRoomTemperatureSystem implements Simulatable {
         for (int i = 0; i < count; i++) serverTemperatures.setTemperatureCelsius(servers.get(i).getCode(), temperatures[i]);
         roomTemperatureCelsius = room;
         rackAirTemperatures = nextRackAirSnapshot;
+        consumedItEnergyWh = nextItEnergyWh;
+        consumedRoomCoolingEnergyWh = nextRoomEnergyWh;
+        consumedRackCoolingEnergyWh = nextRackEnergyWh;
         lastSnapshot = snapshot;
         lastCoolingSnapshot = coolingSnapshot;
     }
@@ -318,6 +362,14 @@ public final class CoupledRoomTemperatureSystem implements Simulatable {
         return Optional.ofNullable(lastSnapshot);
     }
 
+    public Optional<RackCoolingSnapshot> lastRackCoolingSnapshot() {
+        return lastSnapshot == null ? Optional.empty() : lastSnapshot.rackCoolingSnapshot();
+    }
+
+    public Optional<FacilityEnergySnapshot> lastFacilityEnergySnapshot() {
+        return lastSnapshot == null ? Optional.empty() : lastSnapshot.facilityEnergySnapshot();
+    }
+
     public Optional<CoolingSnapshot> lastCoolingSnapshot() {
         return Optional.ofNullable(lastCoolingSnapshot);
     }
@@ -327,6 +379,9 @@ public final class CoupledRoomTemperatureSystem implements Simulatable {
         for (Server server : datacenter.getServers())
             serverTemperatures.setTemperatureCelsius(server.getCode(), serverOptions.defaultInitialTemperatureCelsius());
         roomTemperatureCelsius = roomOptions.initialTemperatureCelsius();
+        consumedItEnergyWh = 0;
+        consumedRoomCoolingEnergyWh = 0;
+        consumedRackCoolingEnergyWh = 0;
         lastSnapshot = null;
         lastCoolingSnapshot = null;
         coolingSystem.ifPresent(CoolingSystem::reset);

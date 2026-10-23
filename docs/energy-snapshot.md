@@ -145,3 +145,22 @@ The current snapshot does not include temperature, alert reasons, cooling, PUE,
 or historical metrics. Use the independent temperature and health snapshots for
 the first two. If the UI needs time series, it should accumulate snapshots or
 use a higher-level layer that stores them.
+
+
+## Facility electricity for the coupled pipeline (stage 6)
+
+The existing energy snapshot and `EnergyConsumptionSystem` continue to represent
+IT electricity only. `FacilityEnergySnapshot` separately captures cumulative IT,
+room cooling and rack cooling electricity in Wh, current electrical powers,
+combined facility totals, instantaneous PUE and accumulated-energy PUE.
+
+`CoupledRoomTemperatureSystem` integrates these counters once per successful
+tick and attaches the immutable capture to its thermal ledger. The history
+recorder passes it to the operational view. Both ROOM and EXTERNAL rack units
+contribute electricity; nominal cooling capacity and thermally removed joules
+are never substituted for electrical consumption.
+
+Snapshots are read-only. Reset the coupled owner and IT energy system together.
+Recording fewer ticks or clearing history does not reset electrical counters.
+See [stage 6](temperature.md#rack-snapshots-and-facility-electricity-stage-6)
+for usage and boundaries.

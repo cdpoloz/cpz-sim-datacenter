@@ -227,7 +227,9 @@ public final class DatacenterSimulationHistoryRecorder {
                 "coupledThermalSnapshotSupplier must not return null");
         DatacenterOperationalSnapshot operationalSnapshot = operationalSnapshotProvider.snapshot(
                 energySnapshot, temperatureSnapshot, healthSnapshot, coolingSnapshot,
-                thermal.map(CoupledRoomThermalSnapshot::roomAir));
+                thermal.map(CoupledRoomThermalSnapshot::roomAir),
+                thermal.flatMap(CoupledRoomThermalSnapshot::rackCoolingSnapshot),
+                thermal.flatMap(CoupledRoomThermalSnapshot::facilityEnergySnapshot));
         DatacenterSimulationStepSnapshot stepSnapshot =
                 new DatacenterSimulationStepSnapshot(
                         energySnapshot,

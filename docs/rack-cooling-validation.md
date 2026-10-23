@@ -102,7 +102,9 @@ Stage 5 verifies numerical consistency and energy accounting for these modeled
 boundaries. Physical calibration, spatial airflow, humidity, separate fan motor
 heat allocation and measured cooling performance remain outside this validation.
 
-Rack-specific operational/history snapshots and complete facility power,
-accumulated energy and PUE aggregation are the next integration stage. Room-only
-cooling snapshots still exclude rack unit electricity; use the explicit rack
-thermal ledger and equipment power accessors until that integration is complete.
+Stage 6 implements rack-specific operational/history captures and combined
+facility power, accumulated energy and PUE. Its integration tests additionally
+verify both rejection destinations, rack-only and combined cooling, zero IT load,
+completed-tick immutability, skipped/repeated records, reset interval matching and
+rejected/stale/duplicate captures. The specialized room cooling snapshot remains
+room-only; the operational view combines both electrical sources.

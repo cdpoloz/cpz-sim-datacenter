@@ -139,6 +139,19 @@ public final class DatacenterOperationalSnapshotProvider {
             Optional<CoolingSnapshot> coolingSnapshot,
             Optional<RoomAirTemperatureSnapshot> roomAirSnapshot
     ) {
+        return snapshot(energySnapshot, temperatureSnapshot, healthSnapshot, coolingSnapshot, roomAirSnapshot,
+                Optional.empty(), Optional.empty());
+    }
+
+    /** Combines completed room/rack cooling and electrical captures exactly once. */
+    public DatacenterOperationalSnapshot snapshot(
+            EnergyConsumptionSnapshot energySnapshot, TemperatureSnapshot temperatureSnapshot,
+            HealthSnapshot healthSnapshot, Optional<CoolingSnapshot> coolingSnapshot,
+            Optional<RoomAirTemperatureSnapshot> roomAirSnapshot, Optional<RackCoolingSnapshot> rackCoolingSnapshot,
+            Optional<FacilityEnergySnapshot> facilityEnergySnapshot
+    ) {
+        Objects.requireNonNull(rackCoolingSnapshot, "rackCoolingSnapshot must not be null");
+        Objects.requireNonNull(facilityEnergySnapshot, "facilityEnergySnapshot must not be null");
         Objects.requireNonNull(roomAirSnapshot, "roomAirSnapshot must not be null");
         Objects.requireNonNull(energySnapshot, "energySnapshot must not be null");
         Objects.requireNonNull(temperatureSnapshot, "temperatureSnapshot must not be null");
@@ -146,6 +159,22 @@ public final class DatacenterOperationalSnapshotProvider {
         Objects.requireNonNull(coolingSnapshot, "coolingSnapshot must not be null");
         validateSameCapture(energySnapshot, temperatureSnapshot, healthSnapshot);
         validateCoolingCapture(energySnapshot, coolingSnapshot);
+        rackCoolingSnapshot.ifPresent(rack -> {
+            if (rack.tickIndex() != energySnapshot.tickIndex()
+                    || Double.compare(rack.elapsedSeconds(), energySnapshot.elapsedSeconds()) != 0)
+                throw new IllegalArgumentException("rack cooling must have the same tick and elapsed time");
+            if (coolingSnapshot.isPresent()) {
+                Set<String> roomCodes = coolingSnapshot.orElseThrow().units().stream()
+                        .map(CoolingUnitSnapshot::unitCode).collect(Collectors.toSet());
+                for (var unit : rack.units()) if (roomCodes.contains(unit.unitCode()))
+                    throw new IllegalArgumentException("cooling unit appears in both room and rack captures: " + unit.unitCode());
+            }
+        });
+        facilityEnergySnapshot.ifPresent(facility -> {
+            double difference = Math.abs(facility.consumedItEnergyWh() - energySnapshot.consumedEnergyWh());
+            if (difference > 1e-8 + 1e-9 * Math.max(facility.consumedItEnergyWh(), energySnapshot.consumedEnergyWh()))
+                throw new IllegalArgumentException("facility and IT energy systems must share the same integration/reset interval");
+        });
         Map<ServerLocation, ServerEnergySnapshot> energyByLocation =
                 indexByLocation(energySnapshot.servers(), ServerEnergySnapshot::location, "energy");
         Map<ServerLocation, ServerTemperatureSnapshot>
@@ -187,18 +216,12 @@ public final class DatacenterOperationalSnapshotProvider {
         double idleItPowerWatts = rackSnapshots.values().stream().mapToDouble(RackOperationalSnapshot::idlePowerWatts).sum();
         double maxItPowerWatts = rackSnapshots.values().stream().mapToDouble(RackOperationalSnapshot::maxPowerWatts).sum();
         double currentItPowerWatts = rackSnapshots.values().stream().mapToDouble(RackOperationalSnapshot::currentPowerWatts).sum();
-        double coolingPowerWatts =
-                coolingSnapshot
-                        .map(CoolingSnapshot::totalElectricalPowerWatts)
-                        .orElse(Double.NaN);
-        double totalFacilityPowerWatts =
-                coolingSnapshot.isEmpty()
-                        ? Double.NaN
-                        : currentItPowerWatts + coolingPowerWatts;
-        double pue =
-                coolingSnapshot.isEmpty() || currentItPowerWatts == 0.0
-                        ? Double.NaN
-                        : totalFacilityPowerWatts / currentItPowerWatts;
+        boolean hasCooling = coolingSnapshot.isPresent() || rackCoolingSnapshot.isPresent();
+        double coolingPowerWatts = !hasCooling ? Double.NaN
+                : coolingSnapshot.map(CoolingSnapshot::totalElectricalPowerWatts).orElse(0.0)
+                + rackCoolingSnapshot.map(RackCoolingSnapshot::totalElectricalPowerWatts).orElse(0.0);
+        double totalFacilityPowerWatts = hasCooling ? currentItPowerWatts + coolingPowerWatts : Double.NaN;
+        double pue = !hasCooling || currentItPowerWatts == 0 ? Double.NaN : totalFacilityPowerWatts / currentItPowerWatts;
         return new DatacenterOperationalSnapshot(
                 energySnapshot.tickIndex(),
                 energySnapshot.elapsedSeconds(),
@@ -215,7 +238,9 @@ public final class DatacenterOperationalSnapshotProvider {
                 coolingPowerWatts,
                 totalFacilityPowerWatts,
                 pue,
-                roomAirSnapshot
+                roomAirSnapshot,
+                rackCoolingSnapshot,
+                facilityEnergySnapshot
         );
     }
 

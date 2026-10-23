@@ -1,6 +1,7 @@
 package com.cpz.sim.datacenter.snapshot;
 
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Integrated energy ledger for one coupled tick, in joules. Transfers to air
@@ -24,10 +25,22 @@ public record CoupledRoomThermalSnapshot(
         double rackRemovedHeatJoules,
         double rackHeatRejectedToRoomJoules,
         double rackHeatRejectedExternalJoules,
-        double rackHeatTransferredToRoomJoules
+        double rackHeatTransferredToRoomJoules,
+        Optional<RackCoolingSnapshot> rackCoolingSnapshot,
+        Optional<FacilityEnergySnapshot> facilityEnergySnapshot
 ) {
     public CoupledRoomThermalSnapshot {
         Objects.requireNonNull(roomAir, "roomAir must not be null");
+        Objects.requireNonNull(rackCoolingSnapshot, "rackCoolingSnapshot must not be null");
+        Objects.requireNonNull(facilityEnergySnapshot, "facilityEnergySnapshot must not be null");
+        rackCoolingSnapshot.ifPresent(rack -> {
+            if (rack.tickIndex() != roomAir.tickIndex() || Double.compare(rack.elapsedSeconds(), roomAir.elapsedSeconds()) != 0)
+                throw new IllegalArgumentException("rack cooling and thermal ledger must represent the same capture");
+        });
+        facilityEnergySnapshot.ifPresent(energy -> {
+            if (energy.tickIndex() != roomAir.tickIndex() || Double.compare(energy.elapsedSeconds(), roomAir.elapsedSeconds()) != 0)
+                throw new IllegalArgumentException("facility electricity and thermal ledger must represent the same capture");
+        });
         for (double value : new double[]{inputElectricalEnergyJoules, serverEnergyChangeJoules,
                 roomAirEnergyChangeJoules, heatTransferredToAirJoules, removedHeatJoules, environmentHeatLossJoules, rackAirEnergyChangeJoules,
                 rackCoolingElectricalEnergyJoules, rackRemovedHeatJoules, rackHeatRejectedToRoomJoules,
@@ -37,6 +50,21 @@ public record CoupledRoomThermalSnapshot(
                 || rackCoolingElectricalEnergyJoules < 0.0 || rackRemovedHeatJoules < 0.0
                 || rackHeatRejectedToRoomJoules < 0.0 || rackHeatRejectedExternalJoules < 0.0)
             throw new IllegalArgumentException("electrical inputs, removed heat and rack rejection must be >= 0");
+    }
+
+    /** Preserves the stage 4 ledger constructor without detailed electrical captures. */
+    public CoupledRoomThermalSnapshot(RoomAirTemperatureSnapshot roomAir,
+            double inputElectricalEnergyJoules, double serverEnergyChangeJoules,
+            double roomAirEnergyChangeJoules, double heatTransferredToAirJoules,
+            double removedHeatJoules, double environmentHeatLossJoules,
+            double rackAirEnergyChangeJoules, double rackCoolingElectricalEnergyJoules,
+            double rackRemovedHeatJoules, double rackHeatRejectedToRoomJoules,
+            double rackHeatRejectedExternalJoules, double rackHeatTransferredToRoomJoules) {
+        this(roomAir, inputElectricalEnergyJoules, serverEnergyChangeJoules, roomAirEnergyChangeJoules,
+                heatTransferredToAirJoules, removedHeatJoules, environmentHeatLossJoules,
+                rackAirEnergyChangeJoules, rackCoolingElectricalEnergyJoules, rackRemovedHeatJoules,
+                rackHeatRejectedToRoomJoules, rackHeatRejectedExternalJoules, rackHeatTransferredToRoomJoules,
+                Optional.empty(), Optional.empty());
     }
 
     /** Compatibility constructor for scenarios without local rack air. */
