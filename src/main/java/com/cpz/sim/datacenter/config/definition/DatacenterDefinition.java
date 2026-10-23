@@ -21,6 +21,7 @@ import java.util.Objects;
  * @param powerInputGranularity telemetry granularity for power-driven input
  * @param temperatureInputGranularity telemetry granularity for temperature-driven input
  * @param roomAirTemperature optional independent room-air thermal configuration
+ * @param rackCooling optional dedicated rack cooling configuration
  *
  * @author CPZ
  */
@@ -35,7 +36,8 @@ public record DatacenterDefinition(
         DatacenterDataInputMode dataInputMode,
         PowerInputGranularity powerInputGranularity,
         TemperatureInputGranularity temperatureInputGranularity,
-        RoomAirTemperatureOptionsDefinition roomAirTemperature
+        RoomAirTemperatureOptionsDefinition roomAirTemperature,
+        RackCoolingConfigDefinition rackCooling
 ) {
 
     public DatacenterDefinition {
@@ -43,6 +45,25 @@ public record DatacenterDefinition(
         powerInputGranularity = Objects.requireNonNullElse(powerInputGranularity, PowerInputGranularity.SERVER);
         temperatureInputGranularity =
                 Objects.requireNonNullElse(temperatureInputGranularity, TemperatureInputGranularity.RACK);
+    }
+
+    /** Preserves the constructor introduced with independent room air. */
+    public DatacenterDefinition(
+            String name,
+            DatacenterLayoutDefinition layout,
+            List<ServerModelDefinition> serverModels,
+            List<ServerDefinition> servers,
+            TemperatureSystemOptionsDefinition temperature,
+            HealthSystemOptionsDefinition health,
+            CoolingConfigDefinition cooling,
+            DatacenterDataInputMode dataInputMode,
+            PowerInputGranularity powerInputGranularity,
+            TemperatureInputGranularity temperatureInputGranularity,
+            RoomAirTemperatureOptionsDefinition roomAirTemperature
+    ) {
+        this(name, layout, serverModels, servers, temperature, health, cooling,
+                dataInputMode, powerInputGranularity, temperatureInputGranularity,
+                roomAirTemperature, null);
     }
 
     /** Preserves the constructor introduced with temperature input granularity. */

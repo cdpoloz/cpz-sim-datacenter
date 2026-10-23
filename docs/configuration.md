@@ -1002,3 +1002,98 @@ If `health` is present, both `utilization` and `temperatureCelsius` are required
 as are both fields inside each threshold. A JSON `null` health block is rejected.
 These values configure runtime behavior; the health system does not use separate
 hard-coded evaluation limits.
+
+
+## Rack cooling configuration (stage 2)
+
+An optional top-level `rackCooling` block defines dedicated rack units and their
+local air nodes. It is independent of the legacy `cooling` block: a scenario may
+have rack units without room cooling zones or room SUPPLY/EXHAUST units.
+
+**Current availability:** the loader and validator accept the contract below.
+`DatacenterFactory.create` and `CoupledRoomTemperatureSystemFactory.create`
+deliberately throw `UnsupportedOperationException`
+when `rackCooling` is declared, including when units are initially disabled.
+Equipment state, thermal evolution and snapshots arrive in later stages; running
+these scenarios now must not silently ignore the new cooling configuration.
+Existing scenarios without `rackCooling` continue to build normally.
+
+The following is a fragment to add to an otherwise complete datacenter definition.
+The referenced `C01/R01` rack must already exist in `layout.racks`. All numeric
+values are illustrative, not physically calibrated.
+
+```json
+{
+  "roomAirTemperature": {
+    "initialTemperatureCelsius": 24.0,
+    "effectiveThermalCapacityJoulesPerCelsius": 2000000.0,
+    "environmentTemperatureCelsius": 20.0,
+    "environmentHeatTransferWattsPerCelsius": 0.0
+  },
+  "rackCooling": {
+    "airDensityKilogramsPerCubicMeter": 1.204,
+    "airSpecificHeatJoulesPerKilogramKelvin": 1005.0,
+    "units": [
+      {
+        "code": "RACK-COOLING-01",
+        "column": "C01",
+        "rackCode": "R01",
+        "initialAirTemperatureCelsius": 24.0,
+        "effectiveAirThermalCapacityJoulesPerCelsius": 10000.0,
+        "roomHeatTransferWattsPerCelsius": 50.0,
+        "ratedAirflowCubicMetersPerSecond": 0.1,
+        "ratedCoolingCapacityWatts": 2000.0,
+        "supplyAirTemperatureCelsius": 18.0,
+        "ratedElectricalPowerWatts": 500.0,
+        "heatRejectionDestination": "ROOM",
+        "initiallyEnabled": true
+      }
+    ]
+  }
+}
+```
+
+Both air constants are required, finite and strictly positive. They apply to
+internal rack unit airflow, independently of room `cooling.options`; no defaults
+are inferred from the room configuration. `units` must be a non-empty array.
+To omit the feature, omit `rackCooling` entirely. An explicit null block is invalid.
+
+Every unit requires all fields shown above:
+
+| Fields | Validation / meaning |
+| --- | --- |
+| `code` | Non-blank, unique across all rack, SUPPLY and EXHAUST units |
+| `column`, `rackCode` | Non-blank; must identify an existing rack as a pair |
+| `initialAirTemperatureCelsius`, `supplyAirTemperatureCelsius` | Finite numbers |
+| `effectiveAirThermalCapacityJoulesPerCelsius` | Finite and strictly positive; excludes separately modeled server capacity |
+| `roomHeatTransferWattsPerCelsius` | Finite and non-negative; zero is ideal thermal isolation |
+| `ratedAirflowCubicMetersPerSecond` | Finite and strictly positive; internal recirculating airflow |
+| `ratedCoolingCapacityWatts` | Finite and strictly positive; thermal capacity, not electrical power |
+| `ratedElectricalPowerWatts` | Finite and strictly positive; future enabled-state electrical consumption |
+| `heatRejectionDestination` | Exactly `ROOM` or `EXTERNAL`, explicitly supplied |
+| `initiallyEnabled` | Explicit JSON boolean |
+
+Only one unit may serve each rack in the first version. Repeated rack codes in
+different columns remain distinct. Empty racks may declare a unit; unlike a legacy
+cooling zone, no installed server is required. Slot occupancy is not reserved by
+this thermal configuration.
+
+`ROOM` assigns rejected heat (actual cooling plus unit electrical power) to the
+common room air. `EXTERNAL` exports that heat across the modeled boundary. Neither
+option removes electrical consumption from facility metrics. The first thermal
+approximation assigns all unit electrical dissipation to the selected destination;
+internal fan heat is not split out. See the
+[thermal design contract](temperature.md#rack-contained-cooling-implementation-contract-stage-1)
+for equations and energy accounting.
+
+A declared block requires `roomAirTemperature` and `UTILIZATION_DRIVEN` (the
+existing default) or `POWER_DRIVEN`. `TEMPERATURE_DRIVEN` is rejected even if the
+units are initially disabled. Existing constructors of `DatacenterDefinition`
+remain available and leave `rackCooling` absent. Programmatic definitions are
+checked by `DatacenterConfigValidator`, including null entries and non-finite
+magnitudes.
+
+The loader rejects missing fields, explicit null fields, unknown properties
+inside this block or its units, wrong JSON types, numeric/boolean coercion and
+non-finite numeric values. Semantic checks (positive magnitudes, rack references,
+uniqueness and mode dependencies) remain the validator's responsibility.

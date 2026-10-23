@@ -52,7 +52,8 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
                     readOptionalDataInputMode(root, path),
                     readOptionalPowerInputGranularity(root, path),
                     readOptionalTemperatureInputGranularity(root, path),
-                    readOptionalRoomAirTemperature(root, path)
+                    readOptionalRoomAirTemperature(root, path),
+                    readOptionalRackCooling(root, path)
             );
         } catch (IOException exception) {
             throw new DatacenterConfigException("Could not load datacenter config from path: " + path, exception);
@@ -73,6 +74,52 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
                 readOptionalHotAisles(layoutNode, path),
                 readRequired(layoutNode, "racks", path, RACKS_TYPE)
         );
+    }
+
+    private static RackCoolingConfigDefinition readOptionalRackCooling(JsonNode root, Path path) throws IOException {
+        JsonNode block = root.get("rackCooling");
+        if (block == null) return null;
+        requireObject(block, "rackCooling", path);
+        rejectUnknownProperties(block, List.of("airDensityKilogramsPerCubicMeter",
+                "airSpecificHeatJoulesPerKilogramKelvin", "units"), "rackCooling", path);
+        requireFiniteNumber(block, "airDensityKilogramsPerCubicMeter", "rackCooling", path);
+        requireFiniteNumber(block, "airSpecificHeatJoulesPerKilogramKelvin", "rackCooling", path);
+        JsonNode units = requireProperty(block, "units", path);
+        if (!units.isArray())
+            throw new DatacenterConfigException("rackCooling.units must be an array: " + path);
+        List<String> numberFields = List.of("initialAirTemperatureCelsius",
+                "effectiveAirThermalCapacityJoulesPerCelsius", "roomHeatTransferWattsPerCelsius",
+                "ratedAirflowCubicMetersPerSecond", "ratedCoolingCapacityWatts",
+                "supplyAirTemperatureCelsius", "ratedElectricalPowerWatts");
+        List<String> textFields = List.of("code", "column", "rackCode", "heatRejectionDestination");
+        List<String> allowed = new java.util.ArrayList<>(numberFields);
+        allowed.addAll(textFields);
+        allowed.add("initiallyEnabled");
+        for (int i = 0; i < units.size(); i++) {
+            JsonNode unit = units.get(i);
+            String context = "rackCooling.units[" + i + "]";
+            requireObject(unit, context, path);
+            rejectUnknownProperties(unit, allowed, context, path);
+            for (String field : numberFields) requireFiniteNumber(unit, field, context, path);
+            for (String field : textFields) {
+                if (!requireProperty(unit, field, path).isTextual())
+                    throw new DatacenterConfigException(context + "." + field + " must be a string: " + path);
+            }
+            if (!requireProperty(unit, "initiallyEnabled", path).isBoolean())
+                throw new DatacenterConfigException(context + ".initiallyEnabled must be a boolean: " + path);
+        }
+        return JSON_MAPPER.readValue(block.traverse(JSON_MAPPER), RackCoolingConfigDefinition.class);
+    }
+
+    private static void requireObject(JsonNode node, String context, Path path) {
+        if (!node.isObject())
+            throw new DatacenterConfigException(context + " must be a non-null object: " + path);
+    }
+
+    private static void requireFiniteNumber(JsonNode node, String field, String context, Path path) {
+        JsonNode value = requireProperty(node, field, path);
+        if (!value.isNumber() || !Double.isFinite(value.doubleValue()))
+            throw new DatacenterConfigException(context + "." + field + " must be a finite number: " + path);
     }
 
     private static RoomAirTemperatureOptionsDefinition readOptionalRoomAirTemperature(JsonNode root, Path path) {

@@ -24,6 +24,8 @@ public final class CoupledRoomTemperatureSystemFactory {
         Objects.requireNonNull(temperatureSystem, "temperatureSystem must not be null");
         Objects.requireNonNull(coolingSystem, "coolingSystem must not be null");
         new DatacenterConfigValidator().validate(definition);
+        if (definition.rackCooling() != null)
+            throw new UnsupportedOperationException("rackCooling thermal runtime is not implemented yet");
         var roomOptions = new RoomAirTemperatureOptionsFactory().create(definition);
         if (roomOptions.isEmpty()) return Optional.empty();
         if (definition.dataInputMode() == DatacenterDataInputMode.TEMPERATURE_DRIVEN)

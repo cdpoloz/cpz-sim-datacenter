@@ -407,7 +407,7 @@ class DatacenterOperationalSnapshotTest {
     }
 
     @Test
-    void shouldRejectInvalidRoomTemperature() {
+    void shouldRejectInvalidAverageOnlineServerTemperature() {
         for (double invalidValue : new double[]{
                 Double.NaN,
                 Double.POSITIVE_INFINITY,
@@ -440,7 +440,7 @@ class DatacenterOperationalSnapshotTest {
             );
 
             assertEquals(
-                    "roomTemperatureCelsius must be finite",
+                    "averageOnlineServerTemperatureCelsius must be finite",
                     exception.getMessage()
             );
         }

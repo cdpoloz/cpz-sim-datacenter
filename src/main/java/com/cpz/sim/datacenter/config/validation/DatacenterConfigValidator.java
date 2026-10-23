@@ -397,6 +397,7 @@ public final class DatacenterConfigValidator {
         validateServers(definition.servers(), definition.serverModels(), layout, errors);
         validateTemperature(definition.temperature(), errors);
         validateRoomAirTemperature(definition.roomAirTemperature(), errors);
+        validateRackCooling(definition, layout, errors);
         validateHealth(definition.health(), errors);
         validateCoolingStructure(definition.cooling(), errors);
         validateCoolingOptions(definition.cooling(), errors);
@@ -408,6 +409,72 @@ public final class DatacenterConfigValidator {
         validateCoolingZones(definition.cooling(), layout, errors);
         validateCoolingZoneMembership(definition.cooling(), definition.servers(), layout, errors);
         if (!errors.isEmpty()) throw new DatacenterConfigValidationException(String.join(System.lineSeparator(), errors));
+    }
+
+    private static void validateRackCooling(DatacenterDefinition definition, LayoutIndex layout, List<String> errors) {
+        RackCoolingConfigDefinition cooling = definition.rackCooling();
+        if (cooling == null) return;
+        if (definition.roomAirTemperature() == null)
+            errors.add("rackCooling requires roomAirTemperature for the coupled thermal pipeline");
+        if (definition.dataInputMode() == com.cpz.sim.datacenter.input.DatacenterDataInputMode.TEMPERATURE_DRIVEN)
+            errors.add("rackCooling does not support TEMPERATURE_DRIVEN");
+        validatePositiveRackMagnitude(cooling.airDensityKilogramsPerCubicMeter(),
+                "rackCooling.airDensityKilogramsPerCubicMeter", errors);
+        validatePositiveRackMagnitude(cooling.airSpecificHeatJoulesPerKilogramKelvin(),
+                "rackCooling.airSpecificHeatJoulesPerKilogramKelvin", errors);
+        if (cooling.units() == null || cooling.units().isEmpty()) {
+            errors.add("rackCooling.units must contain at least one unit");
+            return;
+        }
+        Set<String> roomUnitCodes = new HashSet<>();
+        if (definition.cooling() != null) {
+            if (definition.cooling().supplyUnits() != null)
+                for (var unit : definition.cooling().supplyUnits()) if (unit != null) roomUnitCodes.add(unit.code());
+            if (definition.cooling().exhaustUnits() != null)
+                for (var unit : definition.cooling().exhaustUnits()) if (unit != null) roomUnitCodes.add(unit.code());
+        }
+        Set<String> codes = new HashSet<>();
+        Set<RackKey> racks = new HashSet<>();
+        for (int i = 0; i < cooling.units().size(); i++) {
+            RackCoolingUnitConfigDefinition unit = cooling.units().get(i);
+            String context = "rackCooling.units[" + i + "]";
+            if (unit == null) {
+                errors.add(context + " cannot be null");
+                continue;
+            }
+            if (isBlank(unit.code())) errors.add(context + ".code must be non-blank");
+            else {
+                if (!codes.add(unit.code())) errors.add("Duplicated rack cooling unit code: " + unit.code());
+                if (roomUnitCodes.contains(unit.code()))
+                    errors.add("Duplicated cooling unit code across rack and room units: " + unit.code());
+            }
+            if (isBlank(unit.column())) errors.add(context + ".column must be non-blank");
+            if (isBlank(unit.rackCode())) errors.add(context + ".rackCode must be non-blank");
+            if (!isBlank(unit.column()) && !isBlank(unit.rackCode())) {
+                RackKey rack = new RackKey(unit.column(), unit.rackCode());
+                if (!layout.racksByLocation().containsKey(rack))
+                    errors.add(context + " references unknown rack location: " + rack.code());
+                if (!racks.add(rack)) errors.add("Multiple rack cooling units for rack: " + rack.code());
+            }
+            if (unit.heatRejectionDestination() == null)
+                errors.add(context + ".heatRejectionDestination must be ROOM or EXTERNAL");
+            if (!Double.isFinite(unit.initialAirTemperatureCelsius()))
+                errors.add(context + ".initialAirTemperatureCelsius must be finite");
+            if (!Double.isFinite(unit.supplyAirTemperatureCelsius()))
+                errors.add(context + ".supplyAirTemperatureCelsius must be finite");
+            validatePositiveRackMagnitude(unit.effectiveAirThermalCapacityJoulesPerCelsius(),
+                    context + ".effectiveAirThermalCapacityJoulesPerCelsius", errors);
+            validatePositiveRackMagnitude(unit.ratedAirflowCubicMetersPerSecond(),
+                    context + ".ratedAirflowCubicMetersPerSecond", errors);
+            validatePositiveRackMagnitude(unit.ratedCoolingCapacityWatts(), context + ".ratedCoolingCapacityWatts", errors);
+            validatePositiveRackMagnitude(unit.ratedElectricalPowerWatts(), context + ".ratedElectricalPowerWatts", errors);
+            if (!Double.isFinite(unit.roomHeatTransferWattsPerCelsius()) || unit.roomHeatTransferWattsPerCelsius() < 0.0)
+                errors.add(context + ".roomHeatTransferWattsPerCelsius must be finite and >= 0");
+        }
+    }
+
+    private static void validatePositiveRackMagnitude(double value, String context, List<String> errors) {
+        if (!Double.isFinite(value) || value <= 0.0) errors.add(context + " must be finite and > 0");
     }
 
     private static void validateHealth(HealthSystemOptionsDefinition health, List<String> errors) {

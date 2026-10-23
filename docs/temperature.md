@@ -416,7 +416,7 @@ The exact numeric output depends on workload evolution and tick duration.
 
 The staged rack-contained cooling extension is specified in the
 [stage 1 design contract](#rack-contained-cooling-implementation-contract-stage-1)
-below. It is not implemented yet.
+below. Configuration loading and validation are implemented; runtime is pending.
 
 Possible future extensions, not implemented in this milestone:
 
@@ -429,9 +429,10 @@ Possible future extensions, not implemented in this milestone:
 
 ## Rack-contained cooling: implementation contract (stage 1)
 
-**Status: design contract for the next implementation stages; not supported by
-the current JSON loader, runtime or snapshots.** This section specifies the
-initial extension without changing the current behavior described above.
+**Status: stage 2 supports JSON loading and semantic validation; runtime and
+snapshots are not implemented yet.** `DatacenterFactory` explicitly rejects
+execution of scenarios declaring `rackCooling` until runtime support exists.
+This section specifies the extension without changing existing thermal behavior.
 The parameters remain uncalibrated until independent measurements are available.
 
 ### Scope and identity
@@ -464,8 +465,8 @@ placement/UI work; this contract does not treat the unit as a server.
 ### Required physical quantities
 
 The configuration stage must provide explicit values for these quantities.
-Names below describe the contract; the final JSON structure is defined in
-stage 2 and is not accepted by the current loader.
+Names below describe the physical contract. The implemented JSON structure is
+documented in [rack cooling configuration](configuration.md#rack-cooling-configuration-stage-2).
 
 | Quantity | Unit | Constraint / meaning |
 | --- | --- | --- |
