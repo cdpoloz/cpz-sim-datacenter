@@ -1014,8 +1014,10 @@ have rack units without room cooling zones or room SUPPLY/EXHAUST units.
 `DatacenterFactory.create` and `CoupledRoomTemperatureSystemFactory.create`
 deliberately throw `UnsupportedOperationException`
 when `rackCooling` is declared, including when units are initially disabled.
-Equipment state, thermal evolution and snapshots arrive in later stages; running
-these scenarios now must not silently ignore the new cooling configuration.
+Stage 3 provides standalone equipment definitions, controls and electrical power
+through `RackCoolingConfigurationFactory` and `RackCoolingSystem`. Coupled thermal
+evolution and thermal/history snapshots arrive in later stages; running a full
+scenario now must not silently ignore the new cooling configuration.
 Existing scenarios without `rackCooling` continue to build normally.
 
 The following is a fragment to add to an otherwise complete datacenter definition.

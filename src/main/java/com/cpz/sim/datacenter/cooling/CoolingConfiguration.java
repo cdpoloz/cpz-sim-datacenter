@@ -8,7 +8,8 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Defines the complete immutable configuration of the cooling system.
+ * Defines the immutable room cooling configuration. Dedicated rack equipment
+ * belongs to {@link RackCoolingConfiguration}.
  *
  * @param zones cooling-zone definitions
  * @param units cooling-unit definitions
@@ -29,7 +30,7 @@ public record CoolingConfiguration(
      *         {@code null}
      * @throws IllegalArgumentException if zones or units are empty, a code is
      *         duplicated, an influence references an unknown zone, or a server
-     *         location belongs to more than one zone
+     *         location belongs to more than one zone, or a rack unit is supplied
      */
     public CoolingConfiguration {
         Objects.requireNonNull(zones, "zones must not be null");
@@ -67,6 +68,8 @@ public record CoolingConfiguration(
         Set<String> unitCodes = new HashSet<>();
         for (CoolingZoneDefinition zone : zones) knownZoneCodes.add(zone.code());
         for (CoolingUnitDefinition unit : units) {
+            if (unit instanceof RackCoolingUnitDefinition)
+                throw new IllegalArgumentException("rack units require RackCoolingConfiguration, not room cooling zones");
             if (!unitCodes.add(unit.code())) throw new IllegalArgumentException("duplicate cooling-unit code: " + unit.code());
             for (CoolingZoneInfluence influence : unit.influences()) {
                 if (!knownZoneCodes.contains(influence.zoneCode()))

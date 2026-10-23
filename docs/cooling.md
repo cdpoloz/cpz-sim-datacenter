@@ -10,6 +10,10 @@ The implementation remains a pure Java backend concern. A console demo, a
 future UI, or another adapter may control cooling units, but the operational
 state belongs to `CoolingSystem`.
 
+Dedicated rack equipment is documented in
+[rack cooling equipment controls](#rack-cooling-equipment-controls-stage-3).
+Its local thermal simulation is not yet implemented.
+
 ## Current Scope
 
 The current milestone includes:
@@ -669,3 +673,76 @@ Possible future extensions include:
 - cooling alarms and health reasons
 - telemetry adapters for physical supply and exhaust equipment
 - calibrated or interchangeable airflow and cooling models
+
+
+## Rack cooling equipment controls (stage 3)
+
+`RackCoolingUnitDefinition` implements the common `CoolingUnitDefinition`
+contract with type `CoolingUnitType.RACK`. It carries the full `RackLocation`
+(column plus rack code), rejection destination, initial local-air parameters,
+nominal airflow, refrigeration capacity, electrical power and initial enabled
+state. Definitions are immutable and independently validate their magnitudes.
+A dedicated unit returns an empty legacy zone influence list: its connection
+is to exactly one rack, not a room cooling zone.
+
+`RackCoolingConfiguration` owns the rack airflow air constants and a defensive
+list of definitions. It rejects repeated unit codes, multiple units for the same
+rack, null entries, empty lists and invalid constants. The configuration factory
+validates the complete datacenter definition first, including cross-type unit
+code collisions and exact rack references. It returns an empty optional when
+`rackCooling` is absent and does not invent physical defaults.
+
+Load and inspect equipment independently of the not-yet-supported full thermal
+scenario:
+
+```java
+DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(configPath);
+Optional<RackCoolingConfiguration> configuration =
+        new RackCoolingConfigurationFactory().create(definition);
+
+if (configuration.isPresent()) {
+    RackCoolingSystem rackCooling = new RackCoolingSystem(configuration.orElseThrow());
+    rackCooling.enable("RACK-COOLING-01");
+    double unitWatts = rackCooling.currentElectricalPowerWatts("RACK-COOLING-01");
+    double totalRackCoolingWatts = rackCooling.currentElectricalPowerWatts();
+    List<CoolingUnitSnapshot> equipment = rackCooling.currentUnitSnapshots();
+}
+```
+
+Use a code actually declared in the loaded configuration. `RackCoolingSystem`
+provides `enable`, `disable`, `setEnabled`, `toggle`, `isEnabled`, `stateOf`,
+`definitionOf`, `findUnitForRack` and `reset`. It reuses immutable
+`CoolingUnitState`. A reset restores initial enabled states; the later thermal
+owner will restore local-air temperatures. Commands for unknown/null identities
+fail without changing existing equipment. Control calls belong on the simulation
+owner thread, like existing room cooling controls.
+
+Equipment snapshots are read-only captures in configuration order. Commands do
+not mutate prior states or snapshots. Repeated captures do not advance a tick,
+integrate energy or change any temperature. Use `definitionOf(snapshot.unitCode())`
+to obtain the corresponding rack and heat rejection destination.
+
+For an enabled unit:
+
+- Current airflow is its configured internal recirculating airflow.
+- Current electrical power is rated electrical power, independently of destination.
+- `CoolingUnitSnapshot.currentCoolingPowerWatts()` is enabled **nominal capacity**,
+  following the existing SUPPLY equipment convention; it is not actual heat
+  removal and must not be used as a thermal ledger entry.
+
+Disabled units report zero current airflow, electricity and capacity; rated
+values remain in their definitions and rated electrical power stays in snapshots.
+The system's `currentElectricalPowerWatts()` sums enabled rack unit electricity
+only. Facility totals, accumulated energy and PUE integration remain for the
+snapshot/energy integration stage; these units are not yet registered in those
+aggregates automatically.
+
+`CoolingConfiguration` rejects rack units, preventing accidental registration
+in the room cooling paths. `CoolingSystem` remains the authoritative controller
+for room units; `RackCoolingSystem` owns rack unit controls. This separation
+prevents counting local cooling capacity again as a room refrigeration sink.
+
+Full scenario construction remains blocked by `DatacenterFactory` and
+`CoupledRoomTemperatureSystemFactory` while rack air physics is pending, even
+when all rack units start disabled. Equipment-only inspection does not remove
+that guard. Existing configurations without rack cooling retain their behavior.

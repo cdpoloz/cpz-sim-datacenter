@@ -10,14 +10,16 @@ import java.util.Objects;
  * <p>Disabled units report zero current airflow, zero current electrical
  * power and zero current cooling power. Exhaust units also report zero
  * current cooling power because they remove air but do not provide
- * refrigeration capacity.</p>
+ * refrigeration capacity. SUPPLY and RACK snapshots expose enabled nominal
+ * capacity; actual removed heat belongs to thermal outputs.</p>
  *
  * @param unitCode cooling-unit code
  * @param type functional type of the cooling unit
  * @param enabled whether the unit was enabled at this tick
  * @param currentAirflowCubicMetersPerSecond current airflow
  * @param currentElectricalPowerWatts current electrical power
- * @param currentCoolingPowerWatts current cooling power
+ * @param currentCoolingPowerWatts enabled nominal refrigeration capacity for
+ *        SUPPLY/RACK units, not actual thermally removed heat
  * @param ratedElectricalPowerWatts nominal electrical power when enabled
  *
  * @author CPZ

@@ -416,7 +416,8 @@ The exact numeric output depends on workload evolution and tick duration.
 
 The staged rack-contained cooling extension is specified in the
 [stage 1 design contract](#rack-contained-cooling-implementation-contract-stage-1)
-below. Configuration loading and validation are implemented; runtime is pending.
+below. Configuration and equipment controls are implemented; coupled rack
+thermal evolution is pending.
 
 Possible future extensions, not implemented in this milestone:
 
@@ -429,9 +430,12 @@ Possible future extensions, not implemented in this milestone:
 
 ## Rack-contained cooling: implementation contract (stage 1)
 
-**Status: stage 2 supports JSON loading and semantic validation; runtime and
-snapshots are not implemented yet.** `DatacenterFactory` explicitly rejects
-execution of scenarios declaring `rackCooling` until runtime support exists.
+**Status: stage 3 supports JSON validation, immutable equipment definitions and
+operational controls.** Coupled rack thermal evolution and thermal/history
+snapshots are not implemented yet. `DatacenterFactory` and the coupled thermal
+factory explicitly reject execution of scenarios declaring `rackCooling` until
+the local-air thermal solver exists. Standalone equipment controls are available
+through `RackCoolingConfigurationFactory` and `RackCoolingSystem`.
 This section specifies the extension without changing existing thermal behavior.
 The parameters remain uncalibrated until independent measurements are available.
 

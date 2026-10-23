@@ -6,11 +6,12 @@ import java.util.List;
  * Defines the immutable characteristics shared by all cooling units.
  *
  * <p>The operational enabled state is intentionally not stored in this
- * definition. It will be managed by {@code CoolingSystem}.</p>
+ * definition. It is managed by {@code CoolingSystem} for room units and
+ * {@code RackCoolingSystem} for rack units.</p>
  *
  * @author CPZ
  */
-public sealed interface CoolingUnitDefinition permits SupplyCoolingUnitDefinition, ExhaustCoolingUnitDefinition {
+public sealed interface CoolingUnitDefinition permits SupplyCoolingUnitDefinition, ExhaustCoolingUnitDefinition, RackCoolingUnitDefinition {
 
     /**
      * Returns the unique unit code.
@@ -41,7 +42,8 @@ public sealed interface CoolingUnitDefinition permits SupplyCoolingUnitDefinitio
     double ratedElectricalPowerWatts();
 
     /**
-     * Returns the zones affected by the unit.
+     * Returns the legacy room zones affected by the unit. Dedicated rack
+     * units return an empty list and identify their rack separately.
      *
      * @return immutable influence list
      */
