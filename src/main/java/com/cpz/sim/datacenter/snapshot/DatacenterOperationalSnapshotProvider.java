@@ -131,7 +131,7 @@ public final class DatacenterOperationalSnapshotProvider {
         return snapshot(energySnapshot, temperatureSnapshot, healthSnapshot, coolingSnapshot, Optional.empty());
     }
 
-    /** Captures independent room air without changing the legacy server aggregate. */
+    /** Captures independent room air without changing the server-temperature aggregate. */
     public DatacenterOperationalSnapshot snapshot(
             EnergyConsumptionSnapshot energySnapshot,
             TemperatureSnapshot temperatureSnapshot,
@@ -172,7 +172,7 @@ public final class DatacenterOperationalSnapshotProvider {
                         .filter(RackOperationalSnapshot::hasOnlineServers)
                         .mapToDouble(rackSnapshot -> rackSnapshot.averageOnlineTemperatureCelsius() * rackSnapshot.onlineServerCount())
                         .sum();
-        double roomTemperatureCelsius =
+        double averageOnlineServerTemperatureCelsius =
                 totalOnlineServerCount == 0
                         ? temperatureSnapshot.ambientTemperatureCelsius()
                         : totalOnlineTemperatureSumCelsius / totalOnlineServerCount;
@@ -205,7 +205,7 @@ public final class DatacenterOperationalSnapshotProvider {
                 rackSnapshots,
                 columnSnapshots,
                 serverGroupSnapshots,
-                roomTemperatureCelsius,
+                averageOnlineServerTemperatureCelsius,
                 hottestRackLocation,
                 hottestRackAverageTemperatureCelsius,
                 totalItUtilization,

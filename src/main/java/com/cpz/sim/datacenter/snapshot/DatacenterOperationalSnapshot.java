@@ -25,7 +25,7 @@ public record DatacenterOperationalSnapshot(
         Map<RackLocation, RackOperationalSnapshot> racks,
         Map<String, ColumnOperationalSnapshot> columns,
         Map<String, ServerGroupOperationalSnapshot> serverGroups,
-        double roomTemperatureCelsius,
+        double averageOnlineServerTemperatureCelsius,
         Optional<RackLocation> hottestRackLocation,
         double hottestRackAverageTemperatureCelsius,
         double totalItUtilization,
@@ -73,7 +73,7 @@ public record DatacenterOperationalSnapshot(
                 throw new IllegalArgumentException("Server group map key does not match snapshot code: " + groupCode);
         }
         serverGroups = Map.copyOf(serverGroups);
-        if (!Double.isFinite(roomTemperatureCelsius)) throw new IllegalArgumentException("roomTemperatureCelsius must be finite");
+        if (!Double.isFinite(averageOnlineServerTemperatureCelsius)) throw new IllegalArgumentException("averageOnlineServerTemperatureCelsius must be finite");
         Objects.requireNonNull(hottestRackLocation, "hottestRackLocation must not be null");
         if (hottestRackLocation.isPresent()) {
             RackLocation location = hottestRackLocation.orElseThrow();
@@ -115,12 +115,12 @@ public record DatacenterOperationalSnapshot(
             Map<RackLocation, RackOperationalSnapshot> racks,
             Map<String, ColumnOperationalSnapshot> columns,
             Map<String, ServerGroupOperationalSnapshot> serverGroups,
-            double roomTemperatureCelsius, Optional<RackLocation> hottestRackLocation,
+            double averageOnlineServerTemperatureCelsius, Optional<RackLocation> hottestRackLocation,
             double hottestRackAverageTemperatureCelsius, double totalItUtilization,
             double idleItPowerWatts, double maxItPowerWatts, double currentItPowerWatts,
             double coolingPowerWatts, double totalFacilityPowerWatts, double pue
     ) {
-        this(tickIndex, elapsedSeconds, racks, columns, serverGroups, roomTemperatureCelsius,
+        this(tickIndex, elapsedSeconds, racks, columns, serverGroups, averageOnlineServerTemperatureCelsius,
                 hottestRackLocation, hottestRackAverageTemperatureCelsius, totalItUtilization,
                 idleItPowerWatts, maxItPowerWatts, currentItPowerWatts, coolingPowerWatts,
                 totalFacilityPowerWatts, pue, Optional.empty());
@@ -136,7 +136,7 @@ public record DatacenterOperationalSnapshot(
             double elapsedSeconds,
             Map<RackLocation, RackOperationalSnapshot> racks,
             Map<String, ColumnOperationalSnapshot> columns,
-            double roomTemperatureCelsius,
+            double averageOnlineServerTemperatureCelsius,
             Optional<RackLocation> hottestRackLocation,
             double hottestRackAverageTemperatureCelsius,
             double totalItUtilization,
@@ -153,7 +153,7 @@ public record DatacenterOperationalSnapshot(
                 racks,
                 columns,
                 Map.of(),
-                roomTemperatureCelsius,
+                averageOnlineServerTemperatureCelsius,
                 hottestRackLocation,
                 hottestRackAverageTemperatureCelsius,
                 totalItUtilization,
@@ -167,15 +167,14 @@ public record DatacenterOperationalSnapshot(
     }
 
     /**
-     * Returns the mean representative internal temperature of online servers.
-     *
-     * <p>This is not room-air or rack-inlet temperature. For compatibility with
-     * the existing aggregate, returns the ambient reference when no servers
-     * are online. {@code roomTemperatureCelsius()} remains the legacy accessor
-     * for the same value.</p>
+     * @deprecated This name is misleading: it returns the online-server
+     * temperature aggregate, not room air. Use
+     * {@link #averageOnlineServerTemperatureCelsius()} or
+     * {@link #roomAirTemperatureCelsius()} as appropriate.
      */
-    public double averageOnlineServerTemperatureCelsius() {
-        return roomTemperatureCelsius;
+    @Deprecated(since = "0.1.0-alpha.1", forRemoval = false)
+    public double roomTemperatureCelsius() {
+        return averageOnlineServerTemperatureCelsius;
     }
 
     public Optional<RackOperationalSnapshot> findRack(RackLocation location) {

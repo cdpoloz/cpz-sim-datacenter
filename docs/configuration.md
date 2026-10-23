@@ -85,8 +85,8 @@ Optional<RoomAirThermalState> roomAirState =
                 .map(RoomAirThermalState::new);
 ```
 
-At this stage the pipeline does not construct or advance this state automatically.
-The standalone `RoomAirTemperatureSystem` can advance it explicitly:
+This standalone setup only constructs the room-air state; it does not register or
+advance it. The standalone `RoomAirTemperatureSystem` can advance it explicitly:
 
 ```java
 RoomAirTemperatureSystem roomAirSystem = new RoomAirTemperatureSystem(

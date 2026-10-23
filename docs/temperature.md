@@ -1,9 +1,11 @@
 # Temperature Model
 
-The initial server temperature model adds a separate thermal simulation concern to
-`cpz-sim-datacenter`. Its purpose is to expose a simplified per-server
-temperature view that can be consumed by other applications without coupling the
-simulation backend to any UI framework.
+`cpz-sim-datacenter` contains two distinct temperature quantities: a simplified
+representative internal temperature for each server, and an optional well-mixed
+room-air temperature. The server value remains independent from the room node;
+the coupled pipeline connects them through heat transfer rather than treating
+electrical power as room heat directly. Both can be consumed without coupling
+the backend to a UI framework.
 
 ## Current Scope
 
@@ -208,16 +210,16 @@ The legacy per-server temperature value does not represent:
 is not a full room or cooling simulation.
 
 `DatacenterOperationalSnapshot.averageOnlineServerTemperatureCelsius()` is the
-explicit accessor for the internal server-temperature aggregate.
-`roomTemperatureCelsius()` remains a legacy accessor for the same value; its
-meaning has not changed. When no servers are online, both return the configured
-ambient reference as a compatibility fallback, not a simulated air temperature.
+online-server-weighted mean of representative internal server temperatures. It
+is not room air and is not the configured ambient reference. If no servers are
+online, the aggregate uses the configured ambient reference as a compatibility
+fallback.
 
-This value is an
-operational aggregate for consumers: the dynamic, online-server-weighted
-average of representative internal server temperatures. It must not be
-interpreted as physical room-air temperature or as the configured ambient
-reference.
+`roomTemperatureCelsius()` is a deprecated compatibility alias for that same
+server aggregate; despite its name, it has never returned the simulated room-air
+state. Read the latter with `roomAirTemperatureCelsius()`, which is `NaN` when
+the optional room-air model is absent. The optional snapshot is available as
+`roomAirSnapshot()`.
 
 ## Simplified Model
 
