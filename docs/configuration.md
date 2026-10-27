@@ -1079,7 +1079,7 @@ Every unit requires all fields shown above:
 | `roomHeatTransferWattsPerCelsius` | Finite and non-negative; zero is ideal thermal isolation |
 | `ratedAirflowCubicMetersPerSecond` | Finite and strictly positive; internal recirculating airflow |
 | `ratedCoolingCapacityWatts` | Finite and strictly positive; thermal capacity, not electrical power |
-| `ratedElectricalPowerWatts` | Finite and strictly positive; future enabled-state electrical consumption |
+| `ratedElectricalPowerWatts` | Finite and strictly positive; enabled-state electrical consumption |
 | `heatRejectionDestination` | Exactly `ROOM` or `EXTERNAL`, explicitly supplied |
 | `initiallyEnabled` | Explicit JSON boolean |
 
@@ -1107,3 +1107,8 @@ The loader rejects missing fields, explicit null fields, unknown properties
 inside this block or its units, wrong JSON types, numeric/boolean coercion and
 non-finite numeric values. Semantic checks (positive magnitudes, rack references,
 uniqueness and mode dependencies) remain the validator's responsibility.
+
+## Runnable rack cooling example
+
+See [rack cooling examples](rack-cooling-examples.md) for a complete validated JSON,
+six controlled configurations and commands to reproduce the thermal/electrical comparison.

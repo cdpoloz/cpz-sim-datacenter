@@ -8,7 +8,7 @@ its own.
 
 ```xml
 <dependency>
-    <groupId>com.cpz.sim</groupId>
+    <groupId>com.cpz.sim.datacenter</groupId>
     <artifactId>cpz-sim-datacenter</artifactId>
     <version>0.1.0-alpha.1</version>
 </dependency>
@@ -24,7 +24,8 @@ When the projects are under local development:
 
 1. `cpz-sim-foundation`
 2. `cpz-sim-datacenter`
-3. `sim-datacenter-ui`
+3. `cpz-sim-runtime` (companion UI dependency)
+4. `cpz-sim-datacenter-ui`
 
 Command to install this project:
 
@@ -32,7 +33,21 @@ Command to install this project:
 mvn clean install
 ```
 
-## Recommended Flow for a UI
+## Coupled room and rack cooling
+
+When `roomAirTemperature` is configured, create a `CoupledRoomTemperatureSystem`
+with its factory and register inputs using the coupled overload of
+`DatacenterInputPipelineFactory`. Do not also register the legacy temperature
+update or a competing room cooling tick. Obtain rack controls from
+`coupled.rackCoolingSystem()` and pass `coupled::lastSnapshot` and
+`coupled::lastCoolingSnapshot` into the history recorder. This supplies local
+rack air, actual cooling and combined facility energy without UI physics.
+
+See [the complete runnable example](rack-cooling-examples.md) and its runner for
+composition and six scenarios. The following legacy flow applies to configurations
+without the coupled `roomAirTemperature` block.
+
+## Legacy Flow for a UI
 
 1. Load a JSON file with `JsonDatacenterConfigLoader`.
 2. Build the domain with `DatacenterFactory`.

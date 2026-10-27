@@ -513,6 +513,8 @@ argument; by default it uses `data/config/demo-datacenter-medium.json`.
 - [Energy Snapshot](docs/energy-snapshot.md)
 - [Cooling System](docs/cooling.md)
 - [Temperature Model](docs/temperature.md)
+- [Integrated Rack Cooling Examples](docs/rack-cooling-examples.md)
+- [Rack Cooling Numerical Validation](docs/rack-cooling-validation.md)
 - [Server Health](docs/server-health.md)
 - [Using the Library from a Maven UI](docs/getting-started-ui.md)
 
@@ -533,7 +535,7 @@ the current scope:
 - Hot-aisle gradients, multiple sensors per aisle, and localized recirculation
   effects.
 - More detailed rack inlet, room, and cooling-zone thermal modeling.
-- UI or visualization.
+- Additional visualizations beyond the [companion Processing UI](https://github.com/cdpoloz/cpz-sim-datacenter-ui).
 - More complete public contracts for consumer applications.
 
 ---

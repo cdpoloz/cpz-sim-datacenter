@@ -1,0 +1,160 @@
+{
+  "name": "Synthetic matched-rack cooling comparison",
+  "dataInputMode": "UTILIZATION_DRIVEN",
+  "layout": {
+    "room": {
+      "code": "ROOM-01",
+      "name": "Synthetic comparison room"
+    },
+    "racks": [
+      {
+        "code": "R01",
+        "column": "C01",
+        "row": "R01",
+        "slots": [
+          "S01",
+          "S02"
+        ]
+      },
+      {
+        "code": "R02",
+        "column": "C01",
+        "row": "R02",
+        "slots": [
+          "S01",
+          "S02"
+        ]
+      }
+    ]
+  },
+  "serverModels": [
+    {
+      "modelCode": "M",
+      "manufacturer": "CPZ",
+      "model": "Synthetic 100-300W server",
+      "idlePowerWatts": 100,
+      "maxPowerWatts": 300,
+      "thermalCapacityJoulesPerCelsius": 5000,
+      "heatDissipationWattsPerCelsius": 8
+    }
+  ],
+  "servers": [
+    {
+      "column": "C01",
+      "rackCode": "R01",
+      "slot": "S01",
+      "modelCode": "M",
+      "status": "OK",
+      "role": "GENERAL_PURPOSE"
+    },
+    {
+      "column": "C01",
+      "rackCode": "R01",
+      "slot": "S02",
+      "modelCode": "M",
+      "status": "OK",
+      "role": "GENERAL_PURPOSE"
+    },
+    {
+      "column": "C01",
+      "rackCode": "R02",
+      "slot": "S01",
+      "modelCode": "M",
+      "status": "OK",
+      "role": "GENERAL_PURPOSE"
+    },
+    {
+      "column": "C01",
+      "rackCode": "R02",
+      "slot": "S02",
+      "modelCode": "M",
+      "status": "OK",
+      "role": "GENERAL_PURPOSE"
+    }
+  ],
+  "temperature": {
+    "ambientTemperatureCelsius": 24,
+    "defaultInitialTemperatureCelsius": 30,
+    "thermalCapacityJoulesPerCelsius": 5000,
+    "heatDissipationWattsPerCelsius": 8
+  },
+  "roomAirTemperature": {
+    "initialTemperatureCelsius": 24,
+    "effectiveThermalCapacityJoulesPerCelsius": 200000,
+    "environmentTemperatureCelsius": 24,
+    "environmentHeatTransferWattsPerCelsius": 0
+  },
+  "cooling": {
+    "zones": [
+      {
+        "code": "ROOM-ZONE",
+        "columns": [
+          "C01"
+        ],
+        "rackCodes": [
+          "R01",
+          "R02"
+        ]
+      }
+    ],
+    "supplyUnits": [
+      {
+        "code": "ROOM-SUPPLY",
+        "ratedAirflowCubicMetersPerSecond": 0.2,
+        "ratedElectricalPowerWatts": 500,
+        "ratedCoolingCapacityWatts": 1000,
+        "supplyAirTemperatureCelsius": 18,
+        "influences": [
+          {
+            "zoneCode": "ROOM-ZONE",
+            "weight": 1
+          }
+        ],
+        "initiallyEnabled": false
+      }
+    ],
+    "exhaustUnits": [
+      {
+        "code": "ROOM-EXHAUST",
+        "ratedAirflowCubicMetersPerSecond": 0.2,
+        "ratedElectricalPowerWatts": 100,
+        "influences": [
+          {
+            "zoneCode": "ROOM-ZONE",
+            "weight": 1
+          }
+        ],
+        "initiallyEnabled": false
+      }
+    ],
+    "options": {
+      "airDensityKilogramsPerCubicMeter": 1.204,
+      "airSpecificHeatJoulesPerKilogramKelvin": 1005,
+      "initialInletAirTemperatureCelsius": 24,
+      "maximumRecirculationFraction": 0.95,
+      "residualRecirculationFraction": 0.1,
+      "effectiveZoneAirVolumeCubicMeters": 1000,
+      "recirculationResponseTimeSeconds": 300
+    }
+  },
+  "rackCooling": {
+    "airDensityKilogramsPerCubicMeter": 1.204,
+    "airSpecificHeatJoulesPerKilogramKelvin": 1005,
+    "units": [
+      {
+        "code": "RACK-UNIT",
+        "column": "C01",
+        "rackCode": "R01",
+        "initialAirTemperatureCelsius": 24,
+        "effectiveAirThermalCapacityJoulesPerCelsius": 10000,
+        "roomHeatTransferWattsPerCelsius": 20,
+        "ratedAirflowCubicMetersPerSecond": 0.1,
+        "ratedCoolingCapacityWatts": 1000,
+        "supplyAirTemperatureCelsius": 18,
+        "ratedElectricalPowerWatts": 250,
+        "heatRejectionDestination": "ROOM",
+        "initiallyEnabled": true
+      }
+    ]
+  }
+}

@@ -108,3 +108,12 @@ verify both rejection destinations, rack-only and combined cooling, zero IT load
 completed-tick immutability, skipped/repeated records, reset interval matching and
 rejected/stale/duplicate captures. The specialized room cooling snapshot remains
 room-only; the operational view combines both electrical sources.
+
+## Completed examples (stage 8)
+
+The [runnable scenario guide](rack-cooling-examples.md) adds a small checked-in
+JSON, a standalone six-scenario runner and its generated CSV. Tests verify an
+hour of modeled operation, independent storage accounting and equivalent power
+and utilization input. The companion UI generates and tests matching variants
+using its full layout. This completes implementation verification; real-world
+calibration and the manual desktop P2D check remain explicitly separate.

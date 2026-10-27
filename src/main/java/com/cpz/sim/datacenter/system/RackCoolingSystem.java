@@ -15,7 +15,7 @@ import java.util.Optional;
 /**
  * Authoritative equipment controls for dedicated rack cooling. It does not
  * advance thermal state or integrate energy; the coupled solver will consume
- * enabled states and electrical power in a later stage. Commands affect future
+ * enabled states and electrical power. Commands affect future
  * captures only. Like CoolingSystem, use from the simulation's owning thread.
  *
  * @author CPZ

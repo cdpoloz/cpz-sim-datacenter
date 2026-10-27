@@ -294,7 +294,9 @@ class RackCoolingConfigurationTest {
         try (var paths = Files.list(Path.of("data/config"))) {
             for (Path path : paths.filter(p -> p.toString().endsWith(".json")).toList()) {
                 var definition = new JsonDatacenterConfigLoader().load(path);
-                assertNull(definition.rackCooling(), path.toString());
+                if (path.getFileName().toString().equals("rack-cooling-comparison.json"))
+                    assertNotNull(definition.rackCooling(), path.toString());
+                else assertNull(definition.rackCooling(), path.toString());
                 assertDoesNotThrow(() -> new DatacenterConfigValidator().validate(definition), path.toString());
             }
         }

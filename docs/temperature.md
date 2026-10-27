@@ -418,7 +418,8 @@ The staged rack-contained cooling extension is specified in the
 below. Configuration, equipment controls and coupled rack thermal evolution
 are implemented. Independent numerical validation is documented in
 [stage 5 verification](rack-cooling-validation.md). Operational/history/energy
-integration is implemented in stage 6 below; UI integration remains next.
+integration is implemented in stage 6 below. The companion UI integration and
+[reproducible examples](rack-cooling-examples.md) are available.
 
 Possible future extensions, not implemented in this milestone:
 
@@ -431,10 +432,11 @@ Possible future extensions, not implemented in this milestone:
 
 ## Rack-contained cooling: implementation contract (stage 1)
 
-**Status: stage 6 includes local rack thermal snapshots, historical captures and
-facility electrical power/energy aggregation.** Stage 5 independently verifies
-the numerical solver. JSON validation, equipment controls and thermal evolution
-are available. UI integration remains a subsequent stage. The existing behavior is preserved when
+**Status: stages 1–8 are implemented.** Local rack thermal snapshots, historical
+captures, facility electrical power/energy, companion UI controls and reproducible
+examples are available. Stage 5 independently verifies the numerical solver;
+[stage 8 examples](rack-cooling-examples.md) document controlled operating cases
+and the remaining manual graphical check. The existing behavior is preserved when
 `rackCooling` is absent.
 The parameters remain uncalibrated until independent measurements are available.
 
