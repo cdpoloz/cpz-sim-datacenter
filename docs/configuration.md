@@ -12,6 +12,13 @@ DatacenterDefinition definition = new JsonDatacenterConfigLoader().load(configPa
 Datacenter datacenter = new DatacenterFactory().create(definition);
 ```
 
+## Initial configuration workbook
+
+The [initial configuration template](templates/README.md) provides an English
+Excel workbook for collecting room layout, equipment and simulation parameters.
+It is an initial capture format; the backend does not yet import Excel directly.
+Prepare and validate JSON using the contract documented below.
+
 ## General Structure
 
 ```json
