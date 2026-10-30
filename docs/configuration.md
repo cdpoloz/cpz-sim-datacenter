@@ -14,6 +14,9 @@ Datacenter datacenter = new DatacenterFactory().create(definition);
 
 ## Initial configuration workbook
 
+Timestamped client observations use a separate
+[customer dataset import/replay contract](customer-datasets.md).
+
 The [initial configuration template](templates/README.md) provides an English
 Excel workbook for collecting room layout, equipment and simulation parameters.
 It is an initial capture format; the backend does not yet import Excel directly.

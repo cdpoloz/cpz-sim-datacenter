@@ -1,5 +1,9 @@
 # Initial configuration template
 
+For timestamped client observations, see the separate
+[customer dataset workbook and pilot import/replay guide](../customer-datasets.md).
+Configuration and operational datasets remain distinct contracts.
+
 Use [datacenter-configuration-template.xlsx](datacenter-configuration-template.xlsx)
 to collect a room's initial layout, equipment inventory and simulation settings
 before preparing the backend JSON configuration.

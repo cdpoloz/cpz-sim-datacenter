@@ -509,6 +509,7 @@ argument; by default it uses `data/config/demo-datacenter-medium.json`.
 
 - [Architecture](docs/architecture.md)
 - [JSON Configuration](docs/configuration.md)
+- [Customer Dataset Import and Replay](docs/customer-datasets.md)
 - [Workloads](docs/workloads.md)
 - [Energy Snapshot](docs/energy-snapshot.md)
 - [Cooling System](docs/cooling.md)
