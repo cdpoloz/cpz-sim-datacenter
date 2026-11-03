@@ -9,9 +9,11 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.ss.usermodel.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import java.io.ByteArrayOutputStream;
 import java.nio.file.*;
 import java.time.*;
 import java.util.*;
+import java.util.zip.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CustomerDatasetTest {
@@ -168,6 +170,43 @@ class CustomerDatasetTest {
     @Test void rejectsUnknownHeadersAndFormulaCells() throws Exception {
         assertThrows(IllegalArgumentException.class, () -> new XlsxCustomerDatasetLoader().load(writeWorkbook(true, false)));
         assertThrows(IllegalArgumentException.class, () -> new XlsxCustomerDatasetLoader().load(writeWorkbook(false, true)));
+    }
+    @Test void loadingPreservesExactWorkbookBytesWithOldZipTimestamps() throws Exception {
+        Path file = withOldZipTimestamps(writeWorkbook(false, false));
+        byte[] before = Files.readAllBytes(file);
+        var dataset = new XlsxCustomerDatasetLoader().load(file);
+        assertEquals(.25, dataset.rows("ServerSamples").getFirst().number("utilizationFraction"));
+        assertArrayEquals(before, Files.readAllBytes(file), "Reading must not rewrite the input ZIP");
+    }
+    @Test void rejectingFormulaPreservesExactWorkbookBytesWithOldZipTimestamps() throws Exception {
+        Path file = withOldZipTimestamps(writeWorkbook(false, true));
+        byte[] before = Files.readAllBytes(file);
+        var failure = assertThrows(IllegalArgumentException.class, () -> new XlsxCustomerDatasetLoader().load(file));
+        assertEquals("ServerSamples!7: Formula/error cells are not accepted: G7", failure.getMessage());
+        assertArrayEquals(before, Files.readAllBytes(file), "Rejection must not rewrite the input ZIP");
+    }
+    private Path withOldZipTimestamps(Path source) throws Exception {
+        // A writable POI package can rewrite the ZIP on close even without cell changes.
+        // Fixed old timestamps expose that rewrite without depending on elapsed wall time.
+        LocalDateTime timestamp = LocalDateTime.of(2000, 1, 1, 0, 0);
+        var bytes = new ByteArrayOutputStream();
+        try (var input = new ZipInputStream(Files.newInputStream(source));
+             var output = new ZipOutputStream(bytes)) {
+            for (ZipEntry entry; (entry = input.getNextEntry()) != null;) {
+                var copy = new ZipEntry(entry.getName());
+                copy.setTimeLocal(timestamp);
+                output.putNextEntry(copy);
+                input.transferTo(output);
+                output.closeEntry();
+            }
+        }
+        Path file = temporary.resolve("old-" + source.getFileName());
+        Files.write(file, bytes.toByteArray());
+        try (var zip = new ZipFile(file.toFile())) {
+            assertTrue(zip.size() > 0);
+            assertTrue(zip.stream().allMatch(entry -> timestamp.equals(entry.getTimeLocal())));
+        }
+        return file;
     }
     private Path writeWorkbook(boolean wrongHeader, boolean formula) throws Exception {
         Path path = temporary.resolve(UUID.randomUUID() + ".xlsx");

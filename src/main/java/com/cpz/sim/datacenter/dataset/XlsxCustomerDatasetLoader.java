@@ -1,6 +1,8 @@
 package com.cpz.sim.datacenter.dataset;
 
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.openxml4j.opc.OPCPackage;
+import org.apache.poi.openxml4j.opc.PackageAccess;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -12,7 +14,10 @@ import java.util.*;
 public final class XlsxCustomerDatasetLoader {
     public CustomerDataset load(Path path) {
         Objects.requireNonNull(path, "path");
-        try (Workbook workbook = new XSSFWorkbook(path.toFile())) {
+        // Register the package separately so it is closed even if workbook construction fails.
+        // READ prevents close() from saving the source ZIP, including its entry timestamps.
+        try (OPCPackage source = OPCPackage.open(path.toFile(), PackageAccess.READ);
+             Workbook workbook = new XSSFWorkbook(source)) {
             Map<String, Object> metadata = new LinkedHashMap<>();
             Sheet metadataSheet = requiredSheet(workbook, "Dataset");
             Map<Integer, String> metadataHeaders = headers(metadataSheet, List.of("field", "value", "requirement", "description"));
