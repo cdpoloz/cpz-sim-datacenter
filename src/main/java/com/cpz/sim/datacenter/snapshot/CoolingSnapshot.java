@@ -129,6 +129,12 @@ public record CoolingSnapshot(long tickIndex, List<CoolingUnitSnapshot> units, L
     /**
      * Aggregates a subset of cooling zones into a higher-level cooling snapshot.
      *
+     * <p>Each distinct code is included once, in first-requested order. A zone
+     * shared by several external groups contributes its entire assigned airflow
+     * to each group; no proportional allocation is inferred. The airflow sums
+     * are zone values from this snapshot's tick, not nominal unit airflow.
+     * Consequently, groups that share zones must not be summed as if disjoint.</p>
+     *
      * @param groupCode external group code
      * @param zoneCodes cooling-zone codes to aggregate
      * @return aggregated cooling-zone group snapshot
@@ -136,7 +142,8 @@ public record CoolingSnapshot(long tickIndex, List<CoolingUnitSnapshot> units, L
      * @throws NullPointerException if {@code groupCode}, {@code zoneCodes}, or one
      *         of its elements is {@code null}
      * @throws IllegalArgumentException if {@code groupCode} is blank,
-     *         {@code zoneCodes} is empty, or a requested zone does not exist
+     *         {@code zoneCodes} is empty, contains a blank code, or a requested
+     *         zone does not exist (including when no requested zone exists)
      */
     public CoolingZoneGroupSnapshot aggregateZones(String groupCode, Collection<String> zoneCodes) {
         Objects.requireNonNull(groupCode, "groupCode must not be null");
@@ -157,16 +164,21 @@ public record CoolingSnapshot(long tickIndex, List<CoolingUnitSnapshot> units, L
         double availableCoolingCapacityWatts = selectedZones.stream().mapToDouble(CoolingZoneSnapshot::availableCoolingCapacityWatts).sum();
         double usedCoolingCapacityWatts = selectedZones.stream().mapToDouble(CoolingZoneSnapshot::usedCoolingCapacityWatts).sum();
         double coolingDeficitWatts = selectedZones.stream().mapToDouble(CoolingZoneSnapshot::coolingDeficitWatts).sum();
+        double supplyAirflow = selectedZones.stream().mapToDouble(CoolingZoneSnapshot::supplyAirflowCubicMetersPerSecond).sum();
+        double exhaustAirflow = selectedZones.stream().mapToDouble(CoolingZoneSnapshot::exhaustAirflowCubicMetersPerSecond).sum();
         double averageInletAirTemperatureCelsius = selectedZones.stream().mapToDouble(CoolingZoneSnapshot::inletAirTemperatureCelsius).average().orElseThrow();
         double averageExhaustAirTemperatureCelsius = selectedZones.stream().mapToDouble(CoolingZoneSnapshot::exhaustAirTemperatureCelsius).average().orElseThrow();
         double averageRecirculationFraction = selectedZones.stream().mapToDouble(CoolingZoneSnapshot::recirculationFraction).average().orElseThrow();
         return new CoolingZoneGroupSnapshot(
+                tickIndex,
                 groupCode,
                 List.copyOf(uniqueZoneCodes),
                 generatedHeatWatts,
                 availableCoolingCapacityWatts,
                 usedCoolingCapacityWatts,
                 coolingDeficitWatts,
+                supplyAirflow,
+                exhaustAirflow,
                 averageInletAirTemperatureCelsius,
                 averageExhaustAirTemperatureCelsius,
                 averageRecirculationFraction
