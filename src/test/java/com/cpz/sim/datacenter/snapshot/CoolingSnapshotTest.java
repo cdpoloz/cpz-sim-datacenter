@@ -121,6 +121,38 @@ class CoolingSnapshotTest {
     }
 
     @Test
+    void shouldExposeAssignedAirflowsForDistinctZonesAtSourceTick() {
+        CoolingZoneSnapshot shared = new CoolingZoneSnapshot("SHARED", 0, 0, 0, 0, 2.5, 1.2, 24, 24, 0);
+        CoolingZoneSnapshot other = new CoolingZoneSnapshot("OTHER", 0, 0, 0, 0, 3.0, 4.0, 24, 24, 0);
+        CoolingSnapshot first = new CoolingSnapshot(20, List.of(supplyUnit()), List.of(shared, other));
+        CoolingSnapshot next = new CoolingSnapshot(21, List.of(supplyUnit()), List.of(
+                new CoolingZoneSnapshot("SHARED", 0, 0, 0, 0, 7.0, 8.0, 24, 24, 0), other));
+
+        CoolingZoneGroupSnapshot single = first.aggregateZones("A", List.of("SHARED"));
+        CoolingZoneGroupSnapshot combined = first.aggregateZones("B", List.of("OTHER", "SHARED", "SHARED"));
+        CoolingZoneGroupSnapshot later = next.aggregateZones("A", List.of("SHARED"));
+
+        assertAll(
+                () -> assertEquals(20, single.tickIndex()),
+                () -> assertEquals(2.5, single.supplyAirflowCubicMetersPerSecond(), EPSILON),
+                () -> assertEquals(1.2, single.exhaustAirflowCubicMetersPerSecond(), EPSILON),
+                () -> assertEquals(List.of("OTHER", "SHARED"), combined.zoneCodes()),
+                () -> assertEquals(5.5, combined.supplyAirflowCubicMetersPerSecond(), EPSILON),
+                () -> assertEquals(5.2, combined.exhaustAirflowCubicMetersPerSecond(), EPSILON),
+                () -> assertEquals(21, later.tickIndex()),
+                () -> assertEquals(7.0, later.supplyAirflowCubicMetersPerSecond(), EPSILON),
+                () -> assertEquals(8.0, later.exhaustAirflowCubicMetersPerSecond(), EPSILON),
+                () -> assertEquals(2.5, single.supplyAirflowCubicMetersPerSecond(), EPSILON)
+        );
+    }
+
+    @Test
+    void shouldRejectUnknownZonesEvenWhenSomeExist() {
+        assertThrows(IllegalArgumentException.class,
+                () -> validSnapshot().aggregateZones("GROUP", List.of("ZONE-01", "MISSING")));
+    }
+
+    @Test
     void shouldAggregateZonesIntoCoolingZoneGroupSnapshot() {
         CoolingSnapshot snapshot =
                 new CoolingSnapshot(
@@ -737,12 +769,15 @@ class CoolingSnapshotTest {
     void shouldCalculateThermalCoverage() {
         CoolingZoneGroupSnapshot snapshot =
                 new CoolingZoneGroupSnapshot(
+                        1L,
                         "GROUP-01",
                         List.of("ZONE-01", "ZONE-02"),
                         8000.0,
                         12000.0,
                         6000.0,
                         2000.0,
+                        10.0,
+                        10.0,
                         24.0,
                         36.0,
                         0.25
