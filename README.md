@@ -51,6 +51,8 @@ Available in `0.1.0-alpha.1`:
 - Temperature snapshots through `TemperatureSnapshotProvider`, `TemperatureSnapshot`, and `ServerTemperatureSnapshot`.
 - Optional model-specific thermal capacity and heat dissipation in `serverModels`, with global fallback.
 - Health snapshots through `HealthSnapshotProvider`, `HealthSnapshot`, and `ServerHealthSnapshot`.
+- Optional critical thermal hysteresis through `health.criticalTemperatureCelsius`;
+  health snapshots expose `thermalAlertLevel()` without UI-side threshold checks.
 
 Important rules:
 

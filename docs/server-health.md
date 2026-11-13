@@ -57,6 +57,43 @@ source of status for the rest of the simulation:
 Calling `ServerHealthSystem.reset()` clears alert reasons and returns every
 non-`OFFLINE` server to `OK`; it preserves `OFFLINE`.
 
+## Thermal levels
+
+`ServerHealthState.getThermalAlertLevel()` and
+`ServerHealthSnapshot.thermalAlertLevel()` expose the backend-evaluated
+`ThermalAlertLevel`: `NORMAL`, `ELEVATED`, or `CRITICAL`.
+`NORMAL` describes the thermal condition only: high utilization can still keep
+the server in `HardwareStatus.ALERT`. No new hardware status or alert reason is
+introduced. Both active thermal levels retain `HIGH_TEMPERATURE`.
+
+An optional `health.criticalTemperatureCelsius` threshold enables the critical
+band, with independent activation and recovery limits. Critical activation must
+be strictly above elevated activation; critical recovery must be at or above
+elevated activation (and below critical activation). This ordering ensures a
+critical condition cannot outlive the elevated condition. Each band retains its
+own state inside its hysteresis interval. A direct jump from normal to critical
+or back to normal is supported. Offline and reset clear both bands.
+
+For example, elevated activation/recovery of 80/75 °C and critical limits of
+100/95 °C produce ELEVATED at 80, CRITICAL at 100, retain CRITICAL at 98,
+downgrade to ELEVATED at 95, and return to NORMAL at 75. These are illustrative
+simulation settings, not equipment safety ratings.
+
+When critical configuration is omitted, critical evaluation is disabled and old
+configurations behave as before. The two-argument `ServerHealthOptions` and
+`HealthSystemOptionsDefinition` constructors remain available. The old
+eight-argument `ServerHealthSnapshot` constructor remains available and maps
+`HIGH_TEMPERATURE` to ELEVATED; it never infers criticality from raw degrees.
+The new record component changes record equality, string and serialized shape;
+consumers of those representations should account for the additional field.
+
+UI consumers must compare the thermal level as well as the alert-reason set to
+detect escalation/downgrade: ELEVATED → CRITICAL does not change the reasons.
+The UI may map ELEVATED to WARNING and CRITICAL to ERROR without evaluating
+temperatures itself. This API is current state at a tick, not an event log.
+Clients constructing `ServerHealthOptions` themselves must pass the third
+threshold explicitly, or use `ServerHealthOptionsFactory` to consume JSON.
+
 ## Thresholds and Hysteresis
 
 Each monitored value has two configured limits:
@@ -100,6 +137,7 @@ Each `ServerHealthSnapshot` contains:
 - current `alertReasons`
 - current `utilization`
 - current `temperatureCelsius`
+- evaluated `thermalAlertLevel`
 
 Create it after the simulation tick:
 

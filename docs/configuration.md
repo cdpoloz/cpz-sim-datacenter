@@ -1013,6 +1013,36 @@ as are both fields inside each threshold. A JSON `null` health block is rejected
 These values configure runtime behavior; the health system does not use separate
 hard-coded evaluation limits.
 
+### Optional critical temperature band
+
+Add `criticalTemperatureCelsius` inside the same `health` object to distinguish
+elevated temperature from critical temperature, for example:
+
+```json
+{
+  "health": {
+    "utilization": {"alertAtOrAbove": 0.90, "clearAtOrBelow": 0.85},
+    "temperatureCelsius": {"alertAtOrAbove": 80.0, "clearAtOrBelow": 75.0},
+    "criticalTemperatureCelsius": {"alertAtOrAbove": 100.0, "clearAtOrBelow": 95.0}
+  }
+}
+```
+
+The numbers are illustrative scenario settings. Both critical limits must be
+finite; recovery must be below critical activation and at or above elevated
+activation. Critical activation must exceed elevated activation. Missing
+critical configuration disables the critical band, preserving old behavior;
+explicit null, incomplete and unknown critical fields are rejected by the loader.
+`ServerHealthOptionsFactory` passes this configuration to the health system.
+Applications manually creating the old two-argument options must explicitly
+adopt the third threshold to enable critical evaluation.
+
+The immutable `ServerHealthSnapshot.thermalAlertLevel()` contains NORMAL,
+ELEVATED or CRITICAL after health evaluation, preserving per-band hysteresis.
+See [Server Health](server-health.md#thermal-levels) for transitions and consumer
+compatibility. This does not change thermal physics, existing hardware states,
+or `HIGH_TEMPERATURE` reason semantics.
+
 
 ## Rack cooling configuration (stage 2)
 

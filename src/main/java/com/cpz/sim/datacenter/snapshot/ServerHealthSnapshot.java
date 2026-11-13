@@ -1,6 +1,7 @@
 package com.cpz.sim.datacenter.snapshot;
 
 import com.cpz.sim.datacenter.health.ServerAlertReason;
+import com.cpz.sim.datacenter.health.ThermalAlertLevel;
 import com.cpz.sim.datacenter.model.HardwareStatus;
 import com.cpz.sim.datacenter.model.RackCode;
 import com.cpz.sim.datacenter.model.ServerLocation;
@@ -25,8 +26,17 @@ public record ServerHealthSnapshot(
         HardwareStatus status,
         Set<ServerAlertReason> alertReasons,
         double utilization,
-        double temperatureCelsius
+        double temperatureCelsius,
+        ThermalAlertLevel thermalAlertLevel
 ) {
+    /** Legacy constructor cannot infer criticality from a raw temperature. */
+    public ServerHealthSnapshot(String serverCode, String column, RackCode rackCode, String slot,
+            HardwareStatus status, Set<ServerAlertReason> alertReasons, double utilization, double temperatureCelsius) {
+        this(serverCode, column, rackCode, slot, status, alertReasons, utilization, temperatureCelsius,
+                alertReasons != null && alertReasons.contains(ServerAlertReason.HIGH_TEMPERATURE)
+                        ? ThermalAlertLevel.ELEVATED : ThermalAlertLevel.NORMAL);
+    }
+
     public ServerHealthSnapshot {
         Objects.requireNonNull(serverCode, "serverCode must not be null.");
         if (serverCode.isBlank()) throw new IllegalArgumentException("serverCode must not be blank");
@@ -38,6 +48,10 @@ public record ServerHealthSnapshot(
         Objects.requireNonNull(status, "status must not be null.");
         Objects.requireNonNull(alertReasons, "alertReasons must not be null.");
         alertReasons = Set.copyOf(alertReasons);
+        Objects.requireNonNull(thermalAlertLevel, "thermalAlertLevel must not be null.");
+        if ((thermalAlertLevel != ThermalAlertLevel.NORMAL)
+                != alertReasons.contains(ServerAlertReason.HIGH_TEMPERATURE))
+            throw new IllegalArgumentException("thermalAlertLevel must agree with HIGH_TEMPERATURE.");
         if (!Double.isFinite(utilization) || utilization < 0.0 || utilization > 1.0)
             throw new IllegalArgumentException("utilization must be finite and between 0 and 1");
         if (!Double.isFinite(temperatureCelsius)) throw new IllegalArgumentException("temperatureCelsius must be finite.");

@@ -82,7 +82,7 @@ public class ServerHealthSystem implements Simulatable {
         ServerThermalState thermalState = temperatureSystem.getThermalState(server.getCode());
         if (thermalState == null)
             throw new IllegalStateException("Missing thermal state for server: " + server.getCode());
-        healthState.updateAlertReason(ServerAlertReason.HIGH_TEMPERATURE, thermalState.getTemperatureCelsius(), options.temperatureThreshold());
+        healthState.updateTemperature(thermalState.getTemperatureCelsius(), options);
     }
 
     public ServerHealthState getHealthState(String serverCode) {
