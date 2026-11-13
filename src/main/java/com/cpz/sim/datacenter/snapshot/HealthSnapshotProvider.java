@@ -1,6 +1,7 @@
 package com.cpz.sim.datacenter.snapshot;
 
 import com.cpz.sim.datacenter.health.ServerHealthState;
+import com.cpz.sim.datacenter.health.ThermalAlertLevel;
 import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.model.Server;
 import com.cpz.sim.datacenter.system.ServerHealthSystem;
@@ -61,7 +62,8 @@ public class HealthSnapshotProvider {
                 server.getStatus(),
                 healthState != null ? healthState.getAlertReasons() : Set.of(),
                 server.getUtilization(),
-                thermalState.getTemperatureCelsius()
+                thermalState.getTemperatureCelsius(),
+                healthState != null ? healthState.getThermalAlertLevel() : ThermalAlertLevel.NORMAL
         );
     }
 }

@@ -9,13 +9,24 @@ import java.util.Objects;
  */
 public record ServerHealthOptions(
         HealthThreshold utilizationThreshold,
-        HealthThreshold temperatureThreshold
+        HealthThreshold temperatureThreshold,
+        HealthThreshold criticalTemperatureThreshold
 ) {
 
     public ServerHealthOptions {
         Objects.requireNonNull(utilizationThreshold, "utilizationThreshold must not be null.");
         Objects.requireNonNull(temperatureThreshold, "temperatureThreshold must not be null.");
         validateUtilizationThreshold(utilizationThreshold);
+        if (criticalTemperatureThreshold != null) {
+            if (criticalTemperatureThreshold.alertAtOrAbove() <= temperatureThreshold.alertAtOrAbove()
+                    || criticalTemperatureThreshold.clearAtOrBelow() < temperatureThreshold.alertAtOrAbove())
+                throw new IllegalArgumentException("Critical temperature activation must exceed elevated activation; critical recovery must be at or above elevated activation.");
+        }
+    }
+
+    /** Preserves the previous constructor; critical evaluation is disabled. */
+    public ServerHealthOptions(HealthThreshold utilizationThreshold, HealthThreshold temperatureThreshold) {
+        this(utilizationThreshold, temperatureThreshold, null);
     }
 
     /**

@@ -483,6 +483,14 @@ public final class DatacenterConfigValidator {
         else validateUtilizationHealthThreshold(health.utilization(), errors);
         if (health.temperatureCelsius() == null) errors.add("Health config temperatureCelsius threshold cannot be null");
         else validateTemperatureHealthThreshold(health.temperatureCelsius(), errors);
+        if (health.criticalTemperatureCelsius() != null) {
+            HealthThresholdDefinition critical = health.criticalTemperatureCelsius();
+            validateHealthThreshold(critical, "Health config criticalTemperatureCelsius", errors);
+            if (health.temperatureCelsius() != null
+                    && (critical.alertAtOrAbove() <= health.temperatureCelsius().alertAtOrAbove()
+                    || critical.clearAtOrBelow() < health.temperatureCelsius().alertAtOrAbove()))
+                errors.add("Health config critical temperature activation must exceed elevated activation; critical recovery must be at or above elevated activation");
+        }
     }
 
     private static void validateCoolingStructure(CoolingConfigDefinition cooling, List<String> errors) {

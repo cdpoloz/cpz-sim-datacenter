@@ -17,6 +17,7 @@ import java.util.Set;
 public final class ServerHealthState {
 
     private final String serverCode;
+    private boolean criticalTemperature;
     private final EnumSet<ServerAlertReason> alertReasons = EnumSet.noneOf(ServerAlertReason.class);
 
     public ServerHealthState(String serverCode) {
@@ -49,9 +50,25 @@ public final class ServerHealthState {
         boolean active = threshold.evaluate(value, alertReasons.contains(reason));
         if (active) alertReasons.add(reason);
         else alertReasons.remove(reason);
+        if (reason == ServerAlertReason.HIGH_TEMPERATURE && !active) criticalTemperature = false;
+    }
+
+    public ThermalAlertLevel getThermalAlertLevel() {
+        if (criticalTemperature) return ThermalAlertLevel.CRITICAL;
+        return hasAlertReason(ServerAlertReason.HIGH_TEMPERATURE)
+                ? ThermalAlertLevel.ELEVATED : ThermalAlertLevel.NORMAL;
+    }
+
+    /** Evaluates both thermal hysteresis bands using the same tick temperature. */
+    public void updateTemperature(double value, ServerHealthOptions options) {
+        Objects.requireNonNull(options, "options must not be null.");
+        updateAlertReason(ServerAlertReason.HIGH_TEMPERATURE, value, options.temperatureThreshold());
+        HealthThreshold critical = options.criticalTemperatureThreshold();
+        criticalTemperature = critical != null && critical.evaluate(value, criticalTemperature);
     }
 
     public void clearAlertReasons() {
+        criticalTemperature = false;
         alertReasons.clear();
     }
 

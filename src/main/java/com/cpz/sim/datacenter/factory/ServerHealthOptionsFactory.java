@@ -34,7 +34,8 @@ public final class ServerHealthOptionsFactory {
 
     public ServerHealthOptions create(HealthSystemOptionsDefinition definition) {
         if (definition == null) return ServerHealthOptions.defaults();
-        return new ServerHealthOptions(createThreshold(definition.utilization()), createThreshold(definition.temperatureCelsius()));
+        return new ServerHealthOptions(createThreshold(definition.utilization()), createThreshold(definition.temperatureCelsius()),
+                definition.criticalTemperatureCelsius() == null ? null : createThreshold(definition.criticalTemperatureCelsius()));
     }
 
     private static HealthThreshold createThreshold(HealthThresholdDefinition definition) {

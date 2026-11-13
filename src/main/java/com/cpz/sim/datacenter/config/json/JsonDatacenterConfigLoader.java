@@ -177,7 +177,14 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
         if (healthNode == null) return null;
         if (healthNode.isNull())
             throw new DatacenterConfigException("Health block cannot be null in datacenter config: " + path);
-        return JSON_MAPPER.readValue(healthNode.traverse(JSON_MAPPER), HealthSystemOptionsDefinition.class);
+        requireObject(healthNode, "health", path);
+        rejectUnknownProperties(healthNode, List.of("utilization", "temperatureCelsius", "criticalTemperatureCelsius"), "health", path);
+        JsonNode critical = healthNode.get("criticalTemperatureCelsius");
+        if (critical != null) requireObject(critical, "health.criticalTemperatureCelsius", path);
+        return new HealthSystemOptionsDefinition(
+                readRequired(healthNode, "utilization", path, HealthThresholdDefinition.class),
+                readRequired(healthNode, "temperatureCelsius", path, HealthThresholdDefinition.class),
+                critical == null ? null : JSON_MAPPER.readValue(critical.traverse(JSON_MAPPER), HealthThresholdDefinition.class));
     }
 
     private static CoolingConfigDefinition readOptionalCooling(JsonNode root, Path path) throws IOException {
