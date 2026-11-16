@@ -1,0 +1,73 @@
+{
+  "name": "Synthetic thermal protection demo - illustrative equipment, not manufacturer specifications",
+  "dataInputMode": "UTILIZATION_DRIVEN",
+  "layout": {
+    "room": {
+      "code": "ROOM-01",
+      "name": "Uncooled test room"
+    },
+    "racks": [
+      {
+        "code": "R01",
+        "column": "C01",
+        "row": "R01",
+        "slots": [
+          "S01",
+          "S02"
+        ]
+      }
+    ]
+  },
+  "serverModels": [
+    {
+      "modelCode": "SYNTHETIC-PROTECTED",
+      "manufacturer": "CPZ",
+      "model": "Illustrative protected 100-300W server",
+      "idlePowerWatts": 100,
+      "maxPowerWatts": 300,
+      "thermalCapacityJoulesPerCelsius": 5000,
+      "heatDissipationWattsPerCelsius": 8,
+      "thermalProtection": {
+        "enabled": true,
+        "throttleTemperatureCelsius": 90,
+        "throttleRecoveryTemperatureCelsius": 85,
+        "throttledMaxUtilization": 0.4,
+        "shutdownTemperatureCelsius": 105,
+        "restartTemperatureCelsius": 70,
+        "minimumShutdownSeconds": 120,
+        "restartPolicy": "MANUAL",
+        "shutdownPowerWatts": 5
+      }
+    }
+  ],
+  "servers": [
+    {
+      "column": "C01",
+      "rackCode": "R01",
+      "slot": "S01",
+      "modelCode": "SYNTHETIC-PROTECTED",
+      "status": "OK",
+      "role": "GENERAL_PURPOSE"
+    },
+    {
+      "column": "C01",
+      "rackCode": "R01",
+      "slot": "S02",
+      "modelCode": "SYNTHETIC-PROTECTED",
+      "status": "OK",
+      "role": "GENERAL_PURPOSE"
+    }
+  ],
+  "temperature": {
+    "ambientTemperatureCelsius": 24,
+    "defaultInitialTemperatureCelsius": 30,
+    "thermalCapacityJoulesPerCelsius": 5000,
+    "heatDissipationWattsPerCelsius": 8
+  },
+  "roomAirTemperature": {
+    "initialTemperatureCelsius": 24,
+    "effectiveThermalCapacityJoulesPerCelsius": 20000,
+    "environmentTemperatureCelsius": 24,
+    "environmentHeatTransferWattsPerCelsius": 0
+  }
+}

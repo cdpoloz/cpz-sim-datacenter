@@ -63,7 +63,8 @@ public class HealthSnapshotProvider {
                 healthState != null ? healthState.getAlertReasons() : Set.of(),
                 server.getUtilization(),
                 thermalState.getTemperatureCelsius(),
-                healthState != null ? healthState.getThermalAlertLevel() : ThermalAlertLevel.NORMAL
+                healthState != null ? healthState.getThermalAlertLevel() : ThermalAlertLevel.NORMAL,
+                server.getThermalProtectionState()
         );
     }
 }

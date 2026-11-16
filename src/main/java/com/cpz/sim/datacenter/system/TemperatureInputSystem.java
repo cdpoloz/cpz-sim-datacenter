@@ -49,6 +49,11 @@ public final class TemperatureInputSystem implements Simulatable {
                     server.getCode(),
                     temperatureInputSource.temperatureCelsius(server, tick)
             );
+            server.evaluateThermalProtection(temperatureSystem.getThermalState(server.getCode()).getTemperatureCelsius(),
+                    tick.elapsedSeconds());
         }
+    }
+    @Override public void reset() {
+        datacenter.getServers().forEach(Server::resetThermalProtection);
     }
 }

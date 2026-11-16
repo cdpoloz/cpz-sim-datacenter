@@ -181,6 +181,8 @@ public final class DatacenterConfigValidator {
             if (Float.isFinite(model.idlePowerWatts()) && Float.isFinite(model.maxPowerWatts()) && model.maxPowerWatts() <= model.idlePowerWatts())
                 errors.add(context + " must have maxPowerWatts > idlePowerWatts");
             validateServerModelThermalProperties(model, context, errors);
+            if (model.thermalProtection() != null && model.thermalProtection().shutdownPowerWatts() > model.idlePowerWatts())
+                errors.add(context + " thermalProtection.shutdownPowerWatts must not exceed idlePowerWatts");
         }
     }
 

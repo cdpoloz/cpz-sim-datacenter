@@ -374,3 +374,20 @@ consumedEnergyWh += datacenter.getTotalItPowerWatts() * (tick.deltaSeconds() / 3
 - No advanced electrical model.
 - No UI.
 - No result persistence.
+
+
+## Thermal protection control
+
+An optional `ServerThermalProtection` profile belongs to each `ServerConfig` and
+is loaded from `serverModels[].thermalProtection`. `Server` owns protection state,
+requested versus delivered load, and the distinction between operator OFFLINE
+and protection-owned SHUTDOWN. `ServerThermalProtectionSystem` is a pre-input
+controller in power-derived factory pipelines. It samples the previous completed
+temperature and holds its decision throughout the new tick so cooling, thermal
+integration, energy and snapshots consume the same effective power. Observed
+temperature input systems evaluate protection while preserving observations.
+
+Health evaluation remains a separate projection with its original thresholds;
+`ServerHealthSnapshot.thermalProtectionState()` carries the new operating state.
+See [Thermal protection](thermal-protection.md) for timing resolution, recovery
+ownership, telemetry semantics and configuration.

@@ -1,5 +1,6 @@
 package com.cpz.sim.datacenter.snapshot;
 
+import com.cpz.sim.datacenter.model.ThermalProtectionState;
 import com.cpz.sim.datacenter.health.ServerAlertReason;
 import com.cpz.sim.datacenter.health.ThermalAlertLevel;
 import com.cpz.sim.datacenter.model.HardwareStatus;
@@ -27,8 +28,16 @@ public record ServerHealthSnapshot(
         Set<ServerAlertReason> alertReasons,
         double utilization,
         double temperatureCelsius,
-        ThermalAlertLevel thermalAlertLevel
+        ThermalAlertLevel thermalAlertLevel,
+        ThermalProtectionState thermalProtectionState
 ) {
+    public ServerHealthSnapshot(String serverCode, String column, RackCode rackCode, String slot,
+            HardwareStatus status, Set<ServerAlertReason> alertReasons, double utilization, double temperatureCelsius,
+            ThermalAlertLevel thermalAlertLevel) {
+        this(serverCode, column, rackCode, slot, status, alertReasons, utilization, temperatureCelsius,
+                thermalAlertLevel, ThermalProtectionState.NORMAL);
+    }
+
     /** Legacy constructor cannot infer criticality from a raw temperature. */
     public ServerHealthSnapshot(String serverCode, String column, RackCode rackCode, String slot,
             HardwareStatus status, Set<ServerAlertReason> alertReasons, double utilization, double temperatureCelsius) {
@@ -48,6 +57,10 @@ public record ServerHealthSnapshot(
         Objects.requireNonNull(status, "status must not be null.");
         Objects.requireNonNull(alertReasons, "alertReasons must not be null.");
         alertReasons = Set.copyOf(alertReasons);
+        Objects.requireNonNull(thermalProtectionState, "thermalProtectionState");
+        if (thermalProtectionState == ThermalProtectionState.SHUTDOWN
+                && status != HardwareStatus.OFFLINE)
+            throw new IllegalArgumentException("thermal SHUTDOWN requires OFFLINE status");
         Objects.requireNonNull(thermalAlertLevel, "thermalAlertLevel must not be null.");
         if ((thermalAlertLevel != ThermalAlertLevel.NORMAL)
                 != alertReasons.contains(ServerAlertReason.HIGH_TEMPERATURE))

@@ -1,8 +1,10 @@
 package com.cpz.sim.datacenter.factory;
 
+import com.cpz.sim.datacenter.system.ServerThermalProtectionSystem;
 import com.cpz.sim.datacenter.config.definition.DatacenterDefinition;
 import com.cpz.sim.datacenter.config.validation.DatacenterConfigValidator;
 import com.cpz.sim.datacenter.input.RackTemperatureInputSource;
+import com.cpz.sim.datacenter.input.DatacenterDataInputMode;
 import com.cpz.sim.datacenter.input.ServerPowerInputSource;
 import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.system.PowerConsumptionSystem;
@@ -78,13 +80,17 @@ public final class DatacenterInputPipelineFactory {
             throw new IllegalArgumentException("roomAirTemperature configuration requires the coupled pipeline overload and matching system");
         if (coupledRoomSystem != null && (!coupledRoomSystem.uses(datacenter, temperatureSystem, temperatureSystemOptions,
                 new RoomAirTemperatureOptionsFactory().create(definition).orElseThrow())
-                || definition.dataInputMode() == com.cpz.sim.datacenter.input.DatacenterDataInputMode.TEMPERATURE_DRIVEN))
+                || definition.dataInputMode() == DatacenterDataInputMode.TEMPERATURE_DRIVEN))
             throw new IllegalArgumentException("coupled room system must match the power-derived pipeline");
         if (coupledRoomSystem != null && !coupledRoomSystem.usesRackCooling(
                 new RackCoolingConfigurationFactory().create(definition)))
             throw new IllegalArgumentException("coupled rack cooling must match the pipeline configuration");
         Simulatable thermalSystem = coupledRoomSystem == null ? temperatureSystem : coupledRoomSystem;
         List<Simulatable> systems = new ArrayList<>();
+        if (definition.dataInputMode() != DatacenterDataInputMode.TEMPERATURE_DRIVEN
+                && datacenter.getServers().stream().anyMatch(server -> server.getConfig().thermalProtection() != null
+                && server.getConfig().thermalProtection().enabled()))
+            systems.add(new ServerThermalProtectionSystem(datacenter, temperatureSystem));
         switch (definition.dataInputMode()) {
             case UTILIZATION_DRIVEN -> {
                 Objects.requireNonNull(workloadSource, "workloadSource must not be null for UTILIZATION_DRIVEN");

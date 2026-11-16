@@ -40,7 +40,8 @@ public final class DatacenterFactory {
                     modelDefinition.model(),
                     modelDefinition.idlePowerWatts(),
                     modelDefinition.maxPowerWatts(),
-                    thermalProperties
+                    thermalProperties,
+                    modelDefinition.thermalProtection()
             );
             configs.put(modelDefinition.modelCode(), config);
         }

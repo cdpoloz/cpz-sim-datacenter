@@ -1,5 +1,6 @@
 package com.cpz.sim.datacenter.system;
 
+import com.cpz.sim.datacenter.model.ThermalProtectionState;
 import com.cpz.sim.datacenter.input.RackTemperatureInputSource;
 import com.cpz.sim.datacenter.model.Datacenter;
 import com.cpz.sim.datacenter.model.HardwareStatus;
@@ -72,7 +73,8 @@ public final class RackTemperatureInputSystem implements Simulatable {
         Objects.requireNonNull(tick, "tick must not be null");
         Map<RackLocation, Double> observedTemperatureByRack = new HashMap<>();
         for (Server server : datacenter.getServers()) {
-            if (server.getStatus() == HardwareStatus.OFFLINE) {
+            if (server.getStatus() == HardwareStatus.OFFLINE
+                    && server.getThermalProtectionState() != ThermalProtectionState.SHUTDOWN) {
                 server.setCurrentPowerWatts(0.0);
                 server.estimateUtilizationFromCurrentPower();
                 continue;
@@ -84,11 +86,18 @@ public final class RackTemperatureInputSystem implements Simulatable {
                             location -> rackTemperatureInputSource.temperatureCelsius(location, tick)
                     );
             validateObservedTemperature(observedTemperatureCelsius);
-            double inferredPowerWatts = inferPowerWatts(server, observedTemperatureCelsius);
+            temperatureSystem.setTemperatureCelsius(server.getCode(), observedTemperatureCelsius);
+            server.evaluateThermalProtection(observedTemperatureCelsius, tick.elapsedSeconds());
+            double inferredPowerWatts = server.getStatus() == HardwareStatus.OFFLINE
+                    ? 0.0 : inferPowerWatts(server, observedTemperatureCelsius);
             server.setCurrentPowerWatts(inferredPowerWatts);
             server.estimateUtilizationFromCurrentPower();
-            temperatureSystem.setTemperatureCelsius(server.getCode(), observedTemperatureCelsius);
+
         }
+    }
+
+    @Override public void reset() {
+        datacenter.getServers().forEach(Server::resetThermalProtection);
     }
 
     private double inferPowerWatts(Server server, double observedTemperatureCelsius) {

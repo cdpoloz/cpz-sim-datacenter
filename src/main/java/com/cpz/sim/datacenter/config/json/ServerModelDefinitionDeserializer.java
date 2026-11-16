@@ -1,5 +1,6 @@
 package com.cpz.sim.datacenter.config.json;
 
+import com.cpz.sim.datacenter.model.ServerThermalProtection;
 import com.cpz.sim.datacenter.config.definition.ServerModelDefinition;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
@@ -28,7 +29,8 @@ public final class ServerModelDefinitionDeserializer extends JsonDeserializer<Se
             "idlePowerWatts",
             "maxPowerWatts",
             THERMAL_CAPACITY,
-            HEAT_DISSIPATION
+            HEAT_DISSIPATION,
+            "thermalProtection"
     );
 
     @Override
@@ -46,8 +48,35 @@ public final class ServerModelDefinitionDeserializer extends JsonDeserializer<Se
                 readRequiredFloat(parser, node, "idlePowerWatts"),
                 readRequiredFloat(parser, node, "maxPowerWatts"),
                 readOptionalThermalDouble(parser, node, THERMAL_CAPACITY),
-                readOptionalThermalDouble(parser, node, HEAT_DISSIPATION)
+                readOptionalThermalDouble(parser, node, HEAT_DISSIPATION),
+                readProtection(parser, node)
         );
+    }
+
+    private static ServerThermalProtection readProtection(JsonParser parser, JsonNode model)
+            throws IOException {
+        JsonNode block = model.get("thermalProtection");
+        if (block == null) return null;
+        if (!block.isObject()) throw JsonMappingException.from(parser, "thermalProtection must be a non-null object");
+        Set<String> numbers = Set.of("throttleTemperatureCelsius", "throttleRecoveryTemperatureCelsius",
+                "throttledMaxUtilization", "shutdownTemperatureCelsius", "restartTemperatureCelsius",
+                "minimumShutdownSeconds", "shutdownPowerWatts");
+        var fields = block.fieldNames();
+        while (fields.hasNext()) {
+            String field = fields.next();
+            if (!numbers.contains(field) && !field.equals("enabled") && !field.equals("restartPolicy"))
+                throw JsonMappingException.from(parser, "Unknown thermalProtection field: " + field);
+        }
+        for (String field : numbers) {
+            JsonNode value = block.get(field);
+            if (value == null || !value.isNumber() || !Double.isFinite(value.doubleValue()))
+                throw JsonMappingException.from(parser, "thermalProtection." + field + " must be an explicit finite number");
+        }
+        if (!block.has("enabled") || !block.get("enabled").isBoolean())
+            throw JsonMappingException.from(parser, "thermalProtection.enabled must be an explicit boolean");
+        if (!block.has("restartPolicy") || !block.get("restartPolicy").isTextual())
+            throw JsonMappingException.from(parser, "thermalProtection.restartPolicy must be MANUAL or AUTOMATIC");
+        return parser.getCodec().treeToValue(block, ServerThermalProtection.class);
     }
 
     private static void validateKnownFields(JsonParser parser, JsonNode node) throws JsonMappingException {

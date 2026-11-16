@@ -1152,3 +1152,14 @@ uniqueness and mode dependencies) remain the validator's responsibility.
 
 See [rack cooling examples](rack-cooling-examples.md) for a complete validated JSON,
 six controlled configurations and commands to reproduce the thermal/electrical comparison.
+
+
+## Per-model thermal protection
+
+`serverModels[].thermalProtection` optionally defines equipment protection,
+independently of health alert thresholds. All fields are read from JSON with
+strict types and no numeric defaults. Omitting it keeps the legacy unprotected
+model; `enabled: false` allows an explicit unprotected experiment. See
+[Thermal protection](thermal-protection.md) for the full schema, validation,
+pipeline timing, restart policy and telemetry semantics. The complete synthetic
+example is `data/config/thermal-protection-demo.json`.

@@ -22,6 +22,7 @@ import java.util.Objects;
  *        model-specific thermal properties, or {@code null} to use the
  *        global thermal configuration
  *
+ * @param thermalProtection optional per-model protection; null preserves unprotected behavior
  * @author CPZ
  */
 public record ServerConfig(
@@ -30,13 +31,16 @@ public record ServerConfig(
         String model,
         float idlePowerWatts,
         float maxPowerWatts,
-        ServerThermalProperties thermalProperties
+        ServerThermalProperties thermalProperties,
+        ServerThermalProtection thermalProtection
 ) {
 
     /**
      * Creates and validates a server configuration.
      */
     public ServerConfig {
+        if (thermalProtection != null && thermalProtection.shutdownPowerWatts() > idlePowerWatts)
+            throw new IllegalArgumentException("shutdownPowerWatts must not exceed idlePowerWatts");
         Objects.requireNonNull(modelCode);
         Objects.requireNonNull(manufacturer);
         Objects.requireNonNull(model);
@@ -44,6 +48,11 @@ public record ServerConfig(
             throw new IllegalArgumentException("invalid idlePowerWatts");
         if (!Float.isFinite(maxPowerWatts) || maxPowerWatts <= idlePowerWatts)
             throw new IllegalArgumentException("maxPowerWatts must be higher than idlePowerWatts");
+    }
+
+    public ServerConfig(String modelCode, String manufacturer, String model, float idlePowerWatts,
+                        float maxPowerWatts, ServerThermalProperties thermalProperties) {
+        this(modelCode, manufacturer, model, idlePowerWatts, maxPowerWatts, thermalProperties, null);
     }
 
     /**

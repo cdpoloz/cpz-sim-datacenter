@@ -1,5 +1,6 @@
 package com.cpz.sim.datacenter.config.definition;
 
+import com.cpz.sim.datacenter.model.ServerThermalProtection;
 import com.cpz.sim.datacenter.config.json.ServerModelDefinitionDeserializer;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 
@@ -30,6 +31,7 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
  *        model-specific heat dissipation coefficient, or {@code null} to use
  *        the global thermal configuration
  *
+ * @param thermalProtection optional protection profile, fully explicit when present
  * @author CPZ
  */
 @JsonDeserialize(using = ServerModelDefinitionDeserializer.class)
@@ -40,8 +42,16 @@ public record ServerModelDefinition(
         float idlePowerWatts,
         float maxPowerWatts,
         Double thermalCapacityJoulesPerCelsius,
-        Double heatDissipationWattsPerCelsius
+        Double heatDissipationWattsPerCelsius,
+        ServerThermalProtection thermalProtection
 ) {
+    public ServerModelDefinition(String modelCode, String manufacturer, String model, float idlePowerWatts,
+                                 float maxPowerWatts, Double thermalCapacityJoulesPerCelsius,
+                                 Double heatDissipationWattsPerCelsius) {
+        this(modelCode, manufacturer, model, idlePowerWatts, maxPowerWatts,
+                thermalCapacityJoulesPerCelsius, heatDissipationWattsPerCelsius, null);
+    }
+
     /**
      * Creates a server model definition without model-specific thermal
      * properties.

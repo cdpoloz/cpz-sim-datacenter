@@ -34,6 +34,7 @@ Available in `0.1.0-alpha.1`:
 - Physical layout with existing racks, ordered slot codes, and empty racks.
 - Servers installed by `column`, `rackCode`, and `slot`.
 - Static per-server functional roles exposed through `Server#getRole()`.
+- Optional per-model JSON thermal protection: workload/power capping, thermal shutdown, standby power, and manual/automatic recovery. See [Thermal protection](docs/thermal-protection.md).
 - Hardware states: `OK`, `ALERT`, `OFFLINE`, with automatic health evaluation from utilization and temperature.
 - Simulation systems: `WorkloadSystem`, `PowerConsumptionSystem`, `TemperatureSystem`, `ServerHealthSystem`, and `EnergyConsumptionSystem`.
 - Cooling runtime built from JSON through `CoolingConfigurationFactory`, executed by `CoolingSystem`, and exposed through `CoolingSnapshot`.
