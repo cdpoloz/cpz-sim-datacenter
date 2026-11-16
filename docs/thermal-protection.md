@@ -151,3 +151,19 @@ recovery. `ServerThermalProtectionTest` covers manual/automatic recovery,
 hysteresis, demand capping, repeated ticks, standby power and operator ownership.
 `ThermalProtectionConfigTest` verifies strict JSON parsing, ranges, independent
 profiles, factory propagation and backward compatibility.
+
+
+## Numerical stability at installation scale
+
+The coupled solver forms each substep's equations in temperature differences
+relative to the current room air. It also compensates repeated additions of
+small temperature increments to room/server state. This avoids cancellation
+between large absolute stored energies when many servers exchange small amounts
+of heat with a high-capacity room, including low-power and shutdown periods.
+
+The energy-balance check and its original absolute/relative tolerances remain
+active. An exception includes the tick, residual in joules, and tolerance to
+make genuine inconsistencies diagnosable. `CoupledLargeFleetPrecisionTest`
+exercises 1000 servers at zero or 5 W for a simulated day. The UI integration
+test uses its complete JSON for two days without cooling, covering thermal
+shutdown and the coupled energy ledger at installation scale.

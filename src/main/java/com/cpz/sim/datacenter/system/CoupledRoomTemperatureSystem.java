@@ -129,6 +129,7 @@ public final class CoupledRoomTemperatureSystem implements Simulatable {
         int count = servers.size();
         double[] temperatures = new double[count];
         double[] initial = new double[count];
+        double[] temperatureCompensation = new double[count];
         double[] capacity = new double[count];
         double[] conductance = new double[count];
         double[] power = new double[count];
@@ -180,6 +181,7 @@ public final class CoupledRoomTemperatureSystem implements Simulatable {
         double rackRejectedExternal = 0.0;
         double rackTransferredToRoom = 0.0;
         double room = roomTemperatureCelsius;
+        double roomCompensation = 0.0;
         double transferredEnergy = 0.0;
         double removedEnergy = 0.0;
         double environmentEnergy = 0.0;
@@ -189,20 +191,20 @@ public final class CoupledRoomTemperatureSystem implements Simulatable {
         double[] base = new double[count];
         for (int step = 0; step < steps; step++) {
             double coefficient = airCapacity / dt + environmentConductance;
-            double rhs = airCapacity / dt * room
-                    + environmentConductance * roomOptions.environmentTemperatureCelsius();
+            // Solve increments relative to the current room, avoiding cancellation of C_air * T.
+            double rhs = environmentConductance * (roomOptions.environmentTemperatureCelsius() - room);
             double[] rackCoefficients = new double[rackCount];
             double[] rackRhs = new double[rackCount];
             for (int j = 0; j < rackCount; j++) {
                 var unit = rackUnits.get(j);
                 rackCoefficients[j] = unit.effectiveAirThermalCapacityJoulesPerCelsius() / dt + unit.roomHeatTransferWattsPerCelsius();
-                rackRhs[j] = unit.effectiveAirThermalCapacityJoulesPerCelsius() / dt * rackAir[j];
+                rackRhs[j] = unit.effectiveAirThermalCapacityJoulesPerCelsius() / dt * (rackAir[j] - room);
             }
             for (int i = 0; i < count; i++) {
                 double ratio = dt * conductance[i] / capacity[i];
                 gamma[i] = ratio <= 1.0 ? conductance[i] / (1.0 + ratio)
                         : (capacity[i] / dt) / (1.0 + 1.0 / ratio);
-                base[i] = temperatures[i] + dt * power[i] / capacity[i];
+                base[i] = temperatures[i] - room + dt * power[i] / capacity[i];
                 if (serverRack[i] < 0) {
                     coefficient += gamma[i];
                     rhs += gamma[i] * base[i];
@@ -221,25 +223,33 @@ public final class CoupledRoomTemperatureSystem implements Simulatable {
                         rackUnits.get(j).roomHeatTransferWattsPerCelsius(), rackPaths.get(j), rackPower[j],
                         rackUnits.get(j).heatRejectionDestination() == HeatRejectionDestination.ROOM));
             }
-            double nextRoom = rackCount == 0 ? solveRoom(coefficient, rhs / coefficient, paths)
-                    : CoupledRackAirSolver.solve(coefficient, rhs / coefficient, paths, rackEquations);
+            double roomIncrement = CoupledRackAirSolver.solveOffset(coefficient, rhs / coefficient, room, paths, rackEquations);
+            // Compensate substep additions so small changes are not lost when storing absolute temperatures.
+            double correctedRoomIncrement = roomIncrement - roomCompensation;
+            double nextRoom = room + correctedRoomIncrement;
+            roomCompensation = (nextRoom - room) - correctedRoomIncrement;
+            double[] rackOffsets = new double[rackCount];
             for (int j = 0; j < rackCount; j++) {
                 var equation = rackEquations.get(j);
-                rackAir[j] = equation.temperatureAt(nextRoom);
+                rackOffsets[j] = equation.temperatureOffsetAt(roomIncrement, room);
+                rackAir[j] = room + rackOffsets[j];
                 double removed = rackPaths.get(j).removedHeatWatts(rackAir[j]);
                 rackRemovedEnergy += removed * dt;
                 rackRemovedByUnit[j] += removed * dt;
                 double rejected = (removed + rackPower[j]) * dt;
                 if (equation.rejectsToRoom()) rackRejectedToRoom += rejected;
                 else rackRejectedExternal += rejected;
-                double exchanged = equation.roomConductance() * (rackAir[j] - nextRoom) * dt;
+                double exchanged = equation.roomConductance() * (rackOffsets[j] - roomIncrement) * dt;
                 rackTransferredToRoom += exchanged;
                 rackExchangedByUnit[j] += exchanged;
             }
             for (int i = 0; i < count; i++) {
-                double reference = serverRack[i] < 0 ? nextRoom : rackAir[serverRack[i]];
+                double reference = serverRack[i] < 0 ? roomIncrement : rackOffsets[serverRack[i]];
                 double transfer = gamma[i] * (base[i] - reference);
-                temperatures[i] += dt * (power[i] - transfer) / capacity[i];
+                double increment = dt * (power[i] - transfer) / capacity[i] - temperatureCompensation[i];
+                double nextTemperature = temperatures[i] + increment;
+                temperatureCompensation[i] = (nextTemperature - temperatures[i]) - increment;
+                temperatures[i] = nextTemperature;
                 requireFinite(temperatures[i]);
                 transferredEnergy += transfer * dt;
                 if (serverRack[i] >= 0) serverHeatByRack[serverRack[i]] += transfer * dt;
@@ -296,7 +306,8 @@ public final class CoupledRoomTemperatureSystem implements Simulatable {
                     + Math.abs(snapshot.rackHeatRejectedExternalJoules()) + Math.abs(snapshot.environmentHeatLossJoules());
             requireFinite(energyScale);
             if (Math.abs(snapshot.energyBalanceResidualJoules()) > 1e-6 + 1e-9 * energyScale)
-                throw new IllegalArgumentException("coupled rack energy balance exceeds numerical tolerance");
+                throw new IllegalArgumentException("coupled rack energy balance exceeds numerical tolerance: tick=" + tick.index()
+                        + ", residual=" + snapshot.energyBalanceResidualJoules() + ", tolerance=" + (1e-6 + 1e-9 * energyScale));
         }
         final double finalRoom = room;
         CoolingSnapshot coolingSnapshot = coolingSystem.map(system -> system.snapshotForMixedRoom(
@@ -312,26 +323,6 @@ public final class CoupledRoomTemperatureSystem implements Simulatable {
         consumedRackCoolingEnergyWh = nextRackEnergyWh;
         lastSnapshot = snapshot;
         lastCoolingSnapshot = coolingSnapshot;
-    }
-
-    private static double solveRoom(double coefficient, double uncooledTemperature, List<RoomAirCoolingPath> paths) {
-        requireFinite(uncooledTemperature);
-        if (paths.isEmpty() || paths.stream().mapToDouble(p -> p.removedHeatWatts(uncooledTemperature)).sum() == 0.0)
-            return uncooledTemperature;
-        double totalCapacity = paths.stream().mapToDouble(RoomAirCoolingPath::capacityWatts).sum();
-        requireFinite(totalCapacity);
-        double lower = uncooledTemperature - totalCapacity / coefficient;
-        double upper = uncooledTemperature;
-        requireFinite(lower);
-        for (int iteration = 0; iteration < 100; iteration++) {
-            double midpoint = lower + (upper - lower) * 0.5;
-            if (midpoint == lower || midpoint == upper) break;
-            double removal = paths.stream().mapToDouble(p -> p.removedHeatWatts(midpoint)).sum();
-            double residual = coefficient * (midpoint - uncooledTemperature) + removal;
-            if (residual > 0.0) upper = midpoint;
-            else lower = midpoint;
-        }
-        return lower + (upper - lower) * 0.5;
     }
 
     private static void requireFinite(double value) {

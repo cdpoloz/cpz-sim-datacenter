@@ -126,7 +126,7 @@ class CoupledRackTemperatureIntegrationTest {
     void enabledUnitBelowSupplyDoesNotHeatRackButStillConsumesElectricity() {
         var f = fixture(List.of(unit("RC1", "C01", HeatRejectionDestination.ROOM, true, 10, 0, 2000)), 0);
         var ledger = advance(f, 1, 60);
-        assertEquals(10, f.local(R1));
+        assertEquals(10, f.local(R1), 1e-10);
         assertEquals(0, ledger.rackRemovedHeatJoules());
         assertEquals(30000, ledger.rackHeatRejectedToRoomJoules());
         assertEquals(24.015, f.coupled.roomAirTemperatureCelsius(), 1e-10);
