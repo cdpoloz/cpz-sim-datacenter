@@ -53,6 +53,21 @@ class DatasetReplaySessionIntegrationTest {
         return rows(rows);
     }
 
+    @Test
+    void replayRetainsOperatorPolicyWhenSelectingModeAndRestarting() {
+        var source = configuration;
+        var configured = new DatacenterDefinition(source.name(), source.layout(), source.serverModels(), source.servers(),
+                source.temperature(), source.health(), source.cooling(), source.dataInputMode(),
+                source.powerInputGranularity(), source.temperatureInputGranularity(), source.roomAirTemperature(),
+                source.rackCooling(), new com.cpz.sim.datacenter.health.ServerAlertPolicy(false));
+        var replay = DatasetReplaySession.prepare(configured, dataset, "synthetic-dataset-pilot", "1",
+                plan(DatacenterDataInputMode.POWER_DRIVEN));
+        assertFalse(replay.alertPolicy().highUtilizationEnabled());
+        replay.advance();
+        replay.restart();
+        assertFalse(replay.alertPolicy().highUtilizationEnabled());
+    }
+
     @ParameterizedTest @EnumSource(value = DatacenterDataInputMode.class, names = {"UTILIZATION_DRIVEN", "POWER_DRIVEN"})
     void realPipelineConservesAllOriginalsAndEmitsExactTimes(DatacenterDataInputMode mode) {
         var session = prepare(dataset, plan(mode));

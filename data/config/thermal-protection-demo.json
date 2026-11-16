@@ -1,6 +1,9 @@
 {
   "name": "Synthetic thermal protection demo - illustrative equipment, not manufacturer specifications",
   "dataInputMode": "UTILIZATION_DRIVEN",
+  "alertPolicy": {
+    "highUtilizationEnabled": false
+  },
   "layout": {
     "room": {
       "code": "ROOM-01",

@@ -1163,3 +1163,12 @@ model; `enabled: false` allows an explicit unprotected experiment. See
 [Thermal protection](thermal-protection.md) for the full schema, validation,
 pipeline timing, restart policy and telemetry semantics. The complete synthetic
 example is `data/config/thermal-protection-demo.json`.
+
+
+## Operator-facing alert selection
+
+The optional top-level `alertPolicy.highUtilizationEnabled` JSON boolean controls
+operator-facing reason selection through `ServerAlertPolicy`. It does not stop
+the backend evaluating or publishing utilization diagnostics. The current O&M
+view disables that reason; temperature and protection conditions remain visible.
+See [Alert policy](alert-policy.md) for strict parsing, defaults and consumer rules.

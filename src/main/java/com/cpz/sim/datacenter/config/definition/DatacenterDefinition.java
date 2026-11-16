@@ -1,6 +1,7 @@
 package com.cpz.sim.datacenter.config.definition;
 
 import com.cpz.sim.datacenter.input.DatacenterDataInputMode;
+import com.cpz.sim.datacenter.health.ServerAlertPolicy;
 import com.cpz.sim.datacenter.input.PowerInputGranularity;
 import com.cpz.sim.datacenter.input.TemperatureInputGranularity;
 
@@ -22,6 +23,7 @@ import java.util.Objects;
  * @param temperatureInputGranularity telemetry granularity for temperature-driven input
  * @param roomAirTemperature optional independent room-air thermal configuration
  * @param rackCooling optional dedicated rack cooling configuration
+ * @param alertPolicy operator-facing alert selection; omitted values retain legacy visibility
  *
  * @author CPZ
  */
@@ -37,14 +39,29 @@ public record DatacenterDefinition(
         PowerInputGranularity powerInputGranularity,
         TemperatureInputGranularity temperatureInputGranularity,
         RoomAirTemperatureOptionsDefinition roomAirTemperature,
-        RackCoolingConfigDefinition rackCooling
+        RackCoolingConfigDefinition rackCooling,
+        ServerAlertPolicy alertPolicy
 ) {
 
     public DatacenterDefinition {
+        alertPolicy = Objects.requireNonNullElseGet(alertPolicy, ServerAlertPolicy::defaults);
         dataInputMode = Objects.requireNonNullElse(dataInputMode, DatacenterDataInputMode.UTILIZATION_DRIVEN);
         powerInputGranularity = Objects.requireNonNullElse(powerInputGranularity, PowerInputGranularity.SERVER);
         temperatureInputGranularity =
                 Objects.requireNonNullElse(temperatureInputGranularity, TemperatureInputGranularity.RACK);
+    }
+
+    /** Preserves the constructor introduced with dedicated rack cooling. */
+    public DatacenterDefinition(
+            String name, DatacenterLayoutDefinition layout, List<ServerModelDefinition> serverModels,
+            List<ServerDefinition> servers, TemperatureSystemOptionsDefinition temperature,
+            HealthSystemOptionsDefinition health, CoolingConfigDefinition cooling,
+            DatacenterDataInputMode dataInputMode, PowerInputGranularity powerInputGranularity,
+            TemperatureInputGranularity temperatureInputGranularity,
+            RoomAirTemperatureOptionsDefinition roomAirTemperature, RackCoolingConfigDefinition rackCooling
+    ) {
+        this(name, layout, serverModels, servers, temperature, health, cooling, dataInputMode,
+                powerInputGranularity, temperatureInputGranularity, roomAirTemperature, rackCooling, null);
     }
 
     /** Preserves the constructor introduced with independent room air. */

@@ -29,6 +29,7 @@ Current version:
 
 Available in `0.1.0-alpha.1`:
 
+- Optional JSON operator alert policy preserves raw health diagnostics while selecting actionable reasons; see [Alert policy](docs/alert-policy.md).
 - JSON-configurable datacenter definitions with `layout.racks`, `serverModels` and `servers`.
 - Optional top-level JSON blocks for `temperature`, `health`, `cooling`, and `dataInputMode`.
 - Physical layout with existing racks, ordered slot codes, and empty racks.

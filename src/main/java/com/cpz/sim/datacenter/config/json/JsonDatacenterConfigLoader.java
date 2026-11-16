@@ -53,11 +53,24 @@ public final class JsonDatacenterConfigLoader implements DatacenterConfigLoader 
                     readOptionalPowerInputGranularity(root, path),
                     readOptionalTemperatureInputGranularity(root, path),
                     readOptionalRoomAirTemperature(root, path),
-                    readOptionalRackCooling(root, path)
+                    readOptionalRackCooling(root, path),
+                    readOptionalAlertPolicy(root, path)
             );
         } catch (IOException exception) {
             throw new DatacenterConfigException("Could not load datacenter config from path: " + path, exception);
         }
+    }
+
+    private static com.cpz.sim.datacenter.health.ServerAlertPolicy readOptionalAlertPolicy(JsonNode root, Path path)
+            throws IOException {
+        JsonNode block = root.get("alertPolicy");
+        if (block == null) return com.cpz.sim.datacenter.health.ServerAlertPolicy.defaults();
+        requireObject(block, "alertPolicy", path);
+        rejectUnknownProperties(block, List.of("highUtilizationEnabled"), "alertPolicy", path);
+        JsonNode enabled = block.get("highUtilizationEnabled");
+        if (enabled == null || !enabled.isBoolean())
+            throw new DatacenterConfigException("alertPolicy.highUtilizationEnabled must be an explicit boolean: " + path);
+        return JSON_MAPPER.treeToValue(block, com.cpz.sim.datacenter.health.ServerAlertPolicy.class);
     }
 
     private static DatacenterLayoutDefinition readLayout(JsonNode root, Path path) throws IOException {

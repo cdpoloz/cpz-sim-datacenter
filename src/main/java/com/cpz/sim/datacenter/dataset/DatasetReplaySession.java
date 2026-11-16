@@ -87,7 +87,7 @@ public final class DatasetReplaySession {
         this.configurationVersion = configurationVersion;
         var selected = new DatacenterDefinition(supplied.name(), supplied.layout(), supplied.serverModels(),
                 supplied.servers(), supplied.temperature(), supplied.health(), supplied.cooling(), plan.mode(),
-                supplied.powerInputGranularity(), supplied.temperatureInputGranularity(), supplied.roomAirTemperature(), supplied.rackCooling());
+                supplied.powerInputGranularity(), supplied.temperatureInputGranularity(), supplied.roomAirTemperature(), supplied.rackCooling(), supplied.alertPolicy());
         try { new DatacenterConfigValidator().validate(selected); }
         catch (RuntimeException exception) { throw new DatasetReplayException(CONFIGURATION, exception.getMessage(), exception); }
         if (selected.layout().room() == null)
@@ -103,7 +103,7 @@ public final class DatasetReplaySession {
         this.definition = new DatacenterDefinition(selected.name(),
                 new DatacenterLayoutDefinition(layout.room(), aisles, List.copyOf(layout.racks())),
                 List.copyOf(selected.serverModels()), List.copyOf(selected.servers()), selected.temperature(),
-                null, null, selected.dataInputMode(), selected.powerInputGranularity(), selected.temperatureInputGranularity(), null, null);
+                null, null, selected.dataInputMode(), selected.powerInputGranularity(), selected.temperatureInputGranularity(), null, null, selected.alertPolicy());
         initializeRuntime();
         inventory = new Inventory(definition.layout().room().code(), definition.layout().room().name(),
                 datacenter.getRacks().stream().sorted(Comparator.comparing(r -> r.getLocation().code()))
@@ -207,6 +207,7 @@ public final class DatasetReplaySession {
         return new SimulationTick(tick.index(), offset.plus(tick.elapsedTime()), tick.deltaTime());
     }
 
+    public com.cpz.sim.datacenter.health.ServerAlertPolicy alertPolicy() { return definition.alertPolicy(); }
     public DatasetReplayPlan plan() { return plan; }
     public CustomerDataset dataset() { return dataset; }
     public Inventory inventory() { return inventory; }
